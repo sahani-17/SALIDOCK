@@ -1,0 +1,36 @@
+# FastAPI backend
+fastapi
+uvicorn
+pydantic
+python-multipart
+
+# Chemistry & molecular modeling
+rdkit
+gemmi
+pdbfixer
+
+# Scientific computing
+numpy
+biopython
+
+# HTTP requests for AlphaFold API
+requests
+
+#openbabel
+conda install -c conda-forge openbabel
+#pdbfixer 
+conda install -c conda-forge pdbfixer
+#fpocket
+conda install -c conda-forge fpocket
+#vina
+conda install -c conda-forge vina 
+
+# P2RANK for consensus cavity detection
+# Installation (use absolute path to avoid Java classpath issues):
+# 1. Download: wget https://github.com/rdk/p2rank/releases/download/2.4.2/p2rank_2.4.2.tar.gz
+# 2. Extract to /opt: sudo tar -xzf p2rank_2.4.2.tar.gz -C /opt/
+# 3. Verify: /opt/p2rank_2.4.2/prank --version
+# 4. Test prediction: /opt/p2rank_2.4.2/prank predict -f test.pdb -o output/
+# 
+# IMPORTANT: Code uses absolute path /opt/p2rank_2.4.2/prank (not PATH)
+
