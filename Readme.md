@@ -4,13 +4,13 @@ A comprehensive web-based molecular docking platform for drug discovery and prot
 
 ## Features
 
-- **Automated Structure Preparation**: Protein and ligand preparation with PDBFixer and AlphaFold fallback
+- **Automated Structure Preparation**: Protein and ligand preparation seamlessly utilizing PDBFixer and AlphaFold API fallback for missing structures.
 - **Dual Docking Modes**: 
-  - Auto Cavity Mode: Automatic binding site detection using Fpocket
-  - Manual Mode: Expert grid configuration for custom docking
-- **Molecular Docking**: AutoDock Vina integration with multi-cavity support
-- **Interaction Analysis**: Hydrogen bonds, hydrophobic, ionic, and pi-stacking interactions
-- **Results Visualization**: Interactive charts and detailed binding pose analysis
+  - **Auto-Blind Docking**: Automatic multi-cavity consensus detection using both P2Rank (Machine Learning) and Fpocket (Geometric algorithm).
+  - **Active-Site Precision**: Interactive visual grid box viewer for precise, manual docking constraints.
+- **Molecular Docking**: High-performance AutoDock Vina integration with multi-threaded, parallel cavity execution.
+- **Interactive 3D Visualization**: Built-in Mol* Viewer for real-time 3D binding complex rendering.
+- **Publication-Quality 2D Interactions**: Automated interaction maps via ProLIF and RDKit, highlighting hydrogen bonds, hydrophobic interactions, pi-stacking, and ionic bonds, with export options.
 
 ## Prerequisites
 
@@ -46,6 +46,8 @@ conda install -c conda-forge openbabel
 conda install -c conda-forge pdbfixer
 conda install -c conda-forge fpocket
 conda install -c conda-forge vina
+conda install -c conda-forge rdkit
+conda install -c conda-forge gemmi
 ```
 
 #### Install Python Requirements
@@ -57,16 +59,20 @@ pip install -r requirements.txt
 
 **requirements.txt:**
 ```txt
-# FastAPI backend
+# FastAPI backend framework
 fastapi
 uvicorn
 pydantic
 python-multipart
 
-# Chemistry & molecular modeling
-rdkit
-gemmi
-pdbfixer
+# Security
+slowapi
+python-jose[cryptography]
+passlib[bcrypt]
+
+# Chemistry & molecular modeling (Pip packages)
+prolif
+MDAnalysis
 
 # Scientific computing
 numpy
@@ -283,14 +289,16 @@ npm run preview
 
 ### Backend
 - **FastAPI**: Modern Python web framework
-- **RDKit**: Chemistry toolkit
+- **RDKit**: Chemistry toolkit and interaction mapping
+- **ProLIF**: Protein-Ligand Interaction Profiler for 2D diagram generation
 - **Biopython**: Biological computation
 - **AutoDock Vina**: Molecular docking
-- **Fpocket**: Cavity detection
+- **P2Rank & Fpocket**: Consensus cavity detection
 - **PDBFixer**: Structure preparation
 
 ### Frontend
 - **React 19**: UI framework
+- **Mol***: 3D macro-molecular visualization toolkit
 - **Vite**: Build tool
 - **Tailwind CSS**: Styling
 - **Recharts**: Data visualization

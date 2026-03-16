@@ -1,43 +1,36 @@
-# FastAPI backend
+# FastAPI backend framework
 fastapi
 uvicorn
 pydantic
 python-multipart
-
-# Chemistry & molecular modeling
-rdkit
-gemmi
-pdbfixer
-
-# Scientific computing
-numpy
-biopython
-prolif
-MDAnalysis
-
-# HTTP requests for AlphaFold API
-requests
 
 # Security
 slowapi
 python-jose[cryptography]
 passlib[bcrypt]
 
-#openbabel
-conda install -c conda-forge openbabel
-#pdbfixer 
-conda install -c conda-forge pdbfixer
-#fpocket
-conda install -c conda-forge fpocket
-#vina
-conda install -c conda-forge vina 
+# Chemistry & molecular modeling (Pip packages)
+prolif
+MDAnalysis
 
-# P2RANK for consensus cavity detection
-# Installation (use absolute path to avoid Java classpath issues):
-# 1. Download: wget https://github.com/rdk/p2rank/releases/download/2.4.2/p2rank_2.4.2.tar.gz
-# 2. Extract to /opt: sudo tar -xzf p2rank_2.4.2.tar.gz -C /opt/
-# 3. Verify: /opt/p2rank_2.4.2/prank --version
-# 4. Test prediction: /opt/p2rank_2.4.2/prank predict -f test.pdb -o output/
+# Scientific computing
+numpy
+biopython
+
+# HTTP requests for AlphaFold API
+requests
+
+# ---------------------------------------------------------
+# Note: The following dependencies are recommended to be 
+# installed via conda instead of pip for better compatibility:
+#
+# conda install -c conda-forge openbabel
+# conda install -c conda-forge pdbfixer
+# conda install -c conda-forge fpocket
+# conda install -c conda-forge vina
+# conda install -c conda-forge rdkit
+# conda install -c conda-forge gemmi
+# ---------------------------------------------------------
 # 
-# IMPORTANT: Code uses absolute path /opt/p2rank_2.4.2/prank (not PATH)
-
+# P2RANK for consensus cavity detection is also required.
+# See README.md for installation instructions.
