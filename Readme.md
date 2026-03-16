@@ -1,4 +1,4 @@
-# InfoGenix - Molecular Docking Platform
+# SALIDOCK - Molecular Docking Platform
 
 A comprehensive web-based molecular docking platform for drug discovery and protein-ligand interaction analysis. Built with FastAPI backend and React frontend.
 
@@ -24,8 +24,8 @@ A comprehensive web-based molecular docking platform for drug discovery and prot
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/Deepan-CodeBuster/info_genix.git
-cd info_genix
+git clone https://github.com/Toxicvampire007/SALIDOCK.git
+cd SALIDOCK
 ```
 
 ### 2. Backend Setup
@@ -34,8 +34,8 @@ cd info_genix
 
 ```bash
 # Create a new conda environment
-conda create -n info_genix python=3.10
-conda activate info_genix
+conda create -n salidock python=3.10
+conda activate salidock
 ```
 
 #### Install Conda Dependencies
@@ -123,7 +123,7 @@ npm install
 
 ```bash
 # Activate conda environment
-conda activate info_genix
+conda activate salidock
 
 # Navigate to backend directory
 cd backend
@@ -162,7 +162,7 @@ The frontend will be available at: `http://localhost:5173`
 ## Project Structure
 
 ```
-info_genix/
+salidock/
 ├── backend/
 │   ├── app.py                      # FastAPI main application
 │   ├── requirements.txt            # Python dependencies
