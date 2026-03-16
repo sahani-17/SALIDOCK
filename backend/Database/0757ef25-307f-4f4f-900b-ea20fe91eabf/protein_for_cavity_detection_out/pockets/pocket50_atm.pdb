@@ -1,0 +1,37 @@
+HEADER
+HEADER This is a pdb format file writen by the programm fpocket.                 
+HEADER It represents the atoms contacted by the voronoi vertices of the pocket.  
+HEADER                                                                           
+HEADER Information about the pocket    50:
+HEADER 0  - Pocket Score                      : -0.0129
+HEADER 1  - Drug Score                        : 0.0004
+HEADER 2  - Number of alpha spheres           :    18
+HEADER 3  - Mean alpha-sphere radius          : 3.3567
+HEADER 4  - Mean alpha-sphere Solvent Acc.    : 0.4927
+HEADER 5  - Mean B-factor of pocket residues  : 0.0000
+HEADER 6  - Hydrophobicity Score              : -13.7500
+HEADER 7  - Polarity Score                    :     4
+HEADER 8  - Amino Acid based volume Score     : 5.0000
+HEADER 9  - Pocket volume (Monte Carlo)       : 129.3628
+HEADER 10 - Pocket volume (convex hull)       : 3.4202
+HEADER 11 - Charge Score                      :     1
+HEADER 12 - Local hydrophobic density Score   : 3.0000
+HEADER 13 - Number of apolar alpha sphere     :     4
+HEADER 14 - Proportion of apolar alpha sphere : 0.2222
+ATOM   5681    O THR A 698      21.288   5.412 -33.974  0.00  0.00           O 0
+ATOM   5703   CB GLU A 701      22.996   2.491 -32.001  0.00  0.00           C 0
+ATOM   5708  OE1 GLU A 701      21.957   0.322 -33.374  0.62  2.14           O 0
+ATOM   5739  NH1 ARG A 705      26.275   1.160 -36.667  0.00  0.00           N 0
+ATOM   5714   CG LYS A 702      24.099   6.407 -35.483  0.00  0.00           C 0
+ATOM   5709    N LYS A 702      24.461   5.303 -32.599  0.00  0.00           N 0
+ATOM   5741   CZ ARG A 705      26.301   0.549 -35.515  0.00  0.00           C 0
+ATOM   5740  NH2 ARG A 705      25.464  -0.434 -35.333  0.23  3.28           N 0
+ATOM   5737   CD ARG A 705      27.966   2.133 -34.527  0.00  0.00           C 0
+ATOM   5710   CA LYS A 702      25.452   6.131 -33.313  0.00  0.00           C 0
+ATOM   5678   CA THR A 698      19.241   4.253 -33.526  0.00  0.00           C 0
+ATOM   5680   CB THR A 698      18.489   4.361 -34.857  0.00  0.00           C 0
+ATOM   5682  CG2 THR A 698      17.639   3.128 -35.156  0.00  0.00           C 0
+ATOM   5702    C GLU A 701      24.794   4.241 -31.850  0.00  0.00           C 0
+ATOM   5716   CE LYS A 702      22.405   6.744 -37.339  0.00  0.00           C 0
+TER
+END

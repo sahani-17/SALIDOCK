@@ -25,7 +25,7 @@ const Navbar = () => {
                     {/* Desktop */}
                     <div className="hidden md:flex items-center gap-6">
                         <Link to="/about" className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200">About Us</Link>
-                        <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200">Documentation</a>
+                        <Link to="/docs" className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200">Documentation</Link>
                     </div>
 
                     {/* Mobile toggle */}
@@ -38,7 +38,7 @@ const Navbar = () => {
                 {mobileOpen && (
                     <div className="md:hidden pb-4 flex flex-col gap-3 border-t border-border pt-4">
                         <Link to="/about" className="text-sm text-muted-foreground hover:text-foreground transition-colors" onClick={() => setMobileOpen(false)}>About Us</Link>
-                        <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Documentation</a>
+                        <Link to="/docs" className="text-sm text-muted-foreground hover:text-foreground transition-colors" onClick={() => setMobileOpen(false)}>Documentation</Link>
                     </div>
                 )}
             </div>

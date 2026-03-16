@@ -1,0 +1,7 @@
+Docking Parameters
+==================
+
+mode: cavity
+exhaustiveness: 10
+num_modes: 9
+cavities_docked: [15]

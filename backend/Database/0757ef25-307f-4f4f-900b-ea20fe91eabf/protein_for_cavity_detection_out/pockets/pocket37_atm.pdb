@@ -1,0 +1,39 @@
+HEADER
+HEADER This is a pdb format file writen by the programm fpocket.                 
+HEADER It represents the atoms contacted by the voronoi vertices of the pocket.  
+HEADER                                                                           
+HEADER Information about the pocket    37:
+HEADER 0  - Pocket Score                      : 0.0090
+HEADER 1  - Drug Score                        : 0.0009
+HEADER 2  - Number of alpha spheres           :    20
+HEADER 3  - Mean alpha-sphere radius          : 4.1284
+HEADER 4  - Mean alpha-sphere Solvent Acc.    : 0.7476
+HEADER 5  - Mean B-factor of pocket residues  : 0.0000
+HEADER 6  - Hydrophobicity Score              : -35.0000
+HEADER 7  - Polarity Score                    :     2
+HEADER 8  - Amino Acid based volume Score     : 3.3333
+HEADER 9  - Pocket volume (Monte Carlo)       : 353.1406
+HEADER 10 - Pocket volume (convex hull)       : 8.4338
+HEADER 11 - Charge Score                      :    -1
+HEADER 12 - Local hydrophobic density Score   : 9.0000
+HEADER 13 - Number of apolar alpha sphere     :    10
+HEADER 14 - Proportion of apolar alpha sphere : 0.5000
+ATOM   6319    N PRO A 780     106.670 -32.922 -70.572  0.00  0.00           N 0
+ATOM   6303   CA GLU A 778     105.076 -33.541 -65.250  0.00  0.00           C 0
+ATOM   6313    C ASN A 779     105.526 -33.122 -69.899  0.00  0.00           C 0
+ATOM   6311    N ASN A 779     104.606 -33.658 -67.671  0.51  4.37           N 0
+ATOM   6320   CA PRO A 780     106.949 -31.716 -71.344  0.00  0.00           C 0
+ATOM   6322   CB PRO A 780     108.480 -31.626 -71.296  0.00  0.00           C 0
+ATOM   6325   CD PRO A 780     107.826 -33.804 -70.586  0.00  0.00           C 0
+ATOM   6307   CG GLU A 778     106.720 -33.809 -63.301  0.00  0.00           C 0
+ATOM   6305   CB GLU A 778     105.894 -34.517 -64.383  0.00  0.00           C 0
+ATOM   6318  OD1 ASN A 779     107.353 -36.286 -69.101  0.00  0.00           O 0
+ATOM   6308   CD GLU A 778     107.406 -34.793 -62.345  0.00  0.00           C 0
+ATOM   6310  OE1 GLU A 778     106.770 -35.806 -61.980  0.00  0.00           O 0
+ATOM   6317  ND2 ASN A 779     105.862 -37.855 -69.315  0.00  0.00           N 0
+ATOM   6306    O GLU A 778     104.068 -35.415 -66.423  0.62  7.50           O 0
+ATOM   6309  OE2 GLU A 778     108.546 -34.478 -61.937  0.00  0.00           O 0
+ATOM   6312   CA ASN A 779     105.471 -34.164 -68.756  0.00  0.00           C 0
+ATOM   6316   CG ASN A 779     106.177 -36.588 -69.214  0.00  0.00           C 0
+TER
+END

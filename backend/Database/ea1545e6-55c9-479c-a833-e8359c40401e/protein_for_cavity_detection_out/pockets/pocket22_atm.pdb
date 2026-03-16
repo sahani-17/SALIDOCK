@@ -1,0 +1,39 @@
+HEADER
+HEADER This is a pdb format file writen by the programm fpocket.                 
+HEADER It represents the atoms contacted by the voronoi vertices of the pocket.  
+HEADER                                                                           
+HEADER Information about the pocket    22:
+HEADER 0  - Pocket Score                      : 0.0235
+HEADER 1  - Drug Score                        : 0.0005
+HEADER 2  - Number of alpha spheres           :    17
+HEADER 3  - Mean alpha-sphere radius          : 3.6172
+HEADER 4  - Mean alpha-sphere Solvent Acc.    : 0.4829
+HEADER 5  - Mean B-factor of pocket residues  : 0.0000
+HEADER 6  - Hydrophobicity Score              : 23.2222
+HEADER 7  - Polarity Score                    :     4
+HEADER 8  - Amino Acid based volume Score     : 3.6667
+HEADER 9  - Pocket volume (Monte Carlo)       : 190.7195
+HEADER 10 - Pocket volume (convex hull)       : 14.5039
+HEADER 11 - Charge Score                      :     0
+HEADER 12 - Local hydrophobic density Score   : 7.0000
+HEADER 13 - Number of apolar alpha sphere     :     8
+HEADER 14 - Proportion of apolar alpha sphere : 0.4706
+ATOM   2040  OD1 ASP A 263     -47.531  -7.573  44.555  0.17  8.57           O 0
+ATOM   2013    N ALA A 260     -46.962  -3.325  44.793  0.67  2.19           N 0
+ATOM   2006   CA ILE A 259     -45.675  -2.794  42.807  0.00  0.00           C 0
+ATOM   2004    O GLY A 258     -47.523  -2.810  40.707  0.25  7.50           O 0
+ATOM   2010  CG1 ILE A 259     -43.769  -3.441  41.297  0.00  0.00           C 0
+ATOM   2011  CG2 ILE A 259     -43.774  -4.177  43.698  0.00  0.00           C 0
+ATOM   2037   CB ASP A 263     -45.583  -7.096  45.836  0.00  0.00           C 0
+ATOM   1706    O ASN A 221     -43.382 -10.984  42.674  0.75  3.21           O 0
+ATOM   1702  CD2 LEU A 220     -40.157  -6.201  42.141  0.00  0.00           C 0
+ATOM   2012  CD1 ILE A 259     -42.287  -3.351  41.039  0.00  0.00           C 0
+ATOM   1701  CD1 LEU A 220     -40.188  -6.006  39.647  0.00  0.00           C 0
+ATOM   1699   CB LEU A 220     -39.798  -8.235  40.721  0.00  0.00           C 0
+ATOM   2065   OG SER A 267     -39.821  -8.940  45.232  0.00  0.00           O 0
+ATOM   1703    N ASN A 221     -40.724 -10.802  42.312  0.00  0.00           N 0
+ATOM   2036    O ASP A 263     -42.693  -8.133  47.001  0.67  1.07           O 0
+ATOM   2042   CA MET A 264     -41.642  -5.645  47.502  0.00  0.00           C 0
+ATOM   1669  NH2 ARG A 217     -42.172  -5.248  36.921  0.00  0.00           N 0
+TER
+END

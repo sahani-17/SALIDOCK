@@ -1,0 +1,62 @@
+HEADER
+HEADER This is a pqr format file writen by the programm fpocket.                 
+HEADER It represent the voronoi vertices of a single pocket found by the         
+HEADER algorithm.                                                                
+HEADER                                                                           
+HEADER Information about the pocket    77:
+HEADER 0  - Pocket Score                      : -0.0793
+HEADER 1  - Drug Score                        : 0.0009
+HEADER 2  - Number of V. Vertices             :    40
+HEADER 3  - Mean alpha-sphere radius          : 3.4504
+HEADER 4  - Mean alpha-sphere SA              : 0.4386
+HEADER 5  - Mean B-factor                     : 0.0000
+HEADER 6  - Hydrophobicity Score              : 26.3750
+HEADER 7  - Polarity Score                    :     5
+HEADER 8  - Volume Score                      : 4.7500
+HEADER 9  - Real volume (approximation)       : 322.5451
+HEADER 10 - Charge Score                      :     3
+HEADER 11 - Local hydrophobic density Score   : 14.0000
+HEADER 12 - Number of apolar alpha sphere     :    15
+HEADER 13 - Proportion of apolar alpha sphere : 0.3750
+ATOM      1    C STP    77      25.065 -10.875 -17.711    0.00     3.28
+ATOM      2    O STP    77      26.654 -15.587 -22.743    0.00     4.10
+ATOM      3    O STP    77      25.837 -14.434 -21.288    0.00     3.44
+ATOM      4    C STP    77      23.681  -8.078 -22.059    0.00     3.12
+ATOM      5    C STP    77      24.592 -11.097 -17.643    0.00     3.27
+ATOM      6    C STP    77      26.577 -11.176 -18.247    0.00     3.11
+ATOM      7    O STP    77      28.851 -11.197 -18.298    0.00     3.41
+ATOM      8    O STP    77      22.632 -12.197 -19.664    0.00     4.32
+ATOM      9    O STP    77      22.747 -12.805 -19.302    0.00     4.65
+ATOM     10    O STP    77      24.103 -11.669 -18.843    0.00     3.82
+ATOM     11    C STP    77      24.909 -11.213 -18.669    0.00     3.60
+ATOM     12    O STP    77      25.766 -11.653 -18.904    0.00     3.26
+ATOM     13    O STP    77      22.852 -12.886 -19.343    0.00     4.58
+ATOM     14    O STP    77      24.750 -12.898 -19.426    0.00     3.50
+ATOM     15    O STP    77      24.865 -12.943 -19.485    0.00     3.44
+ATOM     16    O STP    77      25.712 -14.233 -21.111    0.00     3.38
+ATOM     17    O STP    77      25.858 -14.205 -21.081    0.00     3.36
+ATOM     18    O STP    77      25.850 -14.246 -21.131    0.00     3.38
+ATOM     19    O STP    77      27.791 -13.819 -21.841    0.00     3.30
+ATOM     20    O STP    77      27.628 -13.777 -21.714    0.00     3.23
+ATOM     21    O STP    77      29.078 -12.196 -19.340    0.00     3.30
+ATOM     22    O STP    77      28.864 -11.600 -18.859    0.00     3.31
+ATOM     23    O STP    77      25.940 -11.712 -18.987    0.00     3.18
+ATOM     24    O STP    77      29.025 -11.306 -17.486    0.00     3.26
+ATOM     25    O STP    77      27.121 -11.108 -18.158    0.00     3.07
+ATOM     26    O STP    77      28.593 -11.073 -18.123    0.00     3.36
+ATOM     27    C STP    77      25.080 -10.860 -17.703    0.00     3.27
+ATOM     28    C STP    77      25.106 -10.865 -17.749    0.00     3.29
+ATOM     29    C STP    77      25.391 -10.839 -18.190    0.00     3.44
+ATOM     30    C STP    77      26.081 -10.990 -18.179    0.00     3.20
+ATOM     31    O STP    77      22.938 -11.114 -19.939    0.00     3.75
+ATOM     32    O STP    77      22.700 -11.732 -19.828    0.00     4.07
+ATOM     33    C STP    77      23.685  -9.075 -20.903    0.00     3.24
+ATOM     34    O STP    77      22.699 -11.688 -20.126    0.00     3.91
+ATOM     35    C STP    77      23.641  -8.684 -20.951    0.00     3.18
+ATOM     36    C STP    77      23.632  -8.179 -21.956    0.00     3.15
+ATOM     37    C STP    77      23.641  -8.214 -22.052    0.00     3.16
+ATOM     38    C STP    77      23.717  -8.794 -22.178    0.00     3.18
+ATOM     39    C STP    77      23.341  -9.420 -22.855    0.00     3.05
+ATOM     40    O STP    77      23.461  -9.360 -22.691    0.00     3.09
+TER
+END

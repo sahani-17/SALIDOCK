@@ -1,0 +1,40 @@
+HEADER
+HEADER This is a pdb format file writen by the programm fpocket.                 
+HEADER It represents the atoms contacted by the voronoi vertices of the pocket.  
+HEADER                                                                           
+HEADER Information about the pocket    32:
+HEADER 0  - Pocket Score                      : -0.0562
+HEADER 1  - Drug Score                        : 0.0098
+HEADER 2  - Number of alpha spheres           :    23
+HEADER 3  - Mean alpha-sphere radius          : 3.4679
+HEADER 4  - Mean alpha-sphere Solvent Acc.    : 0.4870
+HEADER 5  - Mean B-factor of pocket residues  : 0.0000
+HEADER 6  - Hydrophobicity Score              : 36.4286
+HEADER 7  - Polarity Score                    :     3
+HEADER 8  - Amino Acid based volume Score     : 3.4286
+HEADER 9  - Pocket volume (Monte Carlo)       : 203.3957
+HEADER 10 - Pocket volume (convex hull)       : 9.1986
+HEADER 11 - Charge Score                      :     0
+HEADER 12 - Local hydrophobic density Score   : 17.0000
+HEADER 13 - Number of apolar alpha sphere     :    18
+HEADER 14 - Proportion of apolar alpha sphere : 0.7826
+ATOM   2357  CE2 PHE A 305     -34.931   0.285  32.126  0.00  0.00           C 0
+ATOM   2358   CZ PHE A 305     -34.712   0.661  30.818  0.00  0.00           C 0
+ATOM   2356  CE1 PHE A 305     -35.492   1.649  30.250  0.00  0.00           C 0
+ATOM   2354  CD1 PHE A 305     -36.485   2.260  30.994  0.00  0.00           C 0
+ATOM      6   OG SER A   1     -31.312   6.067  33.660  0.74  9.64           O 0
+ATOM   1642    O ASN A 214     -33.087   0.912  35.304  0.50  4.29           O 0
+ATOM   2339  CG1 VAL A 303     -36.869   6.615  34.672  0.00  0.00           C 0
+ATOM   2353   CG PHE A 305     -36.716   1.894  32.306  0.00  0.00           C 0
+ATOM   2352   CB PHE A 305     -37.799   2.567  33.104  0.00  0.00           C 0
+ATOM   1634    O ILE A 213     -36.690   3.498  36.321  0.00  0.00           O 0
+ATOM      5   CB SER A   1     -32.483   6.704  34.140  0.00  0.00           C 0
+ATOM   2355  CD2 PHE A 305     -35.930   0.902  32.865  0.00  0.00           C 0
+ATOM   1640   CA ASN A 214     -34.215   2.350  36.837  0.00  0.00           C 0
+ATOM   2348    N PHE A 305     -39.779   3.983  32.668  0.68  3.28           N 0
+ATOM   2341    N THR A 304     -40.002   6.614  34.069  0.78  1.09           N 0
+ATOM   2347  CG2 THR A 304     -41.611   6.143  31.607  0.00  0.00           C 0
+ATOM   2335   CA VAL A 303     -38.671   8.330  35.137  0.00  0.00           C 0
+ATOM   2333    O GLY A 302     -38.308  11.013  34.363  0.42  8.57           O 0
+TER
+END

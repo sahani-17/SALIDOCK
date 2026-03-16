@@ -213,11 +213,11 @@ const About = () => {
                     <Lightbulb size={100} />
                   </div>
                   <div className="relative z-10">
-                    <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mb-6 text-primary border border-primary/20">
-                      <Zap size={32} />
+                    <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-6 border-2 border-primary/20 bg-primary/5">
+                      <img src="/Shasank.JPG.png" alt="Dr. Shasank Sekhar Swain" className="w-full h-full object-cover" />
                     </div>
                     <h3 className="font-bold text-xl mb-1">Dr. Shasank Sekhar Swain</h3>
-                    <p className="text-sm text-primary mb-4 font-semibold">Mentor & Funder</p>
+                    <p className="text-sm text-primary mb-4 font-semibold">Guide, Mentor & Funder</p>
                     <p className="text-sm text-muted-foreground">
                       Founder of <span className="text-foreground font-semibold">Salixiras Pvt. Ltd.</span> His expert guidance transformed SALIDOCK from a student project to an industry-ready tool.
                     </p>

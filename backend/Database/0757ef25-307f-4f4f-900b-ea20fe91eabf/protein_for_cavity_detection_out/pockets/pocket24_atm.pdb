@@ -1,0 +1,46 @@
+HEADER
+HEADER This is a pdb format file writen by the programm fpocket.                 
+HEADER It represents the atoms contacted by the voronoi vertices of the pocket.  
+HEADER                                                                           
+HEADER Information about the pocket    24:
+HEADER 0  - Pocket Score                      : 0.0488
+HEADER 1  - Drug Score                        : 0.0015
+HEADER 2  - Number of alpha spheres           :    23
+HEADER 3  - Mean alpha-sphere radius          : 3.5797
+HEADER 4  - Mean alpha-sphere Solvent Acc.    : 0.5983
+HEADER 5  - Mean B-factor of pocket residues  : 0.0000
+HEADER 6  - Hydrophobicity Score              : 40.2222
+HEADER 7  - Polarity Score                    :     6
+HEADER 8  - Amino Acid based volume Score     : 4.2222
+HEADER 9  - Pocket volume (Monte Carlo)       : 289.7346
+HEADER 10 - Pocket volume (convex hull)       : 36.9772
+HEADER 11 - Charge Score                      :    -1
+HEADER 12 - Local hydrophobic density Score   : 6.0000
+HEADER 13 - Number of apolar alpha sphere     :     9
+HEADER 14 - Proportion of apolar alpha sphere : 0.3913
+ATOM   2821  CE3 TRP A 349     -14.041  14.403  13.762  0.00  0.00           C 0
+ATOM   2813   CA TRP A 349     -17.599  12.037  12.865  0.00  0.00           C 0
+ATOM   2826    N ASP A 350     -18.158  10.670  14.802  0.63  5.47           N 0
+ATOM   2830    O ASP A 350     -16.608  10.791  17.426  0.91  5.36           O 0
+ATOM    346   OG SER A  44     -13.175  13.222  19.299  0.82  3.21           O 0
+ATOM    340   OG SER A  43      -8.383  14.815  20.977  0.38  7.50           O 0
+ATOM    338   CB SER A  43      -9.407  15.017  21.929  0.00  0.00           C 0
+ATOM    310  CD1 PHE A  40     -11.911  10.307  21.530  0.00  0.00           C 0
+ATOM    342   CA SER A  44     -12.675  15.514  18.869  0.00  0.00           C 0
+ATOM    339    O SER A  43     -10.342  17.050  19.379  0.00  0.00           O 0
+ATOM    337    C SER A  43     -10.800  16.328  20.268  0.00  0.00           C 0
+ATOM    363   CB SER A  47      -9.884  17.030  15.831  0.00  0.00           C 0
+ATOM   2825  CZ3 TRP A 349     -12.690  14.795  13.826  0.00  0.00           C 0
+ATOM    365   OG SER A  47      -9.302  16.626  14.609  0.00  0.00           O 0
+ATOM    341    N SER A  44     -11.910  15.608  20.112  0.00  0.00           N 0
+ATOM   2839   CG LEU A 351     -17.262  15.390  17.288  0.00  0.00           C 0
+ATOM    344   CB SER A  44     -13.783  14.466  19.023  0.00  0.00           C 0
+ATOM   2835   CA LEU A 351     -17.420  13.147  18.616  0.00  0.00           C 0
+ATOM    312  CE1 PHE A  40     -12.059   9.987  20.169  0.00  0.00           C 0
+ATOM    313   CZ PHE A  40     -13.335  10.001  19.577  0.00  0.00           C 0
+ATOM    544  CD1 TRP A  69      -7.015  10.757  22.603  0.00  0.00           C 0
+ATOM    548  NE1 TRP A  69      -7.679   9.550  22.502  0.76  1.09           N 0
+ATOM   2811    O ALA A 348     -16.543  10.490  10.766  0.00  0.00           O 0
+ATOM   2819  CD2 TRP A 349     -14.733  14.378  12.531  0.00  0.00           C 0
+TER
+END

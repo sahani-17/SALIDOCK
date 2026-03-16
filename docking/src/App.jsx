@@ -7,6 +7,7 @@ import Results from "./pages/Results";
 import Cavity from "./pages/Cavity";
 import Active from "./pages/Active";
 import About from "./pages/About";
+import Documentation from "./pages/Documentation";
 import NotFound from "./pages/NotFound";
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
         <Route path="/cavity" element={<Cavity />} />
         <Route path="/active" element={<Active />} />
         <Route path="/about" element={<About />} />
+        <Route path="/docs" element={<Documentation />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
       <Toaster

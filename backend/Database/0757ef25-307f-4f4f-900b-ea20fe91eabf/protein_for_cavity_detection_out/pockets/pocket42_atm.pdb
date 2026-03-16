@@ -1,0 +1,34 @@
+HEADER
+HEADER This is a pdb format file writen by the programm fpocket.                 
+HEADER It represents the atoms contacted by the voronoi vertices of the pocket.  
+HEADER                                                                           
+HEADER Information about the pocket    42:
+HEADER 0  - Pocket Score                      : -0.0040
+HEADER 1  - Drug Score                        : 0.0005
+HEADER 2  - Number of alpha spheres           :    16
+HEADER 3  - Mean alpha-sphere radius          : 3.4693
+HEADER 4  - Mean alpha-sphere Solvent Acc.    : 0.4785
+HEADER 5  - Mean B-factor of pocket residues  : 0.0000
+HEADER 6  - Hydrophobicity Score              : 2.4000
+HEADER 7  - Polarity Score                    :     4
+HEADER 8  - Amino Acid based volume Score     : 3.6000
+HEADER 9  - Pocket volume (Monte Carlo)       : 110.4572
+HEADER 10 - Pocket volume (convex hull)       : 1.8305
+HEADER 11 - Charge Score                      :     0
+HEADER 12 - Local hydrophobic density Score   : 7.0000
+HEADER 13 - Number of apolar alpha sphere     :     8
+HEADER 14 - Proportion of apolar alpha sphere : 0.5000
+ATOM   1845  CD2 HIS A 228     -10.709 -19.255  -0.389  0.00  0.00           C 0
+ATOM   1854  CG2 THR A 229     -12.010 -14.730  -0.272  0.00  0.00           C 0
+ATOM   1818   CB ASP A 225      -9.220 -15.468   4.360  0.00  0.00           C 0
+ATOM   1819    O ASP A 225      -9.000 -14.892   1.128  0.00  0.00           O 0
+ATOM   4686    O MET A 579     -14.936 -15.480   2.929  0.65  5.36           O 0
+ATOM   4687   CG MET A 579     -12.843 -13.188   3.787  0.00  0.00           C 0
+ATOM   1821  OD1 ASP A 225      -9.242 -17.756   5.169  0.35  5.36           O 0
+ATOM   4680  ND2 ASN A 578     -13.615 -18.994   7.350  0.00  0.00           N 0
+ATOM   1820   CG ASP A 225      -9.593 -16.570   5.360  0.00  0.00           C 0
+ATOM   1822  OD2 ASP A 225     -10.281 -16.207   6.343  0.00  0.00           O 0
+ATOM   4677   CB ASN A 578     -14.985 -17.152   6.568  0.00  0.00           C 0
+ATOM   1816   CA ASP A 225      -8.298 -15.899   3.210  0.00  0.00           C 0
+TER
+END

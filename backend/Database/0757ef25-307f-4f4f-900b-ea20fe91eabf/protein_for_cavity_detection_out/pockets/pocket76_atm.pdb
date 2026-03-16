@@ -1,0 +1,36 @@
+HEADER
+HEADER This is a pdb format file writen by the programm fpocket.                 
+HEADER It represents the atoms contacted by the voronoi vertices of the pocket.  
+HEADER                                                                           
+HEADER Information about the pocket    76:
+HEADER 0  - Pocket Score                      : -0.0791
+HEADER 1  - Drug Score                        : 0.0005
+HEADER 2  - Number of alpha spheres           :    17
+HEADER 3  - Mean alpha-sphere radius          : 3.7940
+HEADER 4  - Mean alpha-sphere Solvent Acc.    : 0.6752
+HEADER 5  - Mean B-factor of pocket residues  : 0.0000
+HEADER 6  - Hydrophobicity Score              : -34.0000
+HEADER 7  - Polarity Score                    :     2
+HEADER 8  - Amino Acid based volume Score     : 3.0000
+HEADER 9  - Pocket volume (Monte Carlo)       : 204.2646
+HEADER 10 - Pocket volume (convex hull)       : 3.2007
+HEADER 11 - Charge Score                      :     0
+HEADER 12 - Local hydrophobic density Score   : 11.0000
+HEADER 13 - Number of apolar alpha sphere     :    12
+HEADER 14 - Proportion of apolar alpha sphere : 0.7059
+ATOM   6404   CB ASN A 791      72.563 -37.029 -82.147  0.00  0.00           C 0
+ATOM   6420   CB PRO A 793      66.979 -40.409 -81.312  0.00  0.00           C 0
+ATOM   6407  ND2 ASN A 791      72.168 -34.774 -82.949  0.82  5.47           N 0
+ATOM   6422   CG PRO A 793      67.407 -40.845 -82.710  0.00  0.00           C 0
+ATOM   6423   CD PRO A 793      68.897 -41.073 -82.535  0.00  0.00           C 0
+ATOM   6416  OD1 ASN A 792      71.173 -40.927 -84.311  0.79  5.36           O 0
+ATOM   6411    C ASN A 792      70.399 -41.012 -80.560  0.00  0.00           C 0
+ATOM   6413    O ASN A 792      70.602 -41.134 -79.352  0.76  7.50           O 0
+ATOM   6418   CA PRO A 793      67.879 -41.273 -80.417  0.00  0.00           C 0
+ATOM   6408  OD1 ASN A 791      72.401 -35.071 -80.790  0.00  0.00           O 0
+ATOM   6406   CG ASN A 791      72.378 -35.547 -81.909  0.00  0.00           C 0
+ATOM   6417    N PRO A 793      69.172 -41.188 -81.108  0.00  0.00           N 0
+ATOM   6410   CA ASN A 792      71.586 -40.627 -81.499  0.00  0.00           C 0
+ATOM   6409    N ASN A 792      72.683 -39.868 -80.855  0.38  4.37           N 0
+TER
+END

@@ -1,0 +1,43 @@
+HEADER
+HEADER This is a pqr format file writen by the programm fpocket.                 
+HEADER It represent the voronoi vertices of a single pocket found by the         
+HEADER algorithm.                                                                
+HEADER                                                                           
+HEADER Information about the pocket    95:
+HEADER 0  - Pocket Score                      : -0.1420
+HEADER 1  - Drug Score                        : 0.0016
+HEADER 2  - Number of V. Vertices             :    21
+HEADER 3  - Mean alpha-sphere radius          : 4.0117
+HEADER 4  - Mean alpha-sphere SA              : 0.7738
+HEADER 5  - Mean B-factor                     : 0.0000
+HEADER 6  - Hydrophobicity Score              : 15.5000
+HEADER 7  - Polarity Score                    :     2
+HEADER 8  - Volume Score                      : 3.5000
+HEADER 9  - Real volume (approximation)       : 369.4380
+HEADER 10 - Charge Score                      :     0
+HEADER 11 - Local hydrophobic density Score   : 9.0000
+HEADER 12 - Number of apolar alpha sphere     :    10
+HEADER 13 - Proportion of apolar alpha sphere : 0.4762
+ATOM      1    O STP    95      57.357 -47.735 -82.282    0.00     4.56
+ATOM      2    O STP    95      59.816 -47.182 -82.406    0.00     4.57
+ATOM      3    O STP    95      59.396 -47.359 -81.804    0.00     4.19
+ATOM      4    O STP    95      61.685 -44.883 -82.521    0.00     4.42
+ATOM      5    O STP    95      61.768 -43.844 -81.514    0.00     3.71
+ATOM      6    O STP    95      59.614 -47.371 -81.112    0.00     3.64
+ATOM      7    C STP    95      61.215 -46.800 -81.659    0.00     3.93
+ATOM      8    C STP    95      61.211 -46.834 -82.091    0.00     4.31
+ATOM      9    C STP    95      61.537 -47.404 -81.281    0.00     3.34
+ATOM     10    C STP    95      61.208 -46.835 -82.091    0.00     4.31
+ATOM     11    C STP    95      63.106 -46.130 -81.342    0.00     3.35
+ATOM     12    C STP    95      61.284 -46.756 -82.170    0.00     4.36
+ATOM     13    C STP    95      61.257 -46.803 -82.023    0.00     4.25
+ATOM     14    C STP    95      61.233 -46.824 -82.064    0.00     4.29
+ATOM     15    C STP    95      61.241 -46.819 -82.038    0.00     4.26
+ATOM     16    O STP    95      61.655 -43.112 -81.394    0.00     3.84
+ATOM     17    O STP    95      61.499 -42.471 -80.298    0.00     3.42
+ATOM     18    C STP    95      61.925 -41.637 -82.365    0.00     4.59
+ATOM     19    O STP    95      61.597 -43.478 -81.849    0.00     4.03
+ATOM     20    O STP    95      61.568 -41.438 -79.485    0.00     3.72
+ATOM     21    O STP    95      60.527 -44.091 -81.475    0.00     3.18
+TER
+END

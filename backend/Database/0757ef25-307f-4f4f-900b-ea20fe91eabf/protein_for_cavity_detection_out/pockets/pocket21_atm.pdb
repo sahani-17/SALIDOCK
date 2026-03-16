@@ -1,0 +1,36 @@
+HEADER
+HEADER This is a pdb format file writen by the programm fpocket.                 
+HEADER It represents the atoms contacted by the voronoi vertices of the pocket.  
+HEADER                                                                           
+HEADER Information about the pocket    21:
+HEADER 0  - Pocket Score                      : 0.0553
+HEADER 1  - Drug Score                        : 0.0005
+HEADER 2  - Number of alpha spheres           :    18
+HEADER 3  - Mean alpha-sphere radius          : 3.3437
+HEADER 4  - Mean alpha-sphere Solvent Acc.    : 0.3959
+HEADER 5  - Mean B-factor of pocket residues  : 0.0000
+HEADER 6  - Hydrophobicity Score              : 32.8333
+HEADER 7  - Polarity Score                    :     4
+HEADER 8  - Amino Acid based volume Score     : 4.5000
+HEADER 9  - Pocket volume (Monte Carlo)       : 64.0073
+HEADER 10 - Pocket volume (convex hull)       : 1.0796
+HEADER 11 - Charge Score                      :     1
+HEADER 12 - Local hydrophobic density Score   : 3.0000
+HEADER 13 - Number of apolar alpha sphere     :     4
+HEADER 14 - Proportion of apolar alpha sphere : 0.2222
+ATOM    299    O LEU A  39     -11.088  14.642  25.149  0.63  1.07           O 0
+ATOM    329   CB GLN A  42     -12.097  18.110  25.304  0.00  0.00           C 0
+ATOM    516    O ALA A  65      -6.234  16.197  23.952  0.00  0.00           O 0
+ATOM    335    N SER A  43     -11.128  16.574  22.714  0.00  0.00           N 0
+ATOM    515   CB ALA A  65      -7.636  18.994  22.741  0.00  0.00           C 0
+ATOM    535   CD LYS A  68      -6.668  17.729  28.836  0.00  0.00           C 0
+ATOM    334  OE1 GLN A  42     -11.231  19.038  27.975  0.71  3.21           O 0
+ATOM    302  CD1 LEU A  39      -9.674  15.074  29.573  0.00  0.00           C 0
+ATOM    534   CG LYS A  68      -5.663  16.594  28.622  0.00  0.00           C 0
+ATOM    538    N TRP A  69      -5.464  13.937  25.781  0.88  1.09           N 0
+ATOM    513   CA ALA A  65      -6.340  18.537  23.417  0.00  0.00           C 0
+ATOM    532   CB LYS A  68      -5.023  16.729  27.234  0.00  0.00           C 0
+ATOM    539   CA TRP A  69      -6.101  12.638  25.547  0.00  0.00           C 0
+ATOM    298   CB LEU A  39     -10.539  13.202  28.072  0.00  0.00           C 0
+TER
+END

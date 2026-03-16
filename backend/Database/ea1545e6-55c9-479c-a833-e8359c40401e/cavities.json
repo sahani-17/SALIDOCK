@@ -1,0 +1,485 @@
+[
+  {
+    "cavity_id": 31,
+    "center": [
+      -39.163,
+      5.231,
+      57.374
+    ],
+    "size": [
+      24.211,
+      25.033,
+      25.052
+    ],
+    "residues": [
+      "ASN_203_A",
+      "ASP_245_A",
+      "GLN_107_A",
+      "GLN_110_A",
+      "GLU_240_A",
+      "GLY_109_A",
+      "HIS_246_A",
+      "ILE_200_A",
+      "ILE_249_A",
+      "PHE_294_A",
+      "PRO_108_A",
+      "PRO_241_A",
+      "PRO_293_A",
+      "THR_243_A",
+      "THR_292_A",
+      "VAL_202_A"
+    ],
+    "num_residues": 16,
+    "detected_by": [
+      "fpocket",
+      "p2rank"
+    ],
+    "fpocket_data": {
+      "cavity_id": 31,
+      "center": [
+        -38.814,
+        6.784,
+        58.061
+      ],
+      "size": [
+        22.114,
+        20.876,
+        25.052
+      ],
+      "volume": 538.638,
+      "druggability_score": 0.001,
+      "num_alpha_spheres": 38
+    },
+    "p2rank_data": {
+      "cavity_id": 2,
+      "center": [
+        -39.513,
+        3.679,
+        56.688
+      ],
+      "size": [
+        24.211,
+        25.033,
+        23.428
+      ],
+      "score": 0.307,
+      "rank": 2
+    },
+    "volume": 538.638,
+    "druggability_score": 0.001,
+    "p2rank_score": 0.307,
+    "confidence": "high",
+    "match_criteria": [
+      "liberal_high",
+      "residue_35",
+      "surface_6A",
+      "consensus_65"
+    ],
+    "consensus_score": 0.757217200737389,
+    "centroid_proximity": 0.8288380101384474,
+    "surface_proximity": 0.9426239455314508,
+    "surface_distance": 1.4584796878942135,
+    "spatial_overlap": 0.0,
+    "residue_jaccard": 0.75,
+    "physicochemical_similarity": 0.9997780674022113,
+    "score_agreement": 0.694,
+    "center_distance": 3.4662306616842438,
+    "coverage_small": 0.8571428571428571,
+    "coverage_A": 0.8571428571428571,
+    "coverage_B": 0.8571428571428571,
+    "volume_overlap": null,
+    "rank": 1,
+    "detection_tier": 1,
+    "method": "consensus"
+  },
+  {
+    "cavity_id": 2,
+    "center": [
+      -12.79,
+      15.09,
+      68.172
+    ],
+    "size": [
+      25.258,
+      29.729,
+      31.112
+    ],
+    "residues": [
+      "ALA_191_A",
+      "ARG_188_A",
+      "ASN_142_A",
+      "ASP_187_A",
+      "CYS_145_A",
+      "CYS_44_A",
+      "GLN_189_A",
+      "GLN_192_A",
+      "GLU_166_A",
+      "GLY_143_A",
+      "HIS_163_A",
+      "HIS_164_A",
+      "HIS_172_A",
+      "HIS_41_A",
+      "LEU_141_A",
+      "LEU_167_A",
+      "LEU_27_A",
+      "MET_165_A",
+      "MET_49_A",
+      "PHE_140_A",
+      "PHE_181_A",
+      "PRO_168_A",
+      "PRO_52_A",
+      "SER_144_A",
+      "THR_190_A",
+      "THR_25_A",
+      "THR_26_A",
+      "TYR_54_A"
+    ],
+    "num_residues": 28,
+    "detected_by": [
+      "fpocket",
+      "p2rank"
+    ],
+    "fpocket_data": {
+      "cavity_id": 2,
+      "center": [
+        -12.677,
+        13.055,
+        68.367
+      ],
+      "size": [
+        25.258,
+        29.729,
+        31.112
+      ],
+      "volume": 1275.687,
+      "druggability_score": 0.206,
+      "num_alpha_spheres": 164
+    },
+    "p2rank_data": {
+      "cavity_id": 1,
+      "center": [
+        -12.902,
+        17.125,
+        67.977
+      ],
+      "size": [
+        22.305,
+        25.812,
+        27.692
+      ],
+      "score": 0.777,
+      "rank": 1
+    },
+    "volume": 1275.687,
+    "druggability_score": 0.206,
+    "p2rank_score": 0.777,
+    "confidence": "high",
+    "match_criteria": [
+      "liberal_high",
+      "residue_35",
+      "surface_6A",
+      "consensus_65"
+    ],
+    "consensus_score": 0.709216313677574,
+    "centroid_proximity": 0.7695155325744399,
+    "surface_proximity": 1.0,
+    "surface_distance": 0.0,
+    "spatial_overlap": 0.08421052631578947,
+    "residue_jaccard": 0.6428571428571429,
+    "physicochemical_similarity": 0.9974052553512421,
+    "score_agreement": 0.42899999999999994,
+    "center_distance": 4.094829056261079,
+    "coverage_small": 1.0,
+    "coverage_A": 0.6428571428571429,
+    "coverage_B": 1.0,
+    "volume_overlap": null,
+    "rank": 2,
+    "detection_tier": 1,
+    "method": "consensus"
+  },
+  {
+    "cavity_id": 16,
+    "center": [
+      -16.952,
+      32.817,
+      56.793
+    ],
+    "size": [
+      22.834,
+      23.85,
+      21.66
+    ],
+    "residues": [
+      "ALA_70_A",
+      "ASN_95_A",
+      "CYS_16_A",
+      "GLN_74_A",
+      "GLU_14_A",
+      "GLY_120_A",
+      "GLY_15_A",
+      "GLY_71_A",
+      "LEU_75_A",
+      "LYS_97_A",
+      "MET_17_A",
+      "PRO_122_A",
+      "PRO_96_A",
+      "SER_121_A",
+      "THR_93_A",
+      "TRP_31_A",
+      "VAL_18_A",
+      "VAL_73_A"
+    ],
+    "num_residues": 18,
+    "detected_by": [
+      "fpocket",
+      "p2rank"
+    ],
+    "fpocket_data": {
+      "cavity_id": 16,
+      "center": [
+        -16.383,
+        35.398,
+        56.583
+      ],
+      "size": [
+        20.558,
+        22.931,
+        21.66
+      ],
+      "volume": 475.511,
+      "druggability_score": 0.077,
+      "num_alpha_spheres": 45
+    },
+    "p2rank_data": {
+      "cavity_id": 4,
+      "center": [
+        -17.521,
+        30.235,
+        57.004
+      ],
+      "size": [
+        22.834,
+        23.85,
+        18.998
+      ],
+      "score": 0.078,
+      "rank": 4
+    },
+    "volume": 475.511,
+    "druggability_score": 0.077,
+    "p2rank_score": 0.078,
+    "confidence": "high",
+    "match_criteria": [
+      "liberal_high",
+      "residue_35",
+      "surface_6A",
+      "consensus_65"
+    ],
+    "consensus_score": 0.686644779898986,
+    "centroid_proximity": 0.644349921710021,
+    "surface_proximity": 1.0,
+    "surface_distance": 0.0,
+    "spatial_overlap": 0.07894736842105263,
+    "residue_jaccard": 0.4444444444444444,
+    "physicochemical_similarity": 0.9924281431136281,
+    "score_agreement": 0.999,
+    "center_distance": 5.303664205056731,
+    "coverage_small": 0.7272727272727273,
+    "coverage_A": 0.5333333333333333,
+    "coverage_B": 0.7272727272727273,
+    "volume_overlap": null,
+    "rank": 3,
+    "detection_tier": 1,
+    "method": "consensus"
+  },
+  {
+    "cavity_id": 30,
+    "center": [
+      -34.246,
+      15.854,
+      55.755
+    ],
+    "size": [
+      19.425,
+      25.185,
+      23.041
+    ],
+    "residues": [
+      "ARG_105_A",
+      "ASN_151_A",
+      "ASP_153_A",
+      "ASP_295_A",
+      "GLN_110_A",
+      "ILE_106_A",
+      "ILE_152_A",
+      "PHE_294_A",
+      "PHE_8_A",
+      "SER_158_A",
+      "THR_111_A",
+      "THR_292_A",
+      "TYR_154_A",
+      "VAL_104_A"
+    ],
+    "num_residues": 14,
+    "detected_by": [
+      "fpocket",
+      "p2rank"
+    ],
+    "fpocket_data": {
+      "cavity_id": 30,
+      "center": [
+        -35.51,
+        16.572,
+        52.871
+      ],
+      "size": [
+        19.425,
+        23.224,
+        19.254
+      ],
+      "volume": 376.956,
+      "druggability_score": 0.004,
+      "num_alpha_spheres": 41
+    },
+    "p2rank_data": {
+      "cavity_id": 3,
+      "center": [
+        -32.982,
+        15.137,
+        58.638
+      ],
+      "size": [
+        15.616,
+        25.185,
+        23.041
+      ],
+      "score": 0.256,
+      "rank": 3
+    },
+    "volume": 376.956,
+    "druggability_score": 0.004,
+    "p2rank_score": 0.256,
+    "confidence": "medium",
+    "match_criteria": [
+      "liberal_medium",
+      "residue_20",
+      "surface_8A",
+      "consensus_45"
+    ],
+    "consensus_score": 0.6083526528781786,
+    "centroid_proximity": 0.5211631407267363,
+    "surface_proximity": 1.0,
+    "surface_distance": 0.0,
+    "spatial_overlap": 0.02631578947368421,
+    "residue_jaccard": 0.35714285714285715,
+    "physicochemical_similarity": 0.9706916378596173,
+    "score_agreement": 0.748,
+    "center_distance": 6.458196187791135,
+    "coverage_small": 0.625,
+    "coverage_A": 0.45454545454545453,
+    "coverage_B": 0.625,
+    "volume_overlap": null,
+    "rank": 4,
+    "detection_tier": 1,
+    "method": "consensus"
+  },
+  {
+    "cavity_id": 1,
+    "center": [
+      -26.026,
+      -0.241,
+      53.825
+    ],
+    "size": [
+      22.855,
+      34.845,
+      28.475
+    ],
+    "residues": [
+      "ALA_129_A",
+      "ALA_285_A",
+      "ARG_131_A",
+      "ARG_279_A",
+      "ASN_277_A",
+      "ASP_197_A",
+      "ASP_289_A",
+      "CYS_128_A",
+      "GLN_127_A",
+      "GLU_290_A",
+      "GLY_275_A",
+      "GLY_278_A",
+      "LEU_271_A",
+      "LEU_286_A",
+      "LEU_287_A",
+      "LYS_137_A",
+      "LYS_5_A",
+      "MET_276_A",
+      "THR_198_A",
+      "THR_199_A",
+      "THR_280_A",
+      "TYR_239_A"
+    ],
+    "num_residues": 22,
+    "detected_by": [
+      "fpocket",
+      "p2rank"
+    ],
+    "fpocket_data": {
+      "cavity_id": 1,
+      "center": [
+        -26.611,
+        -1.691,
+        50.198
+      ],
+      "size": [
+        22.855,
+        34.845,
+        28.475
+      ],
+      "volume": 900.321,
+      "druggability_score": 0.012,
+      "num_alpha_spheres": 61
+    },
+    "p2rank_data": {
+      "cavity_id": 5,
+      "center": [
+        -25.442,
+        1.21,
+        57.452
+      ],
+      "size": [
+        20.272,
+        20.55,
+        24.515
+      ],
+      "score": 0.033,
+      "rank": 5
+    },
+    "volume": 900.321,
+    "druggability_score": 0.012,
+    "p2rank_score": 0.033,
+    "confidence": "medium",
+    "match_criteria": [
+      "liberal_medium",
+      "residue_20",
+      "surface_8A",
+      "consensus_45"
+    ],
+    "consensus_score": 0.5596032548602025,
+    "centroid_proximity": 0.37717539207587913,
+    "surface_proximity": 0.9427187887450313,
+    "surface_distance": 1.4572374549125464,
+    "spatial_overlap": 0.0,
+    "residue_jaccard": 0.22727272727272727,
+    "physicochemical_similarity": 0.9893424674533075,
+    "score_agreement": 0.979,
+    "center_distance": 7.899549227645839,
+    "coverage_small": 0.7142857142857143,
+    "coverage_A": 0.25,
+    "coverage_B": 0.7142857142857143,
+    "volume_overlap": null,
+    "rank": 5,
+    "detection_tier": 1,
+    "method": "consensus"
+  }
+]
