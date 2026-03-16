@@ -1,0 +1,10 @@
+Pose,Affinity (kcal/mol),RMSD l.b.,RMSD u.b.,Cavity ID,Complex File,Interactions File
+1,-4.309,0.0,0.0,7,complexes/complex_pose_1.pdb,interactions/interactions_pose_1.json
+2,-4.295,8.231,11.205,7,complexes/complex_pose_2.pdb,interactions/interactions_pose_2.json
+3,-4.255,1.527,3.616,7,complexes/complex_pose_3.pdb,interactions/interactions_pose_3.json
+4,-4.131,9.123,11.469,7,complexes/complex_pose_4.pdb,interactions/interactions_pose_4.json
+5,-4.102,8.796,10.354,7,complexes/complex_pose_5.pdb,interactions/interactions_pose_5.json
+6,-3.894,2.677,4.714,7,complexes/complex_pose_6.pdb,interactions/interactions_pose_6.json
+7,-3.861,1.751,4.501,7,complexes/complex_pose_7.pdb,interactions/interactions_pose_7.json
+8,-3.799,1.777,4.082,7,complexes/complex_pose_8.pdb,interactions/interactions_pose_8.json
+9,-3.706,9.502,10.92,7,complexes/complex_pose_9.pdb,interactions/interactions_pose_9.json

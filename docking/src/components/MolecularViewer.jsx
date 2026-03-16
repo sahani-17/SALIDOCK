@@ -1,7 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Loader2 } from 'lucide-react';
 
-// Mol* imports
 import { createPluginUI } from 'molstar/lib/mol-plugin-ui';
 import { renderReact18 } from 'molstar/lib/mol-plugin-ui/react18';
 import { PluginCommands } from 'molstar/lib/mol-plugin/commands';
@@ -9,25 +8,15 @@ import { Color } from 'molstar/lib/mol-util/color';
 import { PluginBehaviors } from 'molstar/lib/mol-plugin/behavior';
 import { StructureFocusRepresentation } from 'molstar/lib/mol-plugin/behavior/dynamic/selection/structure-focus-representation';
 import { PluginSpec } from 'molstar/lib/mol-plugin/spec';
+import { PluginConfig } from 'molstar/lib/mol-plugin/config';
 import { StateTransforms } from 'molstar/lib/mol-plugin-state/transforms';
-import { AnimateCameraSpin } from 'molstar/lib/mol-plugin-state/animation/built-in/camera-spin';
-import { AnimateCameraRock } from 'molstar/lib/mol-plugin-state/animation/built-in/camera-rock';
-import { AnimateStructureSpin } from 'molstar/lib/mol-plugin-state/animation/built-in/spin-structure';
-import { CreateVolumeStreamingBehavior } from 'molstar/lib/mol-plugin/behavior/dynamic/volume-streaming/transformers';
-import { VolumeStreamingCustomControls } from 'molstar/lib/mol-plugin-ui/custom/volume';
 import 'molstar/lib/mol-plugin-ui/skin/light.scss';
 
 /**
- * Custom Mol* spec for SaliDock:
- * - No left panel actions (no Download Structure, Open Files, Remote States, etc.)
- * - Keeps right panel (Structure Tools, Quick Styles, Components, Measurements)
- * - Keeps sequence viewer, viewport controls
- * - Hides log panel via CSS
+ * Custom Mol* spec for SaliDock
  */
 const SaliDockPluginSpec = () => ({
   actions: [
-    // Keep only structure/representation manipulation actions (for right panel)
-    // Remove: DownloadStructure, DownloadDensity, DownloadFile, OpenFiles, LoadTrajectory
     PluginSpec.Action(StateTransforms.Representation.StructureRepresentation3D),
     PluginSpec.Action(StateTransforms.Representation.StructureSelectionsDistance3D),
     PluginSpec.Action(StateTransforms.Representation.StructureSelectionsAngle3D),
@@ -55,22 +44,14 @@ const SaliDockPluginSpec = () => ({
     PluginSpec.Behavior(PluginBehaviors.CustomProps.SecondaryStructure),
     PluginSpec.Behavior(PluginBehaviors.CustomProps.ValenceModel),
   ],
-  animations: [
-    AnimateCameraSpin,
-    AnimateCameraRock,
-    AnimateStructureSpin,
-  ],
-  customParamEditors: [
-    [CreateVolumeStreamingBehavior, VolumeStreamingCustomControls],
-  ],
+  animations: [],
+  customParamEditors: [],
 });
 
 /**
  * Paint SaliDock watermark directly onto a canvas 2D context.
- * Called after Mol*'s draw() renders the screenshot to the internal canvas.
  */
 function paintWatermark(ctx, width, height) {
-  // SaliDock watermark — bottom-right, scaled for any resolution
   const watermarkText = 'SaliDock';
   const fontSize = Math.max(24, height * 0.035);
   ctx.font = `bold ${fontSize}px Arial`;
@@ -86,20 +67,83 @@ function paintWatermark(ctx, width, height) {
   ctx.strokeText(watermarkText, textX, textY);
   ctx.fillText(watermarkText, textX, textY);
 
-  // Resolution info — bottom-left
   const infoText = `${width}×${height}px`;
   ctx.font = `${Math.max(14, fontSize * 0.4)}px Arial`;
   ctx.fillStyle = 'rgba(100, 100, 100, 0.6)';
   ctx.fillText(infoText, padding, height - padding);
 }
 
-function MolecularViewer({ pdbData, poseNumber }) {
+/**
+ * MolecularViewer — a clean Mol* viewer that exposes methods via ref.
+ *
+ * Exposed ref methods:
+ *   getPlugin()            — returns the raw Mol* plugin instance
+ *   setShowSequence(bool)  — toggle sequence panel
+ */
+const MolecularViewer = forwardRef(function MolecularViewer({ pdbData, poseNumber }, ref) {
   const viewerRef = useRef(null);
   const pluginRef = useRef(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Initialize the Mol* plugin once
+  // Track poseNumber safely for async operations
+  const poseNumberRef = useRef(poseNumber);
+  useEffect(() => {
+    poseNumberRef.current = poseNumber;
+  }, [poseNumber]);
+
+  // Load PDB data into Mol*
+  const loadStructureInternal = useCallback(async (plugin, data) => {
+    setLoading(true);
+    setError(null);
+    try {
+      await plugin.clear();
+
+      const dataObj = await plugin.builders.data.rawData({
+        data,
+        label: `Pose ${poseNumberRef.current || '?'}`,
+      });
+
+      const trajectory = await plugin.builders.structure.parseTrajectory(dataObj, 'pdb');
+
+      await plugin.builders.structure.hierarchy.applyPreset(trajectory, 'default', {
+        structure: { name: 'model', params: {} },
+        showUnitcell: false,
+        representationPreset: 'polymer-and-ligand',
+      });
+
+      plugin.managers.camera.reset();
+    } catch (err) {
+      console.error('Error loading structure:', err);
+      setError('Failed to load molecular structure');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // ─── Expose API to parent via ref ──────────────────────────────────
+  useImperativeHandle(ref, () => ({
+    getPlugin: () => pluginRef.current,
+
+    setShowSequence: (show) => {
+      const plugin = pluginRef.current;
+      if (!plugin) return;
+      try {
+        plugin.layout.setProps({
+          regionState: {
+            ...plugin.layout.state.regionState,
+            top: show ? 'full' : 'hidden',
+          },
+        });
+        // setProps doesn't fire updated event, so we trigger it manually
+        plugin.layout.events.updated.next(void 0);
+      } catch (err) {
+        console.error('Error toggling sequence:', err);
+      }
+    },
+  }));
+
+  // Initialize Mol* plugin
   useEffect(() => {
     if (!viewerRef.current) return;
     let mounted = true;
@@ -116,52 +160,52 @@ function MolecularViewer({ pdbData, poseNumber }) {
                 isExpanded: false,
                 showControls: true,
                 controlsDisplay: 'reactive',
+                regionState: {
+                  left: 'hidden',
+                  right: 'hidden',
+                  top: 'hidden',
+                  bottom: 'hidden',
+                },
               },
             },
-            components: {
-              remoteState: 'none',
-            },
+            components: { remoteState: 'none' },
+            config: [
+              [PluginConfig.Viewport.ShowSelectionMode, false],
+            ],
           },
         });
 
-        if (!mounted) {
-          plugin.dispose();
-          return;
-        }
+        if (!mounted) { plugin.dispose(); return; }
 
-        // Set white background
+        // White background
         PluginCommands.Canvas3D.SetSettings(plugin, {
           settings: (props) => {
             props.renderer.backgroundColor = Color(0xffffff);
           },
         });
 
-        // Monkey-patch Mol*'s screenshot draw() method so ALL outputs
-        // (download, clipboard, preview) get the SaliDock watermark.
-        // draw() renders to this.canvas, which is then used for blob/dataUri.
+        // Watermark on screenshots
         const screenshotHelper = plugin.helpers.viewportScreenshot;
         if (screenshotHelper) {
           const originalDraw = screenshotHelper.draw.bind(screenshotHelper);
           screenshotHelper.draw = async (ctx) => {
             await originalDraw(ctx);
-            // Paint watermark onto the internal canvas after rendering
             const canvas = screenshotHelper.canvas;
             const canvasCtx = canvas.getContext('2d');
-            if (canvasCtx) {
-              paintWatermark(canvasCtx, canvas.width, canvas.height);
-            }
+            if (canvasCtx) paintWatermark(canvasCtx, canvas.width, canvas.height);
           };
         }
 
         pluginRef.current = plugin;
 
-        // If pdbData is already available, load it
         if (pdbData) {
-          await loadStructure(plugin, pdbData);
+          await loadStructureInternal(plugin, pdbData);
+        } else {
+          setLoading(false);
         }
       } catch (err) {
         console.error('Error initializing Mol* viewer:', err);
-        if (mounted) setError('Failed to initialize molecular viewer');
+        if (mounted) { setError('Failed to initialize molecular viewer'); setLoading(false); }
       }
     };
 
@@ -169,123 +213,65 @@ function MolecularViewer({ pdbData, poseNumber }) {
 
     return () => {
       mounted = false;
-      if (pluginRef.current) {
-        pluginRef.current.dispose();
-        pluginRef.current = null;
-      }
+      if (pluginRef.current) { pluginRef.current.dispose(); pluginRef.current = null; }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load new structure when pdbData changes
+  // Reload when pdbData changes
   useEffect(() => {
     if (!pluginRef.current || !pdbData) return;
-    loadStructure(pluginRef.current, pdbData);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pdbData]);
-
-  // Load a PDB string into the Mol* plugin
-  const loadStructure = async (plugin, data) => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      await plugin.clear();
-
-      const dataObj = await plugin.builders.data.rawData({
-        data,
-        label: `Pose ${poseNumber || '?'}`,
-      });
-
-      const trajectory = await plugin.builders.structure.parseTrajectory(
-        dataObj,
-        'pdb'
-      );
-
-      await plugin.builders.structure.hierarchy.applyPreset(
-        trajectory,
-        'default',
-        {
-          structure: { name: 'model', params: {} },
-          showUnitcell: false,
-          // 'polymer-and-ligand' preset: protein as cartoon, ligands as ball-and-stick
-          representationPreset: 'polymer-and-ligand',
-        }
-      );
-
-      // Start auto-spin
-      if (plugin.canvas3d) {
-        PluginCommands.Canvas3D.SetSettings(plugin, {
-          settings: {
-            trackball: {
-              ...plugin.canvas3d.props.trackball,
-              animate: {
-                name: 'spin',
-                params: { speed: 0.5 },
-              },
-            },
-          },
-        });
-      }
-    } catch (err) {
-      console.error('Error loading structure:', err);
-      setError('Failed to load molecular structure');
-    } finally {
-      setLoading(false);
-    }
-  };
+    loadStructureInternal(pluginRef.current, pdbData);
+  }, [pdbData, loadStructureInternal]);
 
   if (error) {
     return (
-      <div className="w-full h-96 bg-gray-100 rounded-lg flex items-center justify-center">
-        <p className="text-red-600">{error}</p>
+      <div className="w-full h-96 bg-card border border-primary/10 rounded-lg flex items-center justify-center">
+        <p className="text-destructive font-medium">{error}</p>
       </div>
     );
   }
 
   return (
-    <div className="relative">
-      {/* Hide log panel and left panel home button via CSS */}
+    <div className="relative" id="molecular-viewer-container">
+      {/* Hide specific Mol* UI elements via CSS */}
       <style>{`
-        .msp-log { display: none !important; }
-        .msp-layout-expanded { position: relative !important; }
+        #molecular-viewer-container .msp-log { display: none !important; }
+        #molecular-viewer-container .msp-layout-expanded { position: relative !important; }
+        #molecular-viewer-container .msp-viewport-controls-buttons [title="Selection Mode"] { display: none !important; }
+        #molecular-viewer-container .msp-viewport-controls-buttons [title="Toggle Expanded Viewport"] { display: none !important; }
+        #molecular-viewer-container .msp-viewport-controls-buttons [title="Toggle Controls Panel"] { display: none !important; }
+        #molecular-viewer-container .msp-viewport-controls-buttons [title="Reset Camera"] { display: none !important; }
+        #molecular-viewer-container .msp-viewport-controls-buttons [title="Focus Camera On Selection"] { display: none !important; }
+        #molecular-viewer-container .msp-selection-viewport-controls { display: none !important; }
       `}</style>
 
       <div
-        className="relative w-full bg-gray-50"
-        style={{ height: '600px', minHeight: '600px' }}
+        className="relative w-full bg-background rounded-lg border border-primary/10"
+        style={{ minHeight: '600px' }}
       >
-        {/* Mol* Viewer Container */}
+        {/* Mol* Viewer Canvas */}
         <div
           ref={viewerRef}
-          className="w-full h-full rounded-lg border-2 border-gray-200 bg-white"
+          className="w-full bg-white"
           style={{
-            width: '100%',
-            height: '100%',
-            minHeight: '600px',
             position: 'relative',
             overflow: 'hidden',
+            borderRadius: '8px',
+            height: '600px',
           }}
         />
 
         {/* Loading Overlay */}
         {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-20 rounded-lg">
-            <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-card/60 backdrop-blur-sm z-20 rounded-lg">
+            <Loader2 className="w-10 h-10 text-primary animate-spin mb-2" />
+            <p className="text-sm font-medium text-foreground">Processing Structure...</p>
           </div>
         )}
-
-
-        {/* Pose Info Overlay */}
-        <div className="absolute bottom-4 left-4 bg-white/90 rounded-lg shadow-lg px-4 py-2 border border-gray-200 z-10">
-          <p className="text-sm font-medium text-gray-900">
-            Pose {poseNumber || 'N/A'}
-          </p>
-          <p className="text-xs text-gray-600">Protein-Ligand Complex</p>
-        </div>
       </div>
     </div>
   );
-}
+});
 
 export default MolecularViewer;

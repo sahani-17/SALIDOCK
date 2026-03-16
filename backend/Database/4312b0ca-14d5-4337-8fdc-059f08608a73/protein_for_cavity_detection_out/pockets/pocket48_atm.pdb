@@ -1,0 +1,36 @@
+HEADER
+HEADER This is a pdb format file writen by the programm fpocket.                 
+HEADER It represents the atoms contacted by the voronoi vertices of the pocket.  
+HEADER                                                                           
+HEADER Information about the pocket    48:
+HEADER 0  - Pocket Score                      : -0.0490
+HEADER 1  - Drug Score                        : 0.0002
+HEADER 2  - Number of alpha spheres           :    16
+HEADER 3  - Mean alpha-sphere radius          : 3.6342
+HEADER 4  - Mean alpha-sphere Solvent Acc.    : 0.5083
+HEADER 5  - Mean B-factor of pocket residues  : 0.0000
+HEADER 6  - Hydrophobicity Score              : 23.3333
+HEADER 7  - Polarity Score                    :     3
+HEADER 8  - Amino Acid based volume Score     : 4.6667
+HEADER 9  - Pocket volume (Monte Carlo)       : 152.8356
+HEADER 10 - Pocket volume (convex hull)       : 6.7711
+HEADER 11 - Charge Score                      :     2
+HEADER 12 - Local hydrophobic density Score   : 0.0000
+HEADER 13 - Number of apolar alpha sphere     :     1
+HEADER 14 - Proportion of apolar alpha sphere : 0.0625
+ATOM   2133  CD1 ILE A 268      -6.579  21.339  12.841  0.00  0.00           C 0
+ATOM   2104    O ARG A 265      -2.587  27.168  12.173  0.67  7.50           O 0
+ATOM   2131  CG1 ILE A 268      -5.070  21.108  12.998  0.00  0.00           C 0
+ATOM   2129   CB ILE A 268      -4.294  20.959  11.665  0.00  0.00           C 0
+ATOM   2126    N ILE A 268      -2.217  21.860  12.747  0.00  0.00           N 0
+ATOM   2130    O ILE A 268      -1.710  21.738  10.040  0.44  1.07           O 0
+ATOM   2115    N ARG A 267      -0.702  24.020  14.171  0.00  0.00           N 0
+ATOM   2148  OD1 ASN A 270      -4.273  23.224   7.680  0.68  7.50           O 0
+ATOM   2114    O GLY A 266      -2.880  24.474  14.606  0.38  2.14           O 0
+ATOM   2103   CB ARG A 265      -5.180  28.794  13.062  0.00  0.00           C 0
+ATOM   2147  ND2 ASN A 270      -2.749  24.772   7.441  0.00  0.00           N 0
+ATOM   2102    C ARG A 265      -2.860  27.721  13.232  0.00  0.00           C 0
+ATOM   2076    O LEU A 262      -3.530  28.981   8.220  0.23  3.21           O 0
+ATOM   2079  CD2 LEU A 262      -7.471  28.315   6.661  0.00  0.00           C 0
+TER
+END

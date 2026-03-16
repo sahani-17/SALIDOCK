@@ -12,9 +12,16 @@ pdbfixer
 # Scientific computing
 numpy
 biopython
+prolif
+MDAnalysis
 
 # HTTP requests for AlphaFold API
 requests
+
+# Security
+slowapi
+python-jose[cryptography]
+passlib[bcrypt]
 
 #openbabel
 conda install -c conda-forge openbabel

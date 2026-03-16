@@ -1,8 +1,8 @@
 """
-Grid Calculation Module - Cavity-Based and Manual Modes
-
+Grid Calculation Module - Auto-Blind and Manual Modes
+Handles grid box parameter calculations for both auto cavity docking and manual coordinate-based active site docking modes.
 Supports two docking modes:
-1. Cavity Mode: Use cavity-detected grid parameters
+1. Auto-Blind Mode: Use cavity-detected grid parameters
 2. Manual Mode: User-defined grid center and size
 """
 

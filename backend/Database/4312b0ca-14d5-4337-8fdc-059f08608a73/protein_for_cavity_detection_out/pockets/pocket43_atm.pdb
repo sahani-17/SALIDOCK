@@ -1,0 +1,39 @@
+HEADER
+HEADER This is a pdb format file writen by the programm fpocket.                 
+HEADER It represents the atoms contacted by the voronoi vertices of the pocket.  
+HEADER                                                                           
+HEADER Information about the pocket    43:
+HEADER 0  - Pocket Score                      : -0.0284
+HEADER 1  - Drug Score                        : 0.0006
+HEADER 2  - Number of alpha spheres           :    16
+HEADER 3  - Mean alpha-sphere radius          : 3.6237
+HEADER 4  - Mean alpha-sphere Solvent Acc.    : 0.6586
+HEADER 5  - Mean B-factor of pocket residues  : 0.0000
+HEADER 6  - Hydrophobicity Score              : -14.0000
+HEADER 7  - Polarity Score                    :     5
+HEADER 8  - Amino Acid based volume Score     : 3.3333
+HEADER 9  - Pocket volume (Monte Carlo)       : 276.1596
+HEADER 10 - Pocket volume (convex hull)       : 9.6211
+HEADER 11 - Charge Score                      :     2
+HEADER 12 - Local hydrophobic density Score   : 8.0000
+HEADER 13 - Number of apolar alpha sphere     :     9
+HEADER 14 - Proportion of apolar alpha sphere : 0.5625
+ATOM    206   CA SER A  26     -18.514 -32.665  24.740  0.00  0.00           C 0
+ATOM    241   CD LYS A  30     -14.915 -30.353  25.471  0.00  0.00           C 0
+ATOM    211    N GLY A  27     -19.399 -32.019  22.535  0.64  3.28           N 0
+ATOM    207    C SER A  26     -19.213 -31.650  23.807  0.00  0.00           C 0
+ATOM    214    O GLY A  27     -18.509 -29.529  21.230  0.34  3.21           O 0
+ATOM    240   CG LYS A  30     -15.072 -28.902  25.033  0.00  0.00           C 0
+ATOM    249   CG LYS A  31     -15.716 -27.467  19.529  0.00  0.00           C 0
+ATOM    242   CE LYS A  30     -13.511 -30.811  25.857  0.00  0.00           C 0
+ATOM    251   CE LYS A  31     -15.694 -29.145  17.634  0.00  0.00           C 0
+ATOM    274  ND2 ASN A  34     -11.818 -26.514  24.377  0.00  0.00           N 0
+ATOM    203    O SER A  25     -16.358 -32.713  26.624  0.54  4.29           O 0
+ATOM    243   NZ LYS A  30     -13.579 -32.240  26.261  0.00  0.00           N 0
+ATOM    208   CB SER A  26     -19.083 -34.093  24.646  0.00  0.00           C 0
+ATOM    238   CB LYS A  30     -16.560 -28.720  24.681  0.00  0.00           C 0
+ATOM    244    N LYS A  31     -16.432 -26.499  22.383  0.00  0.00           N 0
+ATOM    245   CA LYS A  31     -15.742 -25.676  21.372  0.00  0.00           C 0
+ATOM    237    C LYS A  30     -16.136 -26.438  23.688  0.00  0.00           C 0
+TER
+END

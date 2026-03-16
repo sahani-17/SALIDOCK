@@ -1,0 +1,39 @@
+HEADER
+HEADER This is a pdb format file writen by the programm fpocket.                 
+HEADER It represents the atoms contacted by the voronoi vertices of the pocket.  
+HEADER                                                                           
+HEADER Information about the pocket    29:
+HEADER 0  - Pocket Score                      : 0.0153
+HEADER 1  - Drug Score                        : 0.0043
+HEADER 2  - Number of alpha spheres           :    17
+HEADER 3  - Mean alpha-sphere radius          : 3.7266
+HEADER 4  - Mean alpha-sphere Solvent Acc.    : 0.6539
+HEADER 5  - Mean B-factor of pocket residues  : 0.0000
+HEADER 6  - Hydrophobicity Score              : 46.8000
+HEADER 7  - Polarity Score                    :     1
+HEADER 8  - Amino Acid based volume Score     : 5.2000
+HEADER 9  - Pocket volume (Monte Carlo)       : 336.2684
+HEADER 10 - Pocket volume (convex hull)       : 9.5898
+HEADER 11 - Charge Score                      :     1
+HEADER 12 - Local hydrophobic density Score   : 11.6923
+HEADER 13 - Number of apolar alpha sphere     :    13
+HEADER 14 - Proportion of apolar alpha sphere : 0.7647
+ATOM   1161  CE1 PHE A 144      20.039 -31.336  -0.520  0.00  0.00           C 0
+ATOM   1122   CD ARG A 140      20.935 -35.421  -5.264  0.00  0.00           C 0
+ATOM   1119   CB ARG A 140      22.911 -33.997  -4.627  0.00  0.00           C 0
+ATOM   1121   CG ARG A 140      21.783 -34.897  -4.103  0.00  0.00           C 0
+ATOM   1087    O PRO A 136      24.187 -32.193  -7.099  0.62  2.14           O 0
+ATOM   1116    N ARG A 140      24.750 -32.480  -4.051  0.00  0.00           N 0
+ATOM   1117   CA ARG A 140      23.717 -33.361  -3.486  0.00  0.00           C 0
+ATOM   1150  CD1 LEU A 143      23.706 -28.584  -0.691  0.00  0.00           C 0
+ATOM   1112    O LEU A 139      25.329 -31.585  -2.076  0.00  0.00           O 0
+ATOM   1110    C LEU A 139      25.494 -31.664  -3.293  0.00  0.00           C 0
+ATOM   1111   CB LEU A 139      26.022 -29.614  -4.656  0.00  0.00           C 0
+ATOM   1157   CG PHE A 144      20.305 -33.526   0.518  0.00  0.00           C 0
+ATOM   1155   CB PHE A 144      20.965 -34.891   0.561  0.00  0.00           C 0
+ATOM   1158  CD2 PHE A 144      19.376 -33.164   1.511  0.00  0.00           C 0
+ATOM   1125  NH2 ARG A 140      18.158 -37.807  -4.948  0.00  0.00           N 0
+ATOM   1123   NE ARG A 140      19.940 -36.400  -4.788  0.55  6.56           N 0
+ATOM   1159  CD1 PHE A 144      20.638 -32.608  -0.495  0.00  0.00           C 0
+TER
+END

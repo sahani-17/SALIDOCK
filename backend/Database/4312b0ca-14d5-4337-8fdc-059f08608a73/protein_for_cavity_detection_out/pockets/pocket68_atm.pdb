@@ -1,0 +1,63 @@
+HEADER
+HEADER This is a pdb format file writen by the programm fpocket.                 
+HEADER It represents the atoms contacted by the voronoi vertices of the pocket.  
+HEADER                                                                           
+HEADER Information about the pocket    68:
+HEADER 0  - Pocket Score                      : -0.1139
+HEADER 1  - Drug Score                        : 0.0040
+HEADER 2  - Number of alpha spheres           :    54
+HEADER 3  - Mean alpha-sphere radius          : 3.7350
+HEADER 4  - Mean alpha-sphere Solvent Acc.    : 0.5723
+HEADER 5  - Mean B-factor of pocket residues  : 0.0000
+HEADER 6  - Hydrophobicity Score              : -1.5556
+HEADER 7  - Polarity Score                    :     6
+HEADER 8  - Amino Acid based volume Score     : 4.3333
+HEADER 9  - Pocket volume (Monte Carlo)       : 801.5106
+HEADER 10 - Pocket volume (convex hull)       : 294.3651
+HEADER 11 - Charge Score                      :     2
+HEADER 12 - Local hydrophobic density Score   : 12.4000
+HEADER 13 - Number of apolar alpha sphere     :    25
+HEADER 14 - Proportion of apolar alpha sphere : 0.4630
+ATOM   2009    O GLN A 253      -8.454  40.109  -4.367  0.55  3.21           O 0
+ATOM   2045   NZ LYS A 257      -6.216  42.838  -0.689  0.43  9.84           N 0
+ATOM   2013  OE1 GLN A 253      -7.144  44.422  -6.701  0.62  7.50           O 0
+ATOM   2008   CB GLN A 253      -8.582  41.968  -6.506  0.00  0.00           C 0
+ATOM   2044   CE LYS A 257      -5.559  41.509  -0.805  0.00  0.00           C 0
+ATOM   2011   CD GLN A 253      -6.985  43.604  -7.590  0.00  0.00           C 0
+ATOM   2064   CD LYS A 260       0.061  36.091   1.019  0.00  0.00           C 0
+ATOM   2042   CG LYS A 257      -5.709  39.026  -0.385  0.00  0.00           C 0
+ATOM   2066   NZ LYS A 260       1.767  36.990  -0.615  0.00  0.00           N 0
+ATOM   2033    O LEU A 256      -3.713  35.510  -1.614  0.61  2.14           O 0
+ATOM   2007    C GLN A 253      -9.266  39.820  -5.251  0.00  0.00           C 0
+ATOM   2032   CB LEU A 256      -4.153  36.083  -4.537  0.00  0.00           C 0
+ATOM   2006   CA GLN A 253      -9.274  40.589  -6.599  0.00  0.00           C 0
+ATOM   2036  CD2 LEU A 256      -2.046  35.938  -5.909  0.00  0.00           C 0
+ATOM   2014    N SER A 254     -10.176  38.858  -5.043  0.00  0.00           N 0
+ATOM   2002    O PRO A 252     -10.497  38.897  -8.464  0.62  4.29           O 0
+ATOM   2020    N GLU A 255      -9.269  36.162  -4.443  0.50  3.28           N 0
+ATOM   2065   CE LYS A 260       1.088  35.775  -0.084  0.00  0.00           C 0
+ATOM   2023   CB GLU A 255      -9.238  33.930  -5.518  0.00  0.00           C 0
+ATOM   2029    N LEU A 256      -6.501  35.469  -4.022  0.51  2.19           N 0
+ATOM   2037    N LYS A 257      -5.861  36.100  -1.354  0.00  0.00           N 0
+ATOM   2031    C LEU A 256      -4.840  35.647  -2.098  0.00  0.00           C 0
+ATOM   2035  CD1 LEU A 256      -3.885  34.331  -6.351  0.00  0.00           C 0
+ATOM   2010   CG GLN A 253      -7.963  42.450  -7.827  0.00  0.00           C 0
+ATOM   2012  NE2 GLN A 253      -5.914  43.702  -8.347  0.00  0.00           N 0
+ATOM   2090   CZ ARG A 263       2.321  30.125   2.633  0.00  0.00           C 0
+ATOM   2089  NH1 ARG A 263       2.301  29.407   1.545  0.00  0.00           N 0
+ATOM   2088  NH2 ARG A 263       3.429  30.758   2.908  0.00  0.00           N 0
+ATOM   2059   CA LYS A 260      -2.178  33.707   3.218  0.00  0.00           C 0
+ATOM   2061   CB LYS A 260      -1.613  35.032   2.664  0.00  0.00           C 0
+ATOM   2062    O LYS A 260      -2.134  33.793   5.601  0.61  7.50           O 0
+ATOM   2086   CD ARG A 263       1.158  30.879   4.722  0.00  0.00           C 0
+ATOM   2041    O LYS A 257      -5.603  35.417   2.180  0.42  4.29           O 0
+ATOM   2038   CA LYS A 257      -5.731  36.516   0.060  0.00  0.00           C 0
+ATOM   2040   CB LYS A 257      -6.458  37.858   0.291  0.00  0.00           C 0
+ATOM   2056   CB ALA A 259      -3.583  30.934  -0.334  0.00  0.00           C 0
+ATOM   2063   CG LYS A 260      -0.599  34.794   1.524  0.00  0.00           C 0
+ATOM   2055    C ALA A 259      -3.132  31.740   2.031  0.00  0.00           C 0
+ATOM   2057    O ALA A 259      -2.380  30.970   2.633  0.39  4.29           O 0
+ATOM   2087   NE ARG A 263       1.253  30.197   3.414  0.00  0.00           N 0
+ATOM   2034   CG LEU A 256      -3.175  35.138  -5.263  0.00  0.00           C 0
+TER
+END

@@ -2,42 +2,43 @@ import React from 'react';
 import { FileText, CheckCircle2, Loader2 } from 'lucide-react';
 
 /**
- * Shared protein preparation section.
- * Shows chain selection, heteroatom selection, and a Prepare button after protein upload.
+ * Shared protein preparation section (dark theme).
  */
 export default function ProteinPrepSection({
     showProteinPrep,
     chains, selectedChains, setSelectedChains,
     heteroatoms, selectedHeteroatoms, setSelectedHeteroatoms,
     handleProteinPreparation,
-    loading, proteinPrepared,
+    loading, loadingMessage, proteinPrepared,
 }) {
     if (!showProteinPrep) return null;
 
     return (
-        <section className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+        <section className="rounded-2xl bg-card border border-primary/10 p-6 mb-6">
             <div className="flex items-center gap-3 mb-4">
-                <FileText className="w-6 h-6 text-gray-700" />
+                <FileText className="w-6 h-6 text-primary" />
                 <div>
-                    <h2 className="text-xl font-semibold text-gray-900">Protein Configuration</h2>
-                    <p className="text-sm text-gray-600">Select chains and heteroatoms to keep, then prepare the protein</p>
+                    <h2 className="text-xl font-bold text-foreground">Protein Configuration</h2>
+                    <p className="text-sm text-muted-foreground">Select chains and heteroatoms to keep, then prepare the protein</p>
                 </div>
             </div>
 
             {/* Chain Selection */}
             {chains.length > 0 && (
                 <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-3">Select Chains to Keep</label>
+                    <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3 block">Select Chains to Keep</label>
                     <div className="grid grid-cols-4 gap-2">
                         {chains.filter((chain) => {
-                            // Only show chains with valid chain IDs (A, B, C, etc.)
                             const chainId = typeof chain === 'string' ? chain : chain.id;
                             return chainId && chainId.trim() !== '';
                         }).map((chain) => {
                             const chainId = typeof chain === 'string' ? chain : chain.id;
                             const chainAtoms = typeof chain === 'object' && chain.atoms ? ` (${chain.atoms} atoms)` : '';
                             return (
-                                <label key={chainId} className="flex items-center gap-2 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                                <label key={chainId} className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${selectedChains.includes(chainId)
+                                        ? 'border-primary/40 bg-primary/10'
+                                        : 'border-primary/10 hover:border-primary/20'
+                                    }`}>
                                     <input
                                         type="checkbox"
                                         checked={selectedChains.includes(chainId)}
@@ -48,9 +49,9 @@ export default function ProteinPrepSection({
                                                 setSelectedChains(selectedChains.filter(c => c !== chainId));
                                             }
                                         }}
-                                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                        className="accent-primary"
                                     />
-                                    <span className="text-sm font-medium text-gray-900">
+                                    <span className="text-sm font-medium text-foreground">
                                         Chain {chainId}{chainAtoms}
                                     </span>
                                 </label>
@@ -63,10 +64,13 @@ export default function ProteinPrepSection({
             {/* Heteroatom Selection */}
             {heteroatoms.length > 0 && (
                 <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-3">Select Heteroatoms to Keep</label>
+                    <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3 block">Select Heteroatoms to Keep</label>
                     <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto">
                         {heteroatoms.map((het) => (
-                            <label key={het} className="flex items-center gap-2 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                            <label key={het} className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${selectedHeteroatoms.includes(het)
+                                    ? 'border-primary/40 bg-primary/10'
+                                    : 'border-primary/10 hover:border-primary/20'
+                                }`}>
                                 <input
                                     type="checkbox"
                                     checked={selectedHeteroatoms.includes(het)}
@@ -77,9 +81,9 @@ export default function ProteinPrepSection({
                                             setSelectedHeteroatoms(selectedHeteroatoms.filter(h => h !== het));
                                         }
                                     }}
-                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                    className="accent-primary"
                                 />
-                                <span className="text-sm font-mono text-gray-900">{het}</span>
+                                <span className="text-sm font-mono text-foreground">{het}</span>
                             </label>
                         ))}
                     </div>
@@ -90,12 +94,9 @@ export default function ProteinPrepSection({
             <button
                 onClick={handleProteinPreparation}
                 disabled={loading || proteinPrepared}
-                className={`flex items-center gap-2 px-6 py-2.5 rounded-lg transition-colors text-sm font-semibold ${proteinPrepared
-                        ? 'bg-green-100 text-green-800 border border-green-300 cursor-default'
-                        : 'bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed'
-                    }`}
+                className="px-5 py-2 rounded-full bg-primary text-primary-foreground font-bold text-sm hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-2"
             >
-                {loading ? (
+                {loading && loadingMessage?.includes('Preparing protein') ? (
                     <>
                         <Loader2 className="w-4 h-4 animate-spin" />
                         Preparing...

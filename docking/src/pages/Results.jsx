@@ -1,9 +1,163 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Download, ArrowLeft, Loader2, Eye } from 'lucide-react';
+import { Download, Loader2, Eye, ChevronDown } from 'lucide-react';
 import { api } from '../services/api';
 import MolecularViewer from '../components/MolecularViewer';
+import Interaction2DViewer from '../components/Interaction2DViewer';
+import Navbar from '../components/Navbar';
 
+// ─── Definitions ────────────────────────────────────────────────────
+const PROTEIN_REPRESENTATIONS = [
+  { value: 'cartoon', label: 'Cartoon' },
+  { value: 'ball-and-stick', label: 'Ball & Stick' },
+  { value: 'spacefill', label: 'Spacefill' },
+  { value: 'molecular-surface', label: 'Surface' },
+  { value: 'gaussian-surface', label: 'Gaussian Surface' },
+  { value: 'putty', label: 'Putty' },
+];
+
+const LIGAND_REPRESENTATIONS = [
+  { value: 'ball-and-stick', label: 'Ball & Stick' },
+  { value: 'spacefill', label: 'Spacefill' },
+  { value: 'molecular-surface', label: 'Surface' },
+];
+
+const COLOR_SCHEMES = [
+  { value: 'default', label: 'Default' },
+  { value: 'element-symbol', label: 'Element' },
+  { value: 'chain-id', label: 'Chain' },
+  { value: 'residue-name', label: 'Residue Name' },
+  { value: 'sequence-id', label: 'Sequence ID' },
+  { value: 'secondary-structure', label: 'Secondary Structure' },
+  { value: 'hydrophobicity', label: 'Hydrophobicity' },
+  { value: 'uniform', label: 'Uniform' },
+];
+
+// ─── Dropdown Component (lives entirely in Results, outside Mol*) ──
+function ControlDropdown({ label, value, options, onChange, disabled }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const selected = options.find((o) => o.value === value);
+
+  return (
+    <div ref={ref} style={{ position: 'relative', minWidth: '140px' }}>
+      <button
+        onClick={() => !disabled && setOpen(!open)}
+        disabled={disabled}
+        style={{
+          background: 'hsl(215, 25%, 15%)',
+          color: '#f0f0f0',
+          border: '1px solid hsl(160, 60%, 30%)',
+          borderRadius: '8px',
+          padding: '7px 12px',
+          fontSize: '12px',
+          fontWeight: 600,
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: '100%',
+          gap: '6px',
+          transition: 'all 0.15s ease',
+          opacity: disabled ? 0.5 : 1,
+        }}
+      >
+        <span style={{ opacity: 0.5, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: '4px' }}>
+          {label}
+        </span>
+        <span>{selected?.label || value}</span>
+        <ChevronDown
+          size={13}
+          style={{ opacity: 0.5, flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
+        />
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            marginTop: '4px',
+            background: 'hsl(215, 25%, 12%)',
+            border: '1px solid hsl(160, 60%, 30%)',
+            borderRadius: '8px',
+            overflow: 'hidden',
+            zIndex: 100,
+            minWidth: '100%',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+          }}
+        >
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => {
+                onChange(opt.value);
+                setOpen(false);
+              }}
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '8px 14px',
+                fontSize: '12px',
+                fontWeight: opt.value === value ? 700 : 400,
+                textAlign: 'left',
+                cursor: 'pointer',
+                border: 'none',
+                background: opt.value === value ? 'hsl(160, 84%, 39%)' : 'transparent',
+                color: opt.value === value ? '#000' : '#d0d0d0',
+                transition: 'background 0.1s',
+              }}
+              onMouseEnter={(e) => {
+                if (opt.value !== value) e.target.style.background = 'hsl(215, 25%, 20%)';
+              }}
+              onMouseLeave={(e) => {
+                if (opt.value !== value) e.target.style.background = 'transparent';
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Helper: find components by target ──────────────────────────────
+function getComponents(plugin, target) {
+  const structures = plugin.managers.structure.hierarchy.current.structures;
+  const matches = [];
+  for (const s of structures) {
+    for (const comp of s.components) {
+      const key = (comp.key || '').toLowerCase();
+      const label = (comp.cell?.obj?.label || '').toLowerCase();
+      if (target === 'protein') {
+        if (key === 'polymer' || key === 'water' || key === 'non-standard' || label.includes('polymer') || label.includes('protein')) {
+          matches.push(comp);
+        }
+      } else if (target === 'ligand') {
+        if (key === 'ligand' || key === 'branched' || label.includes('ligand') || label.includes('het')) {
+          matches.push(comp);
+        }
+      } else {
+        matches.push(comp);
+      }
+    }
+  }
+  return matches;
+}
+
+// ─── Results Page ───────────────────────────────────────────────────
 function Results() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -16,13 +170,18 @@ function Results() {
   const [selectedPose, setSelectedPose] = useState(1);
   const [pdbData, setPdbData] = useState(null);
   const [loadingViewer, setLoadingViewer] = useState(false);
+  const [viewMode, setViewMode] = useState('3d'); // '3d' or '2d'
 
+  // Viewer control state
+  const [proteinRepr, setProteinRepr] = useState('cartoon');
+  const [ligandRepr, setLigandRepr] = useState('ball-and-stick');
+  const [colorScheme, setColorScheme] = useState('default');
+
+  const viewerRef = useRef(null);
+
+  // ─── Fetch results ────────────────────────────────────────────────
   useEffect(() => {
-    if (!sessionId) {
-      setError('No session ID provided');
-      setLoading(false);
-      return;
-    }
+    if (!sessionId) { setError('No session ID provided'); setLoading(false); return; }
 
     const fetchResults = async () => {
       try {
@@ -30,15 +189,16 @@ function Results() {
         const data = await api.getResults(sessionId);
         setResults(data);
       } catch (err) {
+        console.error('Results fetch error:', err);
         setError('Failed to load results');
       } finally {
         setLoading(false);
       }
     };
-
     fetchResults();
   }, [sessionId]);
 
+  // ─── Pose handling ────────────────────────────────────────────────
   const handleDownloadPose = async (poseNumber) => {
     setDownloadingPose(poseNumber);
     try {
@@ -52,6 +212,7 @@ function Results() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (err) {
+      console.error('Pose download error:', err);
       setError('Failed to download pose');
     } finally {
       setDownloadingPose(null);
@@ -60,42 +221,102 @@ function Results() {
 
   const handleDownloadTop5 = async () => {
     if (!results?.poses) return;
-
     const top5 = results.poses.slice(0, 5);
     for (let i = 0; i < top5.length; i++) {
       await handleDownloadPose(i + 1);
-      // Small delay between downloads
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
   };
 
-  const handleViewPose = async (poseNumber) => {
+  const handleViewPose = useCallback(async (poseNumber) => {
     setLoadingViewer(true);
     setSelectedPose(poseNumber);
     try {
       const blob = await api.downloadComplex(sessionId, poseNumber);
       const text = await blob.text();
       setPdbData(text);
+      // Reset controls to defaults when switching poses
+      setProteinRepr('cartoon');
+      setLigandRepr('ball-and-stick');
+      setColorScheme('default');
     } catch (err) {
+      console.error('View pose error:', err);
       setError('Failed to load structure for visualization');
     } finally {
       setLoadingViewer(false);
     }
-  };
+  }, [sessionId]);
 
-  // Auto-load best pose on mount
+  // Auto-load best pose
   useEffect(() => {
-    if (results?.poses && results.poses.length > 0) {
-      handleViewPose(1);
-    }
-  }, [results]);
+    if (results?.poses && results.poses.length > 0) handleViewPose(1);
+  }, [results, handleViewPose]);
 
+  // ─── Mol* interaction helpers (completely outside the viewer) ─────
+  const getPlugin = () => viewerRef.current?.getPlugin?.();
+
+  const handleProteinReprChange = useCallback(async (value) => {
+    setProteinRepr(value);
+    const plugin = getPlugin();
+    if (!plugin) return;
+    try {
+      const comps = getComponents(plugin, 'protein');
+      if (!comps.length) return;
+      // removeRepresentations takes an ARRAY of components (Mol* v4 API)
+      await plugin.managers.structure.component.removeRepresentations(comps);
+      // Re-fetch fresh components after removal (hierarchy updates)
+      const freshComps = getComponents(plugin, 'protein');
+      if (freshComps.length) {
+        // addRepresentation takes (components[], type_string)
+        await plugin.managers.structure.component.addRepresentation(freshComps, value);
+      }
+    } catch (err) {
+      console.error('Error changing protein repr:', err);
+    }
+  }, []);
+
+  const handleLigandReprChange = useCallback(async (value) => {
+    setLigandRepr(value);
+    const plugin = getPlugin();
+    if (!plugin) return;
+    try {
+      const comps = getComponents(plugin, 'ligand');
+      if (!comps.length) return;
+      await plugin.managers.structure.component.removeRepresentations(comps);
+      const freshComps = getComponents(plugin, 'ligand');
+      if (freshComps.length) {
+        await plugin.managers.structure.component.addRepresentation(freshComps, value);
+      }
+    } catch (err) {
+      console.error('Error changing ligand repr:', err);
+    }
+  }, []);
+
+  const handleColorChange = useCallback(async (value) => {
+    setColorScheme(value);
+    const plugin = getPlugin();
+    if (!plugin) return;
+    try {
+      const comps = getComponents(plugin, 'all');
+      if (!comps.length) return;
+      // updateRepresentationsTheme takes (components[], params)
+      await plugin.managers.structure.component.updateRepresentationsTheme(comps, {
+        color: value === 'default' ? 'default' : value,
+      });
+    } catch (err) {
+      console.error('Error changing color scheme:', err);
+    }
+  }, []);
+
+
+
+  // ─── Render guards ────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Loading results...</p>
+          <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground font-medium">Loading results...</p>
         </div>
       </div>
     );
@@ -103,12 +324,12 @@ function Results() {
 
   if (error || !results) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <p className="text-red-600 mb-4">{error || 'No results found'}</p>
+          <p className="text-destructive font-medium mb-4">{error || 'No results found'}</p>
           <button
             onClick={() => navigate('/docking')}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-lg hover:brightness-110 transition-all glow-emerald"
           >
             Back to Docking
           </button>
@@ -120,41 +341,39 @@ function Results() {
   const allPoses = results.poses || [];
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <a href="/"><img src="/logo.png" alt="SaliDock" className="h-12" /></a>
-            <div className="flex items-center gap-6">
-              <div className="text-right">
-                <h1 className="text-2xl font-semibold text-gray-900">Results & Analysis</h1>
-                <p className="text-sm text-gray-600 mt-1">Analyze docking results and molecular interactions</p>
-              </div>
-              <button
-                onClick={() => navigate('/')}
-                className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                New Docking
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-background pt-16">
+      <Navbar />
 
       <div className="max-w-7xl mx-auto px-6 py-8">
-
-        {/* 3D Molecular Viewer */}
-        <section className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900">3D Molecular Structure</h2>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Viewing Pose:</span>
+        {/* 3D Molecular Viewer Section */}
+        <section className="bg-card rounded-xl border border-primary/10 p-6 mb-6 shadow-sm">
+          {/* Title row with pose selector */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-4">
+            <div className="flex bg-secondary/30 rounded-lg p-1 border border-primary/10">
+              <button
+                onClick={() => setViewMode('3d')}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-md transition-all ${
+                  viewMode === '3d' ? 'bg-background shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Eye className="w-4 h-4" />
+                3D View
+              </button>
+              <button
+                onClick={() => setViewMode('2d')}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-md transition-all ${
+                  viewMode === '2d' ? 'bg-background shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                2D Interactions
+              </button>
+            </div>
+            <div className="flex items-center gap-3 bg-secondary/50 p-1.5 rounded-lg border border-primary/5">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-2">Viewing Pose:</span>
               <select
                 value={selectedPose}
                 onChange={(e) => handleViewPose(parseInt(e.target.value))}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="px-3 py-1.5 bg-background border border-primary/20 rounded-md text-sm font-medium focus:ring-1 focus:ring-primary/30 focus:border-primary/50 outline-none transition-all"
                 disabled={loadingViewer}
               >
                 {allPoses.map((pose, index) => (
@@ -166,110 +385,162 @@ function Results() {
             </div>
           </div>
 
-          {loadingViewer ? (
-            <div className="w-full h-96 bg-gray-50 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
-              <div className="text-center">
-                <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-                <p className="text-gray-600">Loading molecular structure...</p>
+          {/* ─── Controls bar (OUTSIDE Mol* container) ─── */}
+          {viewMode === '3d' ? (
+            <>
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '12px 16px',
+              background: 'hsl(215, 25%, 10%)',
+              borderRadius: '10px 10px 0 0',
+              borderBottom: '1px solid hsl(160, 60%, 25%)',
+            }}
+          >
+            <ControlDropdown
+              label="Protein"
+              value={proteinRepr}
+              options={PROTEIN_REPRESENTATIONS}
+              onChange={handleProteinReprChange}
+              disabled={loadingViewer}
+            />
+            <ControlDropdown
+              label="Ligand"
+              value={ligandRepr}
+              options={LIGAND_REPRESENTATIONS}
+              onChange={handleLigandReprChange}
+              disabled={loadingViewer}
+            />
+            <ControlDropdown
+              label="Colour"
+              value={colorScheme}
+              options={COLOR_SCHEMES}
+              onChange={handleColorChange}
+              disabled={loadingViewer}
+            />
+          </div>
+
+          {/* Mol* Viewer (clean, no controls inside) */}
+          <div className="relative rounded-b-xl overflow-hidden ring-1 ring-primary/10">
+            {loadingViewer && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-card/60 backdrop-blur-sm rounded-xl">
+                <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
+                <p className="font-medium text-foreground pb-2 px-4 rounded-md shadow-sm">Loading molecular structure...</p>
               </div>
-            </div>
-          ) : pdbData ? (
-            <MolecularViewer pdbData={pdbData} poseNumber={selectedPose} sessionId={sessionId} />
+            )}
+            {pdbData ? (
+              <MolecularViewer ref={viewerRef} pdbData={pdbData} poseNumber={selectedPose} sessionId={sessionId} />
+            ) : (
+              <div className="w-full h-[500px] bg-secondary/20 rounded-xl flex items-center justify-center border-2 border-dashed border-primary/20">
+                {!loadingViewer && <p className="text-muted-foreground font-medium">No structure available</p>}
+              </div>
+            )}
+          </div>
+            </>
           ) : (
-            <div className="w-full h-96 bg-gray-50 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
-              <p className="text-gray-600">No structure available</p>
+            <div className="rounded-xl overflow-hidden ring-1 ring-primary/10">
+              <Interaction2DViewer sessionId={sessionId} poseNumber={selectedPose} totalPoses={allPoses.length || 9} />
             </div>
           )}
 
-          <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-100">
-            <h3 className="text-sm font-semibold text-blue-900 mb-2">Viewer Controls</h3>
-            <ul className="text-xs text-blue-800 space-y-1">
-              <li>• <strong>Rotate:</strong> Left click + drag</li>
-              <li>• <strong>Zoom:</strong> Scroll wheel or pinch</li>
-              <li>• <strong>Pan:</strong> Right click + drag</li>
-              <li>• <strong>Reset View:</strong> Click the rotate icon</li>
-              <li>• <strong>Toggle Rotation:</strong> Click the rotation icon to start/stop auto-rotation</li>
+          {/* Viewer hints */}
+          {viewMode === '3d' && (
+          <div className="mt-6 p-4 bg-primary/5 rounded-xl border border-primary/10 backdrop-blur-sm">
+            <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+              Viewer Controls
+            </h3>
+            <ul className="text-xs text-muted-foreground flex flex-wrap gap-x-6 gap-y-2">
+              <li className="flex items-center gap-1.5"><span className="px-1.5 py-0.5 bg-background border border-primary/20 rounded text-[10px] font-mono">Left Click</span> rotate</li>
+              <li className="flex items-center gap-1.5"><span className="px-1.5 py-0.5 bg-background border border-primary/20 rounded text-[10px] font-mono">Right Click</span> pan</li>
+              <li className="flex items-center gap-1.5"><span className="px-1.5 py-0.5 bg-background border border-primary/20 rounded text-[10px] font-mono">Scroll</span> zoom</li>
+              <li className="flex items-center gap-1.5"><span className="text-primary font-bold">•</span> Click icons in viewer to reset/auto-rotate</li>
             </ul>
           </div>
+          )}
         </section>
 
         {/* All Binding Poses */}
-        <section className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900">All Binding Poses</h2>
+        <section className="bg-card rounded-xl border border-primary/10 p-6 mb-6 shadow-sm">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+            <h2 className="text-xl font-bold text-foreground">All Binding Poses</h2>
             <button
               onClick={handleDownloadTop5}
               disabled={allPoses.length === 0}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors text-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-lg disabled:opacity-50 transition-colors text-sm font-medium border border-primary/10 hover:border-primary/30"
             >
               <Download className="w-4 h-4" />
-              Download Top 5 Best Binding Pose Complex (PDB)
+              Download Top 5 (PDB)
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="overflow-x-auto rounded-lg border border-primary/10">
+            <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Rank</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Mode</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Cavity</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Affinity (kcal/mol)</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">RMSD (Å)</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Volume (Ų)</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
+                <tr className="bg-secondary/30 border-b border-primary/10">
+                  <th className="px-4 py-3.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">Rank</th>
+                  <th className="px-4 py-3.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">Mode</th>
+                  <th className="px-4 py-3.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">Cavity</th>
+                  <th className="px-4 py-3.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">Affinity (kcal/mol)</th>
+                  <th className="px-4 py-3.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">RMSD (Å)</th>
+                  <th className="px-4 py-3.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">Volume (ų)</th>
+                  <th className="px-4 py-3.5 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-primary/5">
                 {allPoses.map((pose, index) => (
-                  <tr key={index} className="hover:bg-gray-50 transition-colors">
+                  <tr key={index} className="hover:bg-primary/5 transition-colors">
                     <td className="px-4 py-3">
-                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-900 text-sm font-semibold">
+                      <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-bold border border-primary/20">
                         {index + 1}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 font-medium">{pose.mode || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{pose.cavity_id !== undefined ? pose.cavity_id : '-'}</td>
+                    <td className="px-4 py-3 text-sm text-foreground font-medium">{pose.mode || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground">{pose.cavity_id !== undefined ? `Pocket ${pose.cavity_id}` : '-'}</td>
                     <td className="px-4 py-3 text-sm">
-                      <span className={`font-semibold ${pose.affinity && pose.affinity < -8
-                        ? 'text-green-700'
+                      <span className={`font-mono font-bold px-2.5 py-1 rounded-md text-xs ${pose.affinity && pose.affinity < -8
+                        ? 'bg-primary/10 text-primary border border-primary/20'
                         : pose.affinity && pose.affinity < -6
-                          ? 'text-orange-700'
-                          : 'text-gray-700'
+                          ? 'bg-warning/10 text-warning border border-warning/20'
+                          : 'bg-secondary text-muted-foreground'
                         }`}>
                         {pose.affinity?.toFixed(2) || '-'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{pose.rmsd_lb?.toFixed(2) || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{pose.cavity_volume?.toFixed(0) || '-'}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
+                    <td className="px-4 py-3 text-sm text-muted-foreground font-mono">{pose.rmsd_lb?.toFixed(2) || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground font-mono">{pose.cavity_volume?.toFixed(0) || '-'}</td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => handleViewPose(index + 1)}
                           disabled={loadingViewer && selectedPose === index + 1}
-                          className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded transition-colors ${selectedPose === index + 1
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${selectedPose === index + 1
+                            ? 'bg-primary text-primary-foreground shadow-[0_0_15px_-3px_hsl(160,84%,39%,0.4)]'
+                            : 'bg-secondary text-foreground hover:bg-secondary/80 border border-transparent hover:border-primary/20'
                             } disabled:opacity-50`}
                         >
                           {loadingViewer && selectedPose === index + 1 ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
                           ) : (
-                            <Eye className="w-3 h-3" />
+                            <Eye className="w-3.5 h-3.5" />
                           )}
                           {selectedPose === index + 1 ? 'Viewing' : 'View'}
                         </button>
                         <button
                           onClick={() => handleDownloadPose(index + 1)}
                           disabled={downloadingPose === index + 1}
-                          className="flex items-center gap-1 px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 transition-colors"
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-transparent text-muted-foreground hover:text-foreground border border-primary/10 hover:border-primary/30 rounded-md disabled:opacity-50 transition-all hover:bg-primary/5"
+                          title="Download PDB"
                         >
                           {downloadingPose === index + 1 ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
                           ) : (
-                            <Download className="w-3 h-3" />
+                            <Download className="w-3.5 h-3.5" />
                           )}
-                          Download
+                          <span className="hidden lg:inline">Download</span>
                         </button>
                       </div>
                     </td>
@@ -279,8 +550,12 @@ function Results() {
             </table>
 
             {allPoses.length === 0 && (
-              <div className="text-center py-12">
-                <p className="text-gray-500">No binding poses found</p>
+              <div className="text-center py-16">
+                <div className="w-16 h-16 bg-secondary/50 rounded-full flex items-center justify-center mx-auto mb-4 border border-primary/10">
+                  <Eye className="w-8 h-8 text-muted-foreground/50" />
+                </div>
+                <p className="text-muted-foreground font-medium">No binding poses found in results.</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Run a new docking simulation to generate poses.</p>
               </div>
             )}
           </div>

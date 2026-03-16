@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { api } from '../services/api';
 
 /**
@@ -82,8 +83,10 @@ export function useDockingWorkflow() {
             setHeteroatoms(heteroData.all_heteroatoms || []);
 
             setShowProteinPrep(true);
+            toast.success(`Protein uploaded — ${chainsData.chains?.length || 0} chains found`);
         } catch (err) {
             setError('Failed to upload protein: ' + (err.message || err));
+            toast.error('Protein upload failed');
             console.error('Upload error:', err);
         } finally {
             setLoading(false);
@@ -111,8 +114,10 @@ export function useDockingWorkflow() {
             await api.prepareLigand(sessionId, {
                 filename: savedFilename
             });
+            toast.success('Ligand uploaded & prepared');
         } catch (err) {
             setError('Failed to upload/prepare ligand: ' + (err.message || err));
+            toast.error('Ligand upload failed');
             console.error('Upload error:', err);
         } finally {
             setLoading(false);
@@ -133,8 +138,10 @@ export function useDockingWorkflow() {
             const response = await api.ligandFromSmiles(sessionId, smiles, ligandName);
             setSavedLigandFilename(response.filename);
             setUploadProgress(prev => ({ ...prev, ligand: true }));
+            toast.success('Ligand generated from SMILES');
         } catch (_err) {
             setError('Failed to generate ligand from SMILES');
+            toast.error('SMILES conversion failed');
         } finally {
             setLoading(false);
             setLoadingMessage('');
@@ -162,8 +169,10 @@ export function useDockingWorkflow() {
             setHeteroatoms(heteroData.all_heteroatoms || []);
 
             setShowProteinPrep(true);
+            toast.success('Structure predicted from sequence');
         } catch (_err) {
             setError('Failed to predict structure from sequence');
+            toast.error('Sequence prediction failed');
         } finally {
             setLoading(false);
             setLoadingMessage('');
@@ -180,7 +189,7 @@ export function useDockingWorkflow() {
         try {
             // First get UniProt info
             const info = await api.getUniProtInfo(uniprotId);
-            setUniprotInfo(info);
+            setUniprotInfo(info.protein_info);
 
             // Then fetch the structure
             const response = await api.predictFromUniProt(sessionId, uniprotId);
@@ -196,8 +205,10 @@ export function useDockingWorkflow() {
             setHeteroatoms(heteroData.all_heteroatoms || []);
 
             setShowProteinPrep(true);
+            toast.success('Structure fetched from UniProt');
         } catch (_err) {
             setError('Failed to fetch structure from UniProt');
+            toast.error('UniProt fetch failed');
         } finally {
             setLoading(false);
             setLoadingMessage('');
@@ -216,8 +227,10 @@ export function useDockingWorkflow() {
                 heteroatoms_to_keep: selectedHeteroatoms,
             });
             setProteinPrepared(true);
+            toast.success('Protein prepared successfully');
         } catch (_err) {
             setError('Failed to prepare protein');
+            toast.error('Protein preparation failed');
         } finally {
             setLoading(false);
             setLoadingMessage('');

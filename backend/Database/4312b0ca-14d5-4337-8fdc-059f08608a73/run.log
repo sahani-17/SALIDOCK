@@ -1,0 +1,44 @@
+[INFO] Console - predicting pockets for proteins from dataset [protein_for_cavity_detection.pdb]
+[INFO] PredictPocketsRoutine - outdir: /mnt/d/salidock/backend/Database/4312b0ca-14d5-4337-8fdc-059f08608a73
+[INFO] FeatureSetup - enabledFeatures: [chem, volsite, protrusion, bfactor, atom_table]
+[INFO] Dataset - processing dataset [protein_for_cavity_detection.pdb] using 0 threads
+[INFO] Dataset - 
+------------------------------------------------------------------------------------------------------------------------
+processing [protein_for_cavity_detection.pdb] (1/1)
+------------------------------------------------------------------------------------------------------------------------
+
+[INFO] Console - processing [protein_for_cavity_detection.pdb] (1/1)
+[INFO] Protein - loading protein [/mnt/d/salidock/backend/Database/4312b0ca-14d5-4337-8fdc-059f08608a73/protein_for_cavity_detection.pdb]
+[INFO] PdbUtils - loading file [/mnt/d/salidock/backend/Database/4312b0ca-14d5-4337-8fdc-059f08608a73/protein_for_cavity_detection.pdb]
+[INFO] Struct - all groups in chain A: 845
+[INFO] Struct - all groups in chain A: 845
+[INFO] Struct - 845 groups in chain A
+[WARN] Residues - Multiple residues with same label! [A_1,A_2,A_3,A_4,A_5,A_6,A_7,A_8,A_9,A_10,A_11,A_12,A_13,A_14,A_15,A_16,A_17,A_19,A_20,A_21,A_23,A_24,A_25,A_26,A_27,A_28,A_29,A_30,A_31,A_32,A_33,A_34,A_35,A_36,A_37,A_38,A_39,A_40,A_41,A_42,A_43,A_44,A_45,A_46,A_47,A_48,A_49,A_50,A_51,A_52,A_53,A_54,A_55,A_56,A_57,A_58,A_59,A_60,A_61,A_62,A_63,A_64,A_65,A_66,A_67,A_68,A_69,A_70,A_71,A_72,A_73,A_74,A_76,A_77,A_78,A_79,A_80,A_81,A_82,A_83,A_84,A_86,A_87,A_89,A_90,A_91,A_92,A_93,A_94,A_95,A_96,A_97,A_98,A_99,A_100,A_101,A_102,A_103,A_104,A_105,A_106,A_108,A_109,A_110,A_111,A_112,A_113,A_114,A_116,A_118,A_119,A_120,A_121,A_122,A_123,A_125,A_126,A_127,A_128,A_129,A_130,A_131,A_132,A_133,A_134,A_135,A_137,A_138,A_139,A_140,A_141,A_142,A_143,A_144,A_145,A_146,A_148,A_149,A_150,A_151,A_152,A_153,A_154,A_155,A_156,A_157,A_158,A_159,A_160,A_161,A_163,A_164,A_167,A_168,A_169,A_170,A_171,A_172,A_174,A_175,A_176,A_177,A_178,A_179,A_180,A_181,A_182,A_183,A_184,A_185,A_186,A_187,A_188,A_189,A_190,A_191,A_192,A_195,A_196,A_197,A_198,A_199,A_200,A_201,A_202,A_203,A_204,A_205,A_206,A_207,A_208,A_209,A_210,A_211,A_212,A_213,A_214,A_215,A_216,A_217,A_218,A_219,A_220,A_221,A_222,A_223,A_224,A_225,A_227,A_228,A_229,A_230,A_231,A_233,A_234,A_235,A_236,A_237,A_238,A_239,A_240,A_241,A_242,A_243,A_244,A_245,A_246,A_247,A_248,A_249,A_250,A_251,A_253,A_254,A_255,A_256,A_257,A_258,A_259,A_260,A_261,A_262,A_263,A_264,A_265,A_266,A_267,A_268,A_270,A_271,A_272,A_273,A_274,A_275,A_276,A_277,A_278,A_279,A_280,A_281,A_282,A_283,A_284,A_285,A_286,A_287,A_288,A_289,A_290,A_291,A_292,A_293,A_294,A_296,A_297,A_298,A_299,A_300,A_301,A_302,A_303,A_304,A_305,A_306,A_307,A_308,A_309,A_310,A_311,A_312,A_313,A_314,A_315,A_317,A_318,A_319,A_320,A_321,A_322,A_323,A_324,A_325,A_326,A_327,A_328,A_329,A_330,A_331,A_332,A_333,A_334,A_335,A_336,A_337,A_338,A_339,A_341,A_342,A_343,A_344,A_345,A_346,A_347,A_348,A_349,A_350,A_351,A_352,A_353,A_354,A_355,A_356,A_357,A_358,A_359,A_360,A_361,A_362,A_363,A_364,A_365,A_366,A_367,A_368,A_369,A_370,A_371,A_372,A_373,A_374,A_375,A_376,A_377,A_378,A_379,A_380,A_381,A_382,A_383,A_384,A_385,A_386,A_387,A_388,A_389,A_390,A_391,A_392,A_393,A_394,A_395,A_396,A_397,A_398,A_399,A_400,A_401,A_402,A_403,A_404,A_405,A_406,A_407,A_408,A_409,A_410,A_411,A_412,A_413,A_414,A_415,A_416,A_417,A_418,A_419,A_420,A_421,A_422,A_423,A_424,A_425,A_426,A_427,A_428,A_429,A_430,A_431,A_432,A_433,A_435]
+[INFO] Protein - structure atoms: 4358
+[INFO] Protein - protein   atoms: 3452
+[INFO] Protein - ignoring ligands
+[INFO] FeatureSetup - enabledFeatures: [chem, volsite, protrusion, bfactor, atom_table]
+[INFO] Protein - SAS points: 13348
+[INFO] Protein - exposed protein atoms: 2898 of 3452
+[INFO] InstancePredictor - Creating WekaInstancePredictor
+[INFO] SLinkClusterer - clustering [48] elements
+[INFO] SLinkClusterer - clusters: [id:6( 2 ), id:9( 8 ), id:13( 1 ), id:14( 4 ), id:15( 1 ), id:16( 1 ), id:21( 1 ), id:23( 1 ), id:28( 2 ), id:33( 7 ), id:34( 3 ), id:35( 5 ), id:42( 3 ), id:45( 3 ), id:46( 5 ), id:47( 1 )]
+[INFO] SLinkClusterer - clusters together: 48 / 48
+[INFO] PocketPredictor - PREDICTING POCKETS.... ====================================
+[INFO] PocketPredictor - SAS POINTS: 13348
+[INFO] PocketPredictor - LIGANDABLE POINTS: 48
+[INFO] PocketPredictor - CLUSTERS: 16
+[INFO] PocketPredictor - FILTERED CLUSTERS: 8
+[INFO] PocketPredictor - pocket 1 -  surf_atoms:  24   points:   8   score:    2.6
+[INFO] PocketPredictor - pocket 2 -  surf_atoms:  12   points:   3   score:    2.3
+[INFO] PocketPredictor - pocket 3 -  surf_atoms:  20   points:   3   score:    2.2
+[INFO] PocketPredictor - pocket 4 -  surf_atoms:  20   points:   7   score:    2.2
+[INFO] PocketPredictor - pocket 5 -  surf_atoms:  18   points:   5   score:    2.0
+[INFO] PocketPredictor - pocket 6 -  surf_atoms:   9   points:   3   score:    1.9
+[INFO] PocketPredictor - pocket 7 -  surf_atoms:  10   points:   5   score:    1.6
+[INFO] PocketPredictor - pocket 8 -  surf_atoms:  10   points:   4   score:    1.0
+[INFO] OldPymolRenderer - copying [/mnt/d/salidock/backend/Database/4312b0ca-14d5-4337-8fdc-059f08608a73/protein_for_cavity_detection.pdb] to [/mnt/d/salidock/backend/Database/4312b0ca-14d5-4337-8fdc-059f08608a73/visualizations/data/protein_for_cavity_detection.pdb]
+[INFO] Console - predicting pockets finished in 0 hours 0 minutes 9.397 seconds
+[INFO] Console - results saved to directory [/mnt/d/salidock/backend/Database/4312b0ca-14d5-4337-8fdc-059f08608a73]
+[INFO] Console - 
+[INFO] Console - Finished successfully in 0 hours 0 minutes 10.992 seconds.

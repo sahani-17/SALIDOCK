@@ -126,16 +126,18 @@ def detect_chains(input_pdb):
     
     with open(input_pdb, 'r') as f:
         for line in f:
-            if line.startswith('ATOM') or line.startswith('HETATM'):
+            # Only consider ATOM records for valid protein chains
+            if line.startswith('ATOM'):
                 # Validate line length before accessing column 21
                 if len(line) < 22:
-                    # Skip malformed lines that are too short
                     continue
                 
                 # Chain ID is at column 21 (0-indexed: position 21)
-                chain_id = line[21]
-                # Normalize: strip and uppercase, treat empty as space
-                chain_id = chain_id.strip().upper() if chain_id.strip() else ' '
+                chain_id = line[21].strip().upper()
+                
+                # Ignore empty chains
+                if not chain_id:
+                    continue
                 
                 if chain_id not in chain_atoms:
                     chain_atoms[chain_id] = 0
@@ -340,63 +342,8 @@ def analyze_pdb_structure(pdb_file):
     return stats
 
 
-def detect_missing_residues(pdb_file):
-    """
-    Detect missing residues by finding gaps in residue numbering.
-    
-    Args:
-        pdb_file: Path to PDB file
-        
-    Returns:
-        dict: {chain_id: [(start, end), ...]} of missing residue ranges
-        
-    Example:
-        >>> detect_missing_residues('protein.pdb')
-        {'A': [(10, 14), (50, 52)], 'B': [(5, 7)]}
-        # Chain A missing residues 10-14 and 50-52
-        # Chain B missing residues 5-7
-    """
-    pdb_file = str(pdb_file)
-    
-    # Collect residue numbers per chain
-    chains = {}
-    
-    with open(pdb_file, 'r') as f:
-        for line in f:
-            if line.startswith('ATOM'):
-                if len(line) < 26:
-                    continue
-                
-                chain_id = line[21].strip().upper() or ' '
-                
-                try:
-                    res_num = int(line[22:26].strip())
-                except ValueError:
-                    continue
-                
-                if chain_id not in chains:
-                    chains[chain_id] = set()
-                chains[chain_id].add(res_num)
-    
-    # Find gaps in numbering
-    missing = {}
-    
-    for chain_id, res_nums in chains.items():
-        nums = sorted(res_nums)
-        gaps = []
-        
-        for i in range(len(nums) - 1):
-            gap_size = nums[i+1] - nums[i]
-            if gap_size > 1:
-                # Gap found
-                gap_start = nums[i] + 1
-                gap_end = nums[i+1] - 1
-                gaps.append((gap_start, gap_end))
-        
-        if gaps:
-            missing[chain_id] = gaps
-    
-    return missing
+
+
 
 
 def extract_sequence_from_pdb(pdb_file):
@@ -607,68 +554,135 @@ def detect_heteroatoms_to_keep(input_pdb):
 
 def complete_structure_pdbfixer(input_pdb, output_pdb):
     """
-    Complete side-chain atoms using PDBFixer.
+    Comprehensive structure repair using PDBFixer.
     
-    PDBFixer is an easy-to-use tool that:
-    - Finds and adds missing atoms (side-chains)
-    - Requires no license (unlike MODELLER)
+    Performs 5 operations in order:
+    1. Alternate location resolution (auto on load — keeps highest occupancy)
+    2. Nonstandard residue replacement (MSE→MET, CSE→CYS, etc.)
+    3. Missing residue detection + addition
+    4. Missing heavy atom completion (including terminal OXT/H atoms)
+    5. Post-fix validation — re-check for remaining gaps
     
     Args:
         input_pdb: Input PDB file path
         output_pdb: Output completed PDB file path
         
     Returns:
-        bool: True if successful, False if PDBFixer unavailable
+        dict: Structured report with keys:
+            - success (bool): True if PDBFixer ran successfully
+            - nonstandard_replaced (int): Number of nonstandard residues replaced
+            - missing_residues_found (int): Number of missing residues detected
+            - missing_atoms_found (int): Number of missing heavy atoms detected
+            - missing_terminals_found (int): Number of missing terminal atoms detected
+            - missing_residues_remaining (int): Gaps still present after fix (triggers AlphaFold if > 0)
         
     Raises:
+        ImportError: If PDBFixer is not installed
         RuntimeError: If PDBFixer fails during execution
     """
     input_pdb = str(input_pdb)
     output_pdb = str(output_pdb)
     
-    # Try importing PDBFixer
+    # Import PDBFixer
     try:
         from pdbfixer import PDBFixer
         from openmm.app import PDBFile
     except ImportError:
         logger.warning("  WARNING: PDBFixer not available")
         logger.info("  → Install with: conda install -c conda-forge pdbfixer")
-        logger.info("  → Skipping structure completion")
-        return False
+        raise ImportError("PDBFixer is not installed")
     
     try:
-        logger.info("  Using PDBFixer to complete structure...")
+        logger.info("=" * 50)
+        logger.info("PDBFIXER — COMPREHENSIVE STRUCTURE REPAIR")
+        logger.info("=" * 50)
         
-        # Load structure
+        # ── Step 1: Load structure (altLoc auto-resolved) ──
+        logger.info("\n  Step 1/5: Loading structure (alternate locations auto-resolved)...")
         fixer = PDBFixer(filename=input_pdb)
+        logger.info(f"  Structure loaded: {fixer.topology.getNumAtoms()} atoms, "
+                     f"{fixer.topology.getNumResidues()} residues, "
+                     f"{fixer.topology.getNumChains()} chain(s)")
         
-        # Find missing residues
+        # ── Step 2: Nonstandard residue replacement ──
+        logger.info("\n  Step 2/5: Detecting nonstandard residues...")
+        fixer.findNonstandardResidues()
+        num_nonstandard = len(fixer.nonstandardResidues)
+        
+        if num_nonstandard > 0:
+            # Log which residues are being replaced
+            for residue, replacement in fixer.nonstandardResidues:
+                logger.info(f"    {residue.name} (chain {residue.chain.id}, "
+                           f"pos {residue.index}) → {replacement}")
+            fixer.replaceNonstandardResidues()
+            logger.info(f"  Replaced {num_nonstandard} nonstandard residue(s)")
+        else:
+            logger.info("  No nonstandard residues found")
+        
+        # ── Step 3: Missing residues ──
+        logger.info("\n  Step 3/5: Detecting missing residues (backbone gaps)...")
         fixer.findMissingResidues()
-        num_missing_residues = len(fixer.missingResidues)
+        num_missing_res = len(fixer.missingResidues)
         
-        if num_missing_residues > 0:
-            logger.info(f"  Found {num_missing_residues} missing residue(s)")
+        if num_missing_res > 0:
+            for (chain_idx, res_idx), res_names in fixer.missingResidues.items():
+                chain = list(fixer.topology.chains())[chain_idx]
+                logger.info(f"    Chain {chain.id}: {len(res_names)} missing residue(s) "
+                           f"at position {res_idx}")
+            logger.info(f"  Total: {num_missing_res} gap(s) detected")
+        else:
+            logger.info("  No missing residues — backbone is complete")
         
-        # Find missing atoms (side-chains)
+        # ── Step 4: Missing atoms + terminals ──
+        logger.info("\n  Step 4/5: Detecting missing heavy atoms & terminal atoms...")
         fixer.findMissingAtoms()
         num_missing_atoms = sum(len(atoms) for atoms in fixer.missingAtoms.values())
+        num_missing_terminals = sum(len(atoms) for atoms in fixer.missingTerminals.values())
         
         if num_missing_atoms > 0:
-            logger.info(f"  Found {num_missing_atoms} missing atom(s)")
+            logger.info(f"  Found {num_missing_atoms} missing heavy atom(s) in side-chains")
+        if num_missing_terminals > 0:
+            logger.info(f"  Found {num_missing_terminals} missing terminal atom(s)")
         
-        # Add missing atoms and residues
-        if num_missing_residues > 0 or num_missing_atoms > 0:
+        # Apply all fixes
+        total_fixes = num_missing_res + num_missing_atoms + num_missing_terminals
+        if total_fixes > 0:
+            logger.info("\n  Applying fixes...")
             fixer.addMissingAtoms()
-            logger.info("  Added missing residues and atoms")
+            logger.info(f"  ✓ Added all missing residues, atoms, and terminals")
         else:
-            logger.info("  No missing residues or atoms found")
+            logger.info("  No missing atoms or residues — structure is complete")
         
-        # Save completed structure
+        # Save fixed structure
         with open(output_pdb, 'w') as f:
             PDBFile.writeFile(fixer.topology, fixer.positions, f)
+        logger.info(f"\n  Saved fixed structure: {Path(output_pdb).name}")
         
-        logger.info("  Structure completed using PDBFixer")
-        return True
+        # ── Step 5: Post-fix validation ──
+        logger.info("\n  Step 5/5: Post-fix validation (re-checking for remaining gaps)...")
+        fixer2 = PDBFixer(filename=output_pdb)
+        fixer2.findMissingResidues()
+        remaining = len(fixer2.missingResidues)
+        
+        if remaining > 0:
+            logger.warning(f"  ⚠ {remaining} gap(s) still remain after PDBFixer")
+            logger.info("  → AlphaFold fallback will be triggered")
+        else:
+            logger.info("  ✓ All gaps resolved — structure is fully complete")
+        
+        logger.info("=" * 50)
+        
+        report = {
+            "success": True,
+            "nonstandard_replaced": num_nonstandard,
+            "missing_residues_found": num_missing_res,
+            "missing_atoms_found": num_missing_atoms,
+            "missing_terminals_found": num_missing_terminals,
+            "missing_residues_remaining": remaining,
+        }
+        
+        logger.info(f"  Report: {report}")
+        return report
         
     except Exception as e:
         logger.error(f"  ERROR: PDBFixer failed: {e}")
@@ -721,6 +735,26 @@ def _filter_pdb_residues(input_pdb, keep_hetero_residues=None, keep_chains=None)
     
     with open(input_pdb, 'r') as f:
         lines = f.readlines()
+    
+    # ── Pre-filter: discover actual chains in the PDB file ──
+    # PDBFixer can reassign chain IDs (e.g., B→A), so we detect what's actually there
+    if filter_by_chain:
+        actual_chains = set()
+        for line in lines:
+            if line.startswith('ATOM') and len(line) >= 22:
+                cid = line[21].strip().upper() if line[21].strip() else ' '
+                actual_chains.add(cid)
+        
+        logger.info(f"  Chains in PDB file: {', '.join(sorted(actual_chains)) if actual_chains else 'none'}")
+        logger.info(f"  Requested chains: {', '.join(keep_chains)}")
+        
+        # Check if requested chains exist in the file
+        matching = set(keep_chains) & actual_chains
+        if len(matching) == 0 and len(actual_chains) > 0:
+            # PDBFixer likely reassigned chain IDs — fall back to keeping all chains
+            logger.warning(f"  ⚠ Requested chains {keep_chains} not found in PDB (found: {sorted(actual_chains)})")
+            logger.warning(f"  → PDBFixer may have reassigned chain IDs — keeping ALL chains")
+            filter_by_chain = False
     
     filtered_lines = []
     removed_waters = 0
@@ -805,6 +839,10 @@ def _filter_pdb_residues(input_pdb, keep_hetero_residues=None, keep_chains=None)
     
     # Validate we have some valid records
     if valid_atom_count == 0:
+        # Last resort fallback: re-run without chain filtering
+        if filter_by_chain:
+            logger.warning(f"  ⚠ No atoms remain after chain filtering — retrying without chain filter")
+            return _filter_pdb_residues(input_pdb, keep_hetero_residues, keep_chains=None)
         raise ValueError(f"No valid ATOM/HETATM records remain after filtering: {input_pdb}")
     
     with open(output_pdb, 'w') as f:
@@ -1003,7 +1041,7 @@ def prepare_protein(input_pdb, output_pdbqt, remove_waters=True, keep_hetero_res
     logger.info(f"Input: {Path(input_pdb).name}")
     logger.info(f"pH: 7.4 (fixed)")
     
-    # Stage 0: Structure Analysis & Validation
+    # ── Stage 0: Structure Analysis (stats only) ──
     if validate_structure:
         logger.info("\nStage 0: Structure Analysis")
         try:
@@ -1014,76 +1052,68 @@ def prepare_protein(input_pdb, output_pdbqt, remove_waters=True, keep_hetero_res
             logger.info(f"  Heteroatoms: {stats['heteroatoms']}")
             logger.info(f"  Chains: {', '.join(stats['chains']) if stats['chains'] else 'None'}")
             logger.info(f"  Residues: {stats['residues']}")
-            
-            # Check for missing residues
-            missing = detect_missing_residues(input_pdb)
-            if missing:
-                logger.warning("\nStructure Validation Warnings:")
-                for chain, gaps in missing.items():
-                    for start, end in gaps:
-                        if start == end:
-                            logger.warning(f"  Chain {chain}: Missing residue {start}")
-                        else:
-                            logger.warning(f"  Chain {chain}: Missing residues {start}-{end}")
-                logger.warning("  → These gaps may affect docking results")
         except Exception as e:
             logger.warning(f"  WARNING: Structure analysis failed: {e}")
     
-    # Stage 0.5: AlphaFold Fallback (if requested and missing residues detected)
-    if use_alphafold_if_incomplete and validate_structure:
-        missing = detect_missing_residues(input_pdb)
-        if missing:
-            logger.info("\\nStage 0.5: AlphaFold Fallback")
-            logger.info("  Missing residues detected - attempting to fetch complete structure from AlphaFold")
-            
-            try:
-                # Extract sequence from PDB
-                sequence = extract_sequence_from_pdb(input_pdb)
-                
-                if sequence:
-                    logger.info(f"  Extracted sequence: {len(sequence)} residues")
-                    
-                    # Import AlphaFold integration
-                    import alphafold_integration
-                    
-                    # Create AlphaFold structure file path
-                    alphafold_pdb = str(input_pdb).replace('.pdb', '_alphafold.pdb')
-                    
-                    # Try to predict structure using ESMFold (faster than full AlphaFold)
-                    logger.info("  Fetching complete structure from AlphaFold (ESMFold)...")
-                    metadata = alphafold_integration.predict_structure_esmfold(
-                        sequence, 
-                        Path(alphafold_pdb),
-                        timeout=300
-                    )
-                    
-                    # Use AlphaFold structure for preparation
-                    input_pdb = alphafold_pdb
-                    logger.info(f"  Using AlphaFold structure (confidence: {metadata['confidence']})")
-                    logger.info("  → This structure should have no missing residues")
-                    
-                else:
-                    logger.warning("  Could not extract sequence from PDB")
-                    logger.info("  → Continuing with original structure")
-                    
-            except Exception as e:
-                logger.warning(f"  AlphaFold fallback failed: {e}")
-                logger.info("  → Continuing with original structure")
+    # ── Stage 1: PDBFixer — Comprehensive Structure Repair ──
+    logger.info("\nStage 1: PDBFixer — Comprehensive Structure Repair")
+    fixed_pdb = str(input_pdb).replace('.pdb', '_fixed.pdb')
+    pdbfixer_report = None
     
-    # Stage 1: Structure Completion (if requested)
-    if fix_structure:
-        logger.info("\nStage 0.5: Structure Completion")
-        fixed_pdb = str(input_pdb).replace('.pdb', '_fixed.pdb')
+    try:
+        pdbfixer_report = complete_structure_pdbfixer(input_pdb, fixed_pdb)
+        input_pdb = fixed_pdb  # Use fixed version going forward
+        logger.info("  Using PDBFixer-repaired structure for preparation")
+    except ImportError:
+        logger.warning("  PDBFixer not available — skipping structure repair")
+        logger.info("  → Continuing with original structure")
+        pdbfixer_report = {"missing_residues_remaining": -1}  # Unknown
+    except RuntimeError as e:
+        logger.error(f"  ERROR: PDBFixer failed: {e}")
+        logger.info("  → Continuing with original structure")
+        pdbfixer_report = {"missing_residues_remaining": -1}  # Unknown
+    
+    # ── Stage 1.5: AlphaFold Fallback (ONLY if PDBFixer couldn't resolve gaps) ──
+    if use_alphafold_if_incomplete and pdbfixer_report.get("missing_residues_remaining", 0) > 0:
+        logger.info("\nStage 1.5: AlphaFold Fallback")
+        logger.info("  PDBFixer could not resolve all gaps — attempting AlphaFold prediction")
+        
         try:
-            if complete_structure_pdbfixer(input_pdb, fixed_pdb):
-                input_pdb = fixed_pdb
-                logger.info("  Using completed structure for preparation")
-        except RuntimeError as e:
-            logger.error(f"  ERROR: Structure completion failed: {e}")
-            logger.info("  → Continuing with original structure")
+            # Extract sequence from PDB
+            sequence = extract_sequence_from_pdb(input_pdb)
+            
+            if sequence:
+                logger.info(f"  Extracted sequence: {len(sequence)} residues")
+                
+                # Import AlphaFold integration
+                import alphafold_integration
+                
+                # Create AlphaFold structure file path
+                alphafold_pdb = str(input_pdb).replace('.pdb', '_alphafold.pdb')
+                
+                # Predict structure using ESMFold (faster than full AlphaFold)
+                logger.info("  Fetching complete structure from ESMFold...")
+                metadata = alphafold_integration.predict_structure_esmfold(
+                    sequence, 
+                    Path(alphafold_pdb),
+                    timeout=300
+                )
+                
+                # Use AlphaFold structure for preparation
+                input_pdb = alphafold_pdb
+                logger.info(f"  Using AlphaFold structure (confidence: {metadata['confidence']})")
+                logger.info("  → This structure should have no missing residues")
+                
+            else:
+                logger.warning("  Could not extract sequence from PDB")
+                logger.info("  → Continuing with PDBFixer output")
+                
+        except Exception as e:
+            logger.warning(f"  AlphaFold fallback failed: {e}")
+            logger.info("  → Continuing with PDBFixer output")
     
-    # Stage 1: Non-Protein Elements Elimination
-    logger.info("\nStage 1: Non-Protein Elements Elimination")
+    # ── Stage 2: Non-Protein Elements Elimination ──
+    logger.info("\nStage 2: Non-Protein Elements Elimination")
     if remove_waters or keep_hetero_residues is not None or keep_chains is not None:
         if not remove_waters:
             logger.warning("  WARNING: Keeping water molecules (unusual for docking)")
@@ -1094,8 +1124,8 @@ def prepare_protein(input_pdb, output_pdbqt, remove_waters=True, keep_hetero_res
         logger.info("  Keeping all residues (no filtering)")
         filtered_pdb = input_pdb
     
-    # Stage 2: Protein Refinement
-    logger.info("\nStage 2: Protein Refinement")
+    # ── Stage 3: Protein Refinement → PDBQT ──
+    logger.info("\nStage 3: Protein Refinement → PDBQT")
     logger.info("  OpenBabel will:")
     logger.info("    - Add hydrogens at pH 7.4")
     logger.info("    - Assign Gasteiger charges")
@@ -1113,15 +1143,24 @@ def prepare_protein(input_pdb, output_pdbqt, remove_waters=True, keep_hetero_res
     if remove_waters:
         logger.info("  Final cleanup...")
         _remove_waters_from_pdbqt(output_pdbqt)
-    
+    # Save a copy of the filtered PDB as protein_prepared.pdb for visualization and centering
+    prepared_pdb_path = str(Path(output_pdbqt).with_suffix('.pdb'))
+    if os.path.exists(filtered_pdb):
+        import shutil
+        try:
+            shutil.copy(filtered_pdb, prepared_pdb_path)
+            logger.info(f"  Saved prepared PDB for visualization: {Path(prepared_pdb_path).name}")
+        except Exception as e:
+            logger.warning(f"  WARNING: Could not save prepared PDB: {e}")
+
     # Cleanup temp files
-    if filtered_pdb != input_pdb and os.path.exists(filtered_pdb):
+    if filtered_pdb != input_pdb and os.path.exists(filtered_pdb) and filtered_pdb != prepared_pdb_path:
         try:
             os.remove(filtered_pdb)
         except (OSError, PermissionError) as e:
             logger.warning(f"  WARNING: Could not remove temp file {filtered_pdb}: {e}")
     
-    if fix_structure and input_pdb.endswith('_fixed.pdb') and os.path.exists(input_pdb):
+    if input_pdb.endswith('_fixed.pdb') and os.path.exists(input_pdb):
         try:
             os.remove(input_pdb)
         except (OSError, PermissionError) as e:

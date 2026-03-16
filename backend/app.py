@@ -2718,6 +2718,109 @@ async def get_interactions_summary(session_id: str, num_poses: int = 9):
     except Exception as e:
         return json_error(str(e))
 
+def resolve_pose_pdbqt(session_dir: Path, rank: int) -> tuple[Path, int]:
+    """
+    Given a global rank (1-based), find the correct PDBQT file and
+    internal pose number. Counts poses by reading MODEL blocks directly
+    from PDBQT files — does not depend on score.txt files.
+    """
+    import re
+    import json
+
+    def count_poses_in_pdbqt(pdbqt_path: Path) -> int:
+        """Count MODEL blocks in a PDBQT file."""
+        if not pdbqt_path.exists():
+            return 0
+        text = pdbqt_path.read_text()
+        models = re.findall(r'^MODEL\s+\d+', text, re.MULTILINE)
+        if models:
+            return len(models)
+        # Single-model file with no MODEL markers
+        has_atoms = any(
+            line.startswith(('ATOM', 'HETATM'))
+            for line in text.splitlines()
+        )
+        return 1 if has_atoms else 0
+
+    cavities_json = session_dir / "cavities.json"
+
+    if not cavities_json.exists():
+        # Manual docking — single PDBQT, rank is the internal pose number
+        pdbqt = session_dir / "docking_out_out.pdbqt"
+        return pdbqt, rank
+
+    with open(cavities_json) as f:
+        cavities = json.load(f)
+
+    current_global = 1
+    for i, cav in enumerate(cavities):
+        cavity_num = i + 1
+        # Try cavity-specific file first, fall back to combined output
+        pdbqt_path = session_dir / f"docking_out_cavity_{cavity_num}_out.pdbqt"
+        if not pdbqt_path.exists():
+            pdbqt_path = session_dir / "docking_out_out.pdbqt"
+        if not pdbqt_path.exists():
+            continue
+        num_poses = count_poses_in_pdbqt(pdbqt_path)
+        if num_poses == 0:
+            continue
+        if current_global + num_poses > rank:
+            internal_mode = rank - current_global + 1
+            return pdbqt_path, internal_mode
+        current_global += num_poses
+
+    # Fallback — rank out of bounds, return last pose of combined output
+    pdbqt = session_dir / "docking_out_out.pdbqt"
+    return pdbqt, rank
+
+
+@app.get("/api/interactions/2d/{session_id}/{pose}")
+async def get_2d_interaction_svg(session_id: str, pose: int):
+    """
+    Generate and return a 2D interaction diagram SVG for the given docking pose.
+    Handles multi-cavity output resolution.
+    """
+    from interaction_2d import parse_pdb, detect, render_svg, extract_affinity_from_pdb
+    from fastapi.responses import Response
+
+    session_dir = get_session_dir(session_id)
+    protein_pdbqt = session_dir / "protein_prepared.pdbqt"
+    
+    if not protein_pdbqt.exists():
+        raise HTTPException(status_code=404, detail="Prepared protein not found")
+        
+    ligand_pdbqt, internal_mode = resolve_pose_pdbqt(session_dir, pose)
+    if not ligand_pdbqt or not ligand_pdbqt.exists():
+        raise HTTPException(status_code=404, detail=f"Docking results not found for pose {pose}")
+        
+    # Create the complex using helper function and save it to a temporary location
+    complex_pdb_string = create_protein_ligand_complex(
+        protein_pdbqt=protein_pdbqt,
+        ligand_pdbqt=ligand_pdbqt,
+        pose_number=internal_mode,
+        include_remarks=True
+    )
+    
+    # Save to a temporary file in the session directory for parsing
+    complex_path = session_dir / f"temp_complex_pose_{pose}.pdb"
+    try:
+        with open(complex_path, "w") as f:
+            f.write(complex_pdb_string)
+
+        protein_atoms, ligand_atoms = parse_pdb(str(complex_path))
+        affinity = extract_affinity_from_pdb(str(complex_path))
+        
+        interactions = detect(protein_atoms, ligand_atoms)
+        svg_content = render_svg(str(complex_path), interactions, affinity)
+        
+        return Response(content=svg_content, media_type="image/svg+xml")
+    finally:
+        if complex_path.exists():
+            try:
+                complex_path.unlink()
+            except:
+                pass
+
 @app.post("/api/alphafold/uniprot/{session_id}")
 async def fetch_alphafold_from_uniprot(session_id: str, uniprot_id: str):
     """

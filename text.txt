@@ -1,7 +1,0 @@
-conda create -n molapi python=3.10 -y
-conda activate molapi
-
-/mnt/f/Applications/info_genix/proteins/protein.pdb
-/mnt/f/Applications/info_genix/proteins/ligand.sdf
-
-
