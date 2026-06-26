@@ -1,4 +1,4 @@
-# SALIDOCK - Molecular Docking Platform
+ # SALIDOCK - Molecular Docking Platform
 
 A comprehensive web-based molecular docking platform for drug discovery and protein-ligand interaction analysis. Built with FastAPI backend and React frontend.
 
