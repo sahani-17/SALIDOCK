@@ -1,8 +1,0 @@
-Docking Parameters
-==================
-
-mode: manual
-exhaustiveness: 10
-num_modes: 9
-grid_center: [-26.352, 12.6, 58.908]
-grid_size: [20.0, 20.0, 20.0]

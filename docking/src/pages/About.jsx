@@ -2,7 +2,18 @@ import React, { useRef, useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { useScrollAnimation } from "../hooks/useScrollAnimation";
-import { Lightbulb, Target, Network, Users, GraduationCap, Briefcase, Zap, Quote, FlaskConical } from "lucide-react";
+import {
+  Lightbulb,
+  Target,
+  Network,
+  Users,
+  GraduationCap,
+  Briefcase,
+  Zap,
+  Quote,
+  FlaskConical,
+} from "lucide-react";
+import { Mail, Linkedin, Globe, Github} from "lucide-react";
 
 /* ─── Scroll Section Wrapper ─── */
 const AnimatedSection = ({ children, className = "", delay = 0 }) => {
@@ -36,12 +47,16 @@ const TiltCard = ({ children, className = "" }) => {
     const y = (e.clientY - rect.top) / rect.height;
     const rotateX = (0.5 - y) * 10;
     const rotateY = (x - 0.5) * 10;
-    setTransform(`perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.015,1.015,1.015)`);
+    setTransform(
+      `perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.015,1.015,1.015)`,
+    );
     setGlare({ x: x * 100, y: y * 100, opacity: 0.1 });
   };
 
   const handleMouseLeave = () => {
-    setTransform("perspective(800px) rotateX(0deg) rotateY(0deg) scale3d(1,1,1)");
+    setTransform(
+      "perspective(800px) rotateX(0deg) rotateY(0deg) scale3d(1,1,1)",
+    );
     setGlare({ x: 50, y: 50, opacity: 0 });
   };
 
@@ -97,8 +112,11 @@ const About = () => {
 
       {/* ─── HERO: Our Mission ─── */}
       <section className="relative pt-32 pb-20 overflow-hidden min-h-[60vh] flex items-center">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[800px] h-[400px] rounded-full blur-[150px] pointer-events-none opacity-40" style={{ background: "hsl(160 84% 39% / 0.08)" }} />
-        
+        <div
+          className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[800px] h-[400px] rounded-full blur-[150px] pointer-events-none opacity-40"
+          style={{ background: "hsl(160 84% 39% / 0.08)" }}
+        />
+
         <div className="max-w-4xl mx-auto px-4 sm:px-6 relative z-10 text-center">
           <AnimatedSection>
             <span className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-primary mb-6">
@@ -108,8 +126,13 @@ const About = () => {
               Seamless, Rigorous, and Accessible Drug Discovery.
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground leading-relaxed max-w-3xl mx-auto">
-              At SALIDOCK, we believe that computational drug discovery shouldn't be fragmented. We built this platform to solve a common frustration in cheminformatics: the time-consuming nature of molecular docking workflows. 
-              Our goal is to assemble the entire process into one unified platform, saving researchers valuable time and allowing them to focus on the science rather than the software.
+              At SALIDOCK, we believe that computational drug discovery
+              shouldn't be fragmented. We built this platform to solve a common
+              frustration in cheminformatics: the time-consuming nature of
+              molecular docking workflows. Our goal is to assemble the entire
+              process into one unified platform, saving researchers valuable
+              time and allowing them to focus on the science rather than the
+              software.
             </p>
           </AnimatedSection>
         </div>
@@ -122,17 +145,35 @@ const About = () => {
           <div className="grid md:grid-cols-2 gap-16 items-center">
             <AnimatedSection>
               <div className="relative">
-                <Lightbulb size={48} className="text-primary/20 absolute -top-6 -left-6" />
-                <h2 className="text-3xl lg:text-4xl font-black mb-6 relative z-10">Our Story: <br/><span className="text-primary">The "Lightbulb" Moment</span></h2>
+                <Lightbulb
+                  size={48}
+                  className="text-primary/20 absolute -top-6 -left-6"
+                />
+                <h2 className="text-3xl lg:text-4xl font-black mb-6 relative z-10">
+                  Our Story: <br />
+                  <span className="text-primary">The "Lightbulb" Moment</span>
+                </h2>
                 <div className="space-y-6 text-muted-foreground leading-relaxed">
                   <p>
-                    The journey of SALIDOCK is rooted in scientific curiosity and the willingness to learn from mistakes. The project initially began as our undergraduate minor project, where we attempted to predict Drug-Target Interactions (DTI) solely using machine learning models.
+                    The journey of SALIDOCK is rooted in scientific curiosity
+                    and the willingness to learn from mistakes. The project
+                    initially began as our undergraduate minor project, where we
+                    attempted to predict Drug-Target Interactions (DTI) solely
+                    using machine learning models.
                   </p>
                   <p>
-                    However, attending a molecular docking workshop sparked a crucial "lightbulb" moment for us. We realized that our purely data-driven ML approach lacked the necessary biophysical grounding—what we were doing wasn't scientifically robust enough for real-world application.
+                    However, attending a molecular docking workshop sparked a
+                    crucial "lightbulb" moment for us. We realized that our
+                    purely data-driven ML approach lacked the necessary
+                    biophysical grounding—what we were doing wasn't
+                    scientifically robust enough for real-world application.
                   </p>
                   <p>
-                    Recognizing this gap, we sought out our mentor, and our project pivoted in an entirely new, structure-based direction. We moved away from fragmented tools and began developing a platform that integrates everything from robust pocket prediction to comprehensive interaction analysis.
+                    Recognizing this gap, we sought out our mentor, and our
+                    project pivoted in an entirely new, structure-based
+                    direction. We moved away from fragmented tools and began
+                    developing a platform that integrates everything from robust
+                    pocket prediction to comprehensive interaction analysis.
                   </p>
                 </div>
               </div>
@@ -144,7 +185,9 @@ const About = () => {
                   <div className="p-10 flex flex-col items-center justify-center text-center h-full min-h-[350px]">
                     <Quote size={40} className="text-primary/30 mb-6" />
                     <p className="text-xl md:text-2xl font-semibold italic text-foreground tracking-tight leading-snug">
-                      "We moved away from fragmented tools and built a platform that integrates everything, allowing you to focus on the science."
+                      "We moved away from fragmented tools and built a platform
+                      that integrates everything, allowing you to focus on the
+                      science."
                     </p>
                   </div>
                 </div>
@@ -158,11 +201,24 @@ const About = () => {
       <section className="py-24">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 text-center">
           <AnimatedSection>
-            <span className="inline-block text-xs font-semibold uppercase tracking-widest text-primary/70 mb-4">What We Do</span>
-            <h2 className="text-3xl lg:text-4xl font-black mb-8">Streamlining the Workflow</h2>
+            <span className="inline-block text-xs font-semibold uppercase tracking-widest text-primary/70 mb-4">
+              What We Do
+            </span>
+            <h2 className="text-3xl lg:text-4xl font-black mb-8">
+              Streamlining the Workflow
+            </h2>
             <p className="text-lg text-muted-foreground leading-relaxed">
-              Traditional docking forces researchers to juggle multiple disparate tools to get results. 
-              <span className="text-foreground font-semibold"> SALIDOCK eliminates this bottleneck.</span> By integrating the core docking engine with built-in features for visualizing 2D ligand-receptor interactions, we provide a complete, end-to-end solution. Whether you are benchmarking against complex datasets like PDBbind or running high-throughput screens, SALIDOCK is designed to handle it effortlessly.
+              Traditional docking forces researchers to juggle multiple
+              disparate tools to get results.
+              <span className="text-foreground font-semibold">
+                {" "}
+                SALIDOCK eliminates this bottleneck.
+              </span>{" "}
+              By integrating the core docking engine with built-in features for
+              visualizing 2D ligand-receptor interactions, we provide a
+              complete, end-to-end solution. Whether you are benchmarking
+              against complex datasets like PDBbind or running high-throughput
+              screens, SALIDOCK is designed to handle it effortlessly.
             </p>
           </AnimatedSection>
         </div>
@@ -170,13 +226,23 @@ const About = () => {
 
       {/* ─── THE TEAM ─── */}
       <section className="py-24 bg-card/10 relative">
-        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[180px] pointer-events-none opacity-20" style={{ background: "hsl(160 84% 39% / 0.15)" }} />
-        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full blur-[150px] pointer-events-none opacity-10" style={{ background: "hsl(160 84% 39% / 0.1)" }} />
-        
+        <div
+          className="absolute right-0 top-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[180px] pointer-events-none opacity-20"
+          style={{ background: "hsl(160 84% 39% / 0.15)" }}
+        />
+        <div
+          className="absolute left-0 top-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full blur-[150px] pointer-events-none opacity-10"
+          style={{ background: "hsl(160 84% 39% / 0.1)" }}
+        />
+
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <AnimatedSection className="text-center mb-16">
-            <h2 className="text-3xl lg:text-4xl font-black mb-4">The Team Behind SaliDock</h2>
-            <p className="text-muted-foreground max-w-xl mx-auto">Built by students, guided by industry experts.</p>
+            <h2 className="text-3xl lg:text-4xl font-black mb-4">
+              Behind the Vision of Salidock
+            </h2>
+            <p className="text-muted-foreground max-w-xl mx-auto">
+              Built by students, guided by industry experts.
+            </p>
           </AnimatedSection>
 
           <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
@@ -184,11 +250,46 @@ const About = () => {
               <TiltCard className="h-full">
                 <div className="rounded-2xl border border-border bg-card/60 backdrop-blur-sm p-8 text-center h-full hover:border-primary/30 transition-colors">
                   <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-6 border-2 border-primary/20 bg-primary/5">
-                    <img src="/photo.png" alt="Ahan Kumar Biswal" className="w-full h-full object-cover" />
+                    <img
+                      src="/photo.png"
+                      alt="Ahan Kumar Biswal"
+                      className="w-full h-full object-cover"
+                    />
                   </div>
-                  <h3 className="font-bold text-xl mb-1">Ahan Kumar Biswal</h3>
-                  <p className="text-sm text-primary mb-4 font-semibold">Lead Developer</p>
-                  <p className="text-sm text-muted-foreground">Pursuing MSc in Bioinformatics, building robust backend architectures and sleek UI designs.</p>
+
+                  <h3 className="font-bold text-xl mb-4">
+                    Mr. Ahan Kumar Biswal
+                  </h3>
+
+                  {/* Social Icons */}
+                  <div className="flex justify-center gap-4">
+                    <a
+                      href="mailto:ahanbiswal2003@gmail.com"
+                      className="text-muted-foreground hover:text-primary transition"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Mail size={20} />
+                    </a>
+
+                    <a
+                      href="https://www.linkedin.com/in/ahan-biswal-56a614333"
+                      className="text-muted-foreground hover:text-primary transition"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Linkedin size={20} />
+                    </a>
+
+                    <a
+                      href="https://github.com/Toxicvampire007"
+                      className="text-muted-foreground hover:text-primary transition"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                       <Github size={20} />
+                    </a>
+                  </div>
                 </div>
               </TiltCard>
             </AnimatedSection>
@@ -197,11 +298,141 @@ const About = () => {
               <TiltCard className="h-full">
                 <div className="rounded-2xl border border-border bg-card/60 backdrop-blur-sm p-8 text-center h-full hover:border-primary/30 transition-colors">
                   <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-6 border-2 border-primary/20 bg-primary/5">
-                    <img src="/photo2.png" alt="Soumya Ranjan Sahani" className="w-full h-full object-cover" />
+                    <img
+                      src="/photo2.png"
+                      alt="Soumya Ranjan Sahani"
+                      className="w-full h-full object-cover"
+                    />
                   </div>
-                  <h3 className="font-bold text-xl mb-1">Soumya Ranjan Sahani</h3>
-                  <p className="text-sm text-primary mb-4 font-semibold">Lead Researcher</p>
-                  <p className="text-sm text-muted-foreground">Pursuing MSc in Bioinformatics, focusing on molecular dynamics and scientific validation.</p>
+                  <h3 className="font-bold text-xl mb-1">
+                    Mr. Soumya Ranjan Sahani
+                  </h3>
+
+                  <div className="flex justify-center gap-4 mt-4">
+                    <a
+                      href="mailto:sahanisoumya356@gmail.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                    >
+                      <Mail size={20} />
+                    </a>
+
+                    <a
+                      href="https://www.linkedin.com/in/soumya-ranjan-sahani-581874379"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                    >
+                      <Linkedin size={20} />
+                    </a>
+
+                    <a
+                      href="https://github.com/sahani-17"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                    >
+                      <Github size={20} />
+                    </a>
+                  </div>
+                </div>
+              </TiltCard>
+            </AnimatedSection>
+
+            <AnimatedSection delay={200} className="md:col-span-1">
+              <TiltCard className="h-full">
+                <div className="rounded-2xl border border-border bg-card/60 backdrop-blur-sm p-8 text-center h-full hover:border-primary/30 transition-colors">
+                  <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-6 border-2 border-primary/20 bg-primary/5">
+                    <img
+                      src="/deep.jpeg"
+                      alt="Deepan"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <h3 className="font-bold text-xl mb-1">Mr. Deepan Balu</h3>
+
+                  <div className="flex justify-center gap-4 mt-4">
+                    <a
+                      href="mailto:deepanbalud@gmail.com.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                    >
+                      <Mail size={20} />
+                    </a>
+
+                    <a
+                      href="https://linkedin.com/in/deepan-balu"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                    >
+                      <Linkedin size={20} />
+                    </a>
+
+                    <a
+                      href="https://github.com/deepan-codebuster"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                    >
+                      <Github size={20} />
+                    </a>
+
+                    <a
+                      href="https://deepanbalu.vercel.app"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                    >
+                      <Globe size={20} />
+                    </a>
+                  </div>
+                </div>
+              </TiltCard>
+            </AnimatedSection>
+
+            <AnimatedSection delay={200} className="md:col-span-1">
+              <TiltCard className="h-full">
+                <div className="rounded-2xl border border-border bg-card/60 backdrop-blur-sm p-8 text-center h-full hover:border-primary/30 transition-colors">
+                  <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-6 border-2 border-primary/20 bg-primary/5">
+                    <img
+                      src="/alaka.png"
+                      alt="Dr. Alaka Sahoo"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <h3 className="font-bold text-xl mb-1">Dr. Alaka Sahoo</h3>
+
+                  <div className="flex justify-center gap-4 mt-4">
+                    <a
+                      href="mailto:salixiras.bbsr@gmail.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                    >
+                      <Mail size={20} />
+                    </a>
+
+                    <a
+                      href="https://www.linkedin.com/in/salixiras-research-private-limited/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                    >
+                      <Linkedin size={20} />
+                    </a>
+
+                    <a
+                      href="https://salixiras.netlify.app/leadership"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                    >
+                      <Globe size={20} />
+                    </a>
+                  </div>
                 </div>
               </TiltCard>
             </AnimatedSection>
@@ -214,13 +445,44 @@ const About = () => {
                   </div>
                   <div className="relative z-10">
                     <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-6 border-2 border-primary/20 bg-primary/5">
-                      <img src="/Shasank.JPG.png" alt="Dr. Shasank Sekhar Swain" className="w-full h-full object-cover" />
+                      <img
+                        src="/Shasank.JPG.png"
+                        alt="Dr. Shasank Sekhar Swain"
+                        className="w-full h-full object-cover"
+                      />
                     </div>
-                    <h3 className="font-bold text-xl mb-1">Dr. Shasank Sekhar Swain</h3>
-                    <p className="text-sm text-primary mb-4 font-semibold">Guide, Mentor & Funder</p>
-                    <p className="text-sm text-muted-foreground">
-                      Founder of <span className="text-foreground font-semibold">Salixiras Pvt. Ltd.</span> His expert guidance transformed SALIDOCK from a student project to an industry-ready tool.
-                    </p>
+                    <h3 className="font-bold text-xl mb-1">
+                      Dr. Shasank Sekhar Swain
+                    </h3>
+
+                    <div className="flex justify-center gap-4 mt-4">
+                      <a
+                        href="mailto:salixiras.bbsr@gmail.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                      >
+                        <Mail size={20} />
+                      </a>
+
+                      <a
+                        href="https://www.linkedin.com/in/salixiras-research-private-limited/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                      >
+                        <Linkedin size={20} />
+                      </a>
+
+                      <a
+                        href="https://salixiras.netlify.app/leadership"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                      >
+                        <Globe size={20} />
+                      </a>
+                    </div>
                   </div>
                 </div>
               </TiltCard>
@@ -233,8 +495,13 @@ const About = () => {
       <section className="py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <AnimatedSection className="text-center mb-16">
-            <h2 className="text-3xl lg:text-4xl font-black mb-4">Who We Serve</h2>
-            <p className="text-muted-foreground max-w-xl mx-auto">SALIDOCK is built for anyone whose work relies on accurate molecular docking.</p>
+            <h2 className="text-3xl lg:text-4xl font-black mb-4">
+              Who We Serve
+            </h2>
+            <p className="text-muted-foreground max-w-xl mx-auto">
+              SALIDOCK is built for anyone whose work relies on accurate
+              molecular docking.
+            </p>
           </AnimatedSection>
 
           <div className="grid md:grid-cols-3 gap-6">
@@ -261,7 +528,9 @@ const About = () => {
                     <role.icon size={22} />
                   </div>
                   <h3 className="text-lg font-bold mb-2">{role.title}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{role.desc}</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {role.desc}
+                  </p>
                 </div>
               </AnimatedSection>
             ))}

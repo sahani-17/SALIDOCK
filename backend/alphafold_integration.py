@@ -487,11 +487,12 @@ def predict_structure_esmfold(
     print(f"[INFO] Predicting structure using ESMFold for {len(sequence)} residue sequence")
     
     # Adaptive timeout based on sequence length
-    # Longer sequences take exponentially longer to predict
-    base_timeout = 60  # 1 minute base
-    timeout_per_residue = 0.5  # 0.5 seconds per residue
+    # Longer sequences can take significantly longer depending on API load.
+    # Respect explicit caller timeout when larger.
+    base_timeout = 90  # 1.5 minute base
+    timeout_per_residue = 0.9  # seconds per residue
     calculated_timeout = base_timeout + (len(sequence) * timeout_per_residue)
-    adaptive_timeout = min(max(calculated_timeout, 60), 600)  # Between 1-10 minutes
+    adaptive_timeout = int(min(max(calculated_timeout, max(timeout, 180)), 900))  # Between 3-15 minutes
     
     print(f"   Estimated time: {adaptive_timeout // 60:.0f}-{(adaptive_timeout // 60) + 1:.0f} minutes (timeout: {adaptive_timeout}s)")
     

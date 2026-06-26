@@ -35,7 +35,7 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
     // Reset pan/zoom when pose changes
     setScale(1); setPanX(0); setPanY(0);
 
-    fetch(`http://localhost:8000/api/interactions/2d/${sessionId}/${poseNumber}`)
+    fetch(`https://salidock-backend.jollydune-d4ca90c7.eastus.azurecontainerapps.io/api/interactions/2d/${sessionId}/${poseNumber}`)
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.text();

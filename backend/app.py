@@ -1,6 +1,6 @@
 # Dependencies Imported
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uuid
@@ -11,6 +11,12 @@ import logging
 import json
 from pathlib import Path
 import tools, docking_runner, grid_calc, results, alphafold_integration, cavity_detection
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+from supabase_manager import supabase_mgr
 
 # Configure logging
 logging.basicConfig(
@@ -20,14 +26,37 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).parent
-WORK_DIR = BASE_DIR / "Database"
-WORK_DIR.mkdir(exist_ok=True)
 
-# User-facing results directory (SwissDock-style organized output)
-RESULTS_DIR = BASE_DIR / "results"
-RESULTS_DIR.mkdir(exist_ok=True)
+# ========== CLOUD-ONLY MODE CONFIGURATION ==========
+# When CLOUD_ONLY_MODE=true, all intermediate files are uploaded to Supabase Storage
+# instead of persisting to local Database folder. This enables true serverless/containerized
+# deployment where local disk is ephemeral or expensive.
+#
+# In cloud-only mode:
+# - Prepared proteins/ligands uploaded to cloud immediately after processing
+# - Cavity detection results saved to Supabase
+# - Grid parameters saved to Supabase
+# - Docking outputs uploaded to cloud without local copies
+# - All references pull from Supabase Storage (with optional local caching)
+# - NO local Database/ or results/ folders created
+#
+CLOUD_ONLY_MODE = os.getenv("CLOUD_ONLY_MODE", "false").lower() == "true"
+
+# Create local directories only if NOT in cloud-only mode
+if not CLOUD_ONLY_MODE:
+    WORK_DIR = BASE_DIR / "Database"
+    WORK_DIR.mkdir(exist_ok=True)
+    
+    # User-facing results directory (SwissDock-style organized output)
+    RESULTS_DIR = BASE_DIR / "results"
+    RESULTS_DIR.mkdir(exist_ok=True)
+else:
+    # Cloud-only mode: use temp directories without creating them
+    WORK_DIR = BASE_DIR / "Database"
+    RESULTS_DIR = BASE_DIR / "results"
 
 app = FastAPI(title="Docking Tool API - Session Based")
+logger.info(f"🌍 Cloud-Only Mode: {'ENABLED' if CLOUD_ONLY_MODE else 'DISABLED (using local storage)'}")
 
 # CORS configuration - FIXED: Use environment variable instead of wildcard
 CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,http://localhost:8501").split(",")
@@ -106,6 +135,92 @@ def json_error(message: str, suggestion: str = None, log_details: str = None) ->
         payload["suggestion"] = suggestion
     
     return JSONResponse(status_code=500, content=payload)
+
+# ========== CLOUD-ONLY MODE HELPER FUNCTIONS ==========
+
+def save_session_file(session_id: str, filename: str, content: bytes, subpath: str = None) -> Path:
+    """
+    Save session file respecting CLOUD_ONLY_MODE setting.
+    
+    In cloud mode: Uploads to Supabase Storage
+    In local mode: Saves to local WORK_DIR
+    
+    Args:
+        session_id: Session identifier
+        filename: Name of the file
+        content: Binary content
+        subpath: Optional subdirectory within session (e.g., 'grid', 'intermediate')
+        
+    Returns:
+        Path object pointing to file location (local path or cloud path string)
+    """
+    if CLOUD_ONLY_MODE and supabase_mgr:
+        try:
+            # Construct cloud path
+            cloud_subpath = f"{subpath}/{filename}" if subpath else filename
+            supabase_mgr.upload_intermediate_file(session_id, cloud_subpath, content)
+            logger.info(f"☁️  Cloud-saved: {session_id}/{cloud_subpath}")
+            return Path(f"cloud://{session_id}/intermediate/{cloud_subpath}")
+        except Exception as e:
+            logger.error(f"Failed to save to cloud: {str(e)}")
+            # Fallback to local storage
+            pass
+    
+    # Local mode or cloud upload failed
+    session_dir = WORK_DIR / session_id
+    session_dir.mkdir(parents=True, exist_ok=True)
+    
+    if subpath:
+        file_dir = session_dir / subpath
+        file_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        file_dir = session_dir
+    
+    file_path = file_dir / filename
+    file_path.write_bytes(content)
+    logger.info(f"💾 Local-saved: {file_path}")
+    return file_path
+
+def read_session_file(session_id: str, filename: str, subpath: str = None) -> bytes:
+    """
+    Read session file respecting CLOUD_ONLY_MODE setting.
+    
+    In cloud mode: Tries Supabase Storage first, then local fallback
+    In local mode: Reads from WORK_DIR
+    
+    Args:
+        session_id: Session identifier
+        filename: Name of the file
+        subpath: Optional subdirectory within session
+        
+    Returns:
+        Binary content of the file
+        
+    Raises:
+        FileNotFoundError: If file not found in any location
+    """
+    if CLOUD_ONLY_MODE and supabase_mgr:
+        try:
+            cloud_subpath = f"{subpath}/{filename}" if subpath else filename
+            content = supabase_mgr.download_intermediate_file(session_id, cloud_subpath)
+            logger.info(f"☁️  Cloud-read: {session_id}/{cloud_subpath}")
+            return content
+        except Exception as e:
+            logger.warning(f"Cloud read failed, trying local: {str(e)}")
+    
+    # Local fallback or local mode
+    session_dir = WORK_DIR / session_id
+    
+    if subpath:
+        file_path = session_dir / subpath / filename
+    else:
+        file_path = session_dir / filename
+    
+    if file_path.exists():
+        logger.info(f"💾 Local-read: {file_path}")
+        return file_path.read_bytes()
+    
+    raise FileNotFoundError(f"File not found: {file_path}")
 
 # Input validation helpers
 RESERVED_NAMES = {'CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'LPT1', 'LPT2'}
@@ -264,7 +379,23 @@ def cleanup_old_sessions():
     Delete sessions older than SESSION_EXPIRY_HOURS.
     
     This prevents disk space exhaustion from abandoned sessions.
+    In cloud-only mode, delegates to Supabase manager for cleanup.
     """
+    # In cloud-only mode, use Supabase cleanup instead
+    if CLOUD_ONLY_MODE:
+        if supabase_mgr:
+            try:
+                supabase_mgr.cleanup_old_sessions(hours=SESSION_EXPIRY_HOURS)
+                logger.info(f"Cloud-based session cleanup completed via Supabase")
+            except Exception as e:
+                logger.error(f"Cloud session cleanup failed: {e}")
+        return
+    
+    # Local mode: cleanup from WORK_DIR
+    if not WORK_DIR.exists():
+        logger.warning("WORK_DIR does not exist, skipping local cleanup")
+        return
+    
     now = time.time()
     expiry_time = SESSION_EXPIRY_HOURS * 3600
     cleaned_count = 0
@@ -292,6 +423,7 @@ def cleanup_old_sessions():
 def check_disk_space(required_mb: int = 100):
     """
     Check if sufficient disk space is available.
+    Skipped in cloud-only mode (no local persistence needed).
     
     Args:
         required_mb: Minimum required space in MB
@@ -299,6 +431,10 @@ def check_disk_space(required_mb: int = 100):
     Raises:
         HTTPException: If insufficient disk space
     """
+    # Skip disk space check in cloud-only mode
+    if CLOUD_ONLY_MODE:
+        return
+    
     try:
         stat = shutil.disk_usage(WORK_DIR)
         available_mb = stat.free // (1024 * 1024)
@@ -355,7 +491,9 @@ def get_session_dir(session_id: str) -> Path:
         # is_relative_to can raise ValueError on Windows with different drives
         raise HTTPException(status_code=403, detail="Access denied")
     
-    if not session_dir.exists():
+    # In cloud-only mode, session directories may not exist locally
+    # Skip existence check - files are in Supabase Storage
+    if not CLOUD_ONLY_MODE and not session_dir.exists():
         raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
     
     return session_dir
@@ -471,12 +609,22 @@ def create_protein_ligand_complex(
 @app.post("/api/session/create")
 async def create_session():
     """Create a new docking session."""
-    # Check disk space before creating session
+    # Check disk space before creating session (skipped in cloud-only mode)
     check_disk_space(required_mb=100)
     
     session_id = str(uuid.uuid4())
-    session_dir = WORK_DIR / session_id
-    session_dir.mkdir(exist_ok=True)
+    
+    # Create local session directory only if NOT in cloud-only mode
+    if not CLOUD_ONLY_MODE:
+        session_dir = WORK_DIR / session_id
+        session_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create session metadata in Supabase (always, regardless of mode)
+    if supabase_mgr:
+        try:
+            supabase_mgr.create_session(session_id=session_id)
+        except Exception as e:
+            logger.warning(f"Failed to create Supabase session metadata for {session_id}: {e}")
     
     logger.info(f"Created new session: {session_id}")
     return {"status": "ok", "session_id": session_id}
@@ -501,6 +649,14 @@ async def get_session_status(session_id: str):
             "docking_complete": (session_dir / "docking_out_out.pdbqt").exists(),
         }
         
+        if supabase_mgr:
+            try:
+                cloud_session = supabase_mgr.get_session(session_id)
+                if cloud_session:
+                    status["cloud_status"] = cloud_session.get("status")
+            except Exception as e:
+                logger.warning(f"Failed to fetch cloud status for {session_id}: {e}")
+
         return {"status": "ok", "workflow": status}
     except HTTPException:
         raise
@@ -515,25 +671,43 @@ async def upload_file(session_id: str, filetype: str, file: UploadFile = File(..
         if filetype not in ["protein", "ligand"]:
             raise HTTPException(status_code=400, detail="Invalid filetype. Must be 'protein' or 'ligand'")
         
-        # Check disk space before upload
-        check_disk_space(required_mb=100)
+        # Check disk space before upload (only for local mode)
+        if not CLOUD_ONLY_MODE:
+            check_disk_space(required_mb=100)
         
         # Validate filename
         safe_filename = validate_filename(file.filename)
         validate_file_upload(safe_filename, filetype, file.content_type)
         
+        # Read file content with size limit (chunked)
+        total_size = 0
+        file_content = b""
+        while chunk := await file.read(8192):  # 8KB chunks
+            total_size += len(chunk)
+            if total_size > MAX_FILE_SIZE:
+                raise HTTPException(status_code=413, detail=f"File too large (max {MAX_FILE_SIZE // 1024 // 1024} MB)")
+            file_content += chunk
+        
+        # In cloud-only mode: Upload directly to Supabase, skip local disk
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            try:
+                # Upload to Supabase Storage under session_id/uploads/
+                storage_path = f"{session_id}/uploads/{filetype}_{safe_filename}"
+                supabase_mgr.client.storage.from_(supabase_mgr.storage_bucket).upload(
+                    path=storage_path,
+                    file=file_content,
+                    file_options={"content-type": file.content_type, "upsert": "true"}
+                )
+                logger.info(f"☁️  Uploaded {filetype} to cloud: {storage_path} ({total_size} bytes)")
+                return {"filename": safe_filename, "saved_as": f"{filetype}_{safe_filename}", "size": total_size, "location": "cloud"}
+            except Exception as e:
+                logger.error(f"Cloud upload failed: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Cloud upload failed: {str(e)}")
+        
+        # Local mode: Save to disk
         session_dir = get_session_dir(session_id)
         dest = session_dir / f"{filetype}_{safe_filename}"
-        
-        # Read with size limit (chunked)
-        total_size = 0
-        with dest.open("wb") as fh:
-            while chunk := await file.read(8192):  # 8KB chunks
-                total_size += len(chunk)
-                if total_size > MAX_FILE_SIZE:
-                    dest.unlink()  # Delete partial file
-                    raise HTTPException(status_code=413, detail=f"File too large (max {MAX_FILE_SIZE // 1024 // 1024} MB)")
-                fh.write(chunk)
+        dest.write_bytes(file_content)
         
         logger.info(f"Uploaded {safe_filename} ({total_size} bytes) to session {session_id}")
         return {"filename": safe_filename, "saved_as": str(dest.name), "size": total_size}
@@ -566,10 +740,51 @@ async def get_chains(session_id: str, filename: str):
         List of chain information: [{'id': 'A', 'atoms': 1523}, ...]
     """
     try:
-        session_dir = get_session_dir(session_id)
+        validate_session_id(session_id)
         
         # Validate filename to prevent path traversal
         filename = validate_filename(filename)
+        
+        # In cloud-only mode, read from Supabase
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            try:
+                # Download from Supabase Storage (try uploads first, then intermediate)
+                storage_candidates = [
+                    f"{session_id}/uploads/{filename}",
+                    f"{session_id}/intermediate/{filename}",
+                    f"{session_id}/{filename}",
+                ]
+                file_content = None
+                storage_path = None
+                for candidate in storage_candidates:
+                    try:
+                        file_content = supabase_mgr.client.storage.from_(supabase_mgr.storage_bucket).download(candidate)
+                        storage_path = candidate
+                        break
+                    except Exception:
+                        continue
+
+                if file_content is None:
+                    raise HTTPException(status_code=404, detail=f"File {filename} not found in cloud storage")
+                
+                # Write to temp file for analysis
+                import tempfile
+                file_ext = Path(filename).suffix or ".pdb"
+                with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as tmp:
+                    tmp.write(file_content)
+                    tmp_path = Path(tmp.name)
+                
+                chains = tools.detect_chains(tmp_path)
+                tmp_path.unlink()  # Clean up temp file
+                
+                logger.info(f"☁️  Chains detected from cloud file: {storage_path}")
+                return {"status": "ok", "chains": chains}
+            except Exception as e:
+                logger.error(f"Failed to read from cloud: {str(e)}")
+                raise HTTPException(status_code=404, detail=f"File {filename} not found in cloud storage")
+        
+        # Local mode: read from disk
+        session_dir = get_session_dir(session_id)
         protein_file = session_dir / filename
         
         # Validate resolved path is within session directory
@@ -620,21 +835,61 @@ async def analyze_heteroatoms(session_id: str, file_name: str):
         }
     """
     try:
-        session_dir = get_session_dir(session_id)
+        validate_session_id(session_id)
         
         # Validate filename to prevent path traversal
         file_name = validate_filename(file_name)
-        inp = session_dir / file_name
         
-        # Validate resolved path is within session directory
-        if not inp.resolve().is_relative_to(session_dir.resolve()):
-            raise HTTPException(status_code=403, detail="Access denied")
-        
-        if not inp.exists():
-            raise HTTPException(status_code=404, detail=f"File {file_name} not found in session")
-        
-        # Analyze heteroatoms
-        analysis = tools.detect_heteroatoms_to_keep(inp)
+        # In cloud-only mode, read from Supabase
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            try:
+                # Download from Supabase Storage (try uploads first, then intermediate)
+                storage_candidates = [
+                    f"{session_id}/uploads/{file_name}",
+                    f"{session_id}/intermediate/{file_name}",
+                    f"{session_id}/{file_name}",
+                ]
+                file_content = None
+                storage_path = None
+                for candidate in storage_candidates:
+                    try:
+                        file_content = supabase_mgr.client.storage.from_(supabase_mgr.storage_bucket).download(candidate)
+                        storage_path = candidate
+                        break
+                    except Exception:
+                        continue
+
+                if file_content is None:
+                    raise HTTPException(status_code=404, detail=f"File {file_name} not found in cloud storage")
+                
+                # Write to temp file for analysis with correct file extension
+                import tempfile
+                file_ext = Path(file_name).suffix or ".pdb"
+                with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as tmp:
+                    tmp.write(file_content)
+                    tmp_path = Path(tmp.name)
+                
+                analysis = tools.detect_heteroatoms_to_keep(tmp_path)
+                tmp_path.unlink()  # Clean up temp file
+                
+                logger.info(f"☁️  Heteroatoms analyzed from cloud file: {storage_path}")
+            except Exception as e:
+                logger.error(f"Failed to read from cloud: {str(e)}")
+                raise HTTPException(status_code=404, detail=f"File {file_name} not found in cloud storage")
+        else:
+            # Local mode: read from disk
+            session_dir = get_session_dir(session_id)
+            inp = session_dir / file_name
+            
+            # Validate resolved path is within session directory
+            if not inp.resolve().is_relative_to(session_dir.resolve()):
+                raise HTTPException(status_code=403, detail="Access denied")
+            
+            if not inp.exists():
+                raise HTTPException(status_code=404, detail=f"File {file_name} not found in session")
+            
+            # Analyze heteroatoms
+            analysis = tools.detect_heteroatoms_to_keep(inp)
         
 
         # Add detailed breakdown
@@ -717,18 +972,69 @@ async def prepare_protein(
         pH is fixed at 7.4 for hydrogen addition.
     """
     try:
-        session_dir = get_session_dir(session_id)
+        validate_session_id(session_id)
         
         # Validate filename to prevent path traversal
         file_name = validate_filename(file_name)
-        inp = session_dir / file_name
         
-        # Validate resolved path is within session directory
-        if not inp.resolve().is_relative_to(session_dir.resolve()):
-            raise HTTPException(status_code=403, detail="Access denied")
+        # In cloud-only mode, read from Supabase
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            try:
+                # Download from Supabase Storage (try uploads first, then intermediate)
+                storage_candidates = [
+                    f"{session_id}/uploads/{file_name}",
+                    f"{session_id}/intermediate/{file_name}",
+                    f"{session_id}/{file_name}",
+                ]
+                file_content = None
+                storage_path = None
+                for candidate in storage_candidates:
+                    try:
+                        file_content = supabase_mgr.client.storage.from_(supabase_mgr.storage_bucket).download(candidate)
+                        storage_path = candidate
+                        break
+                    except Exception:
+                        continue
+
+                if file_content is None:
+                    raise HTTPException(status_code=404, detail=f"File {file_name} not found in cloud storage")
+                
+                # Write to temp file for processing with correct file extension
+                import tempfile
+                file_ext = Path(file_name).suffix or ".pdb"
+                with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as tmp:
+                    tmp.write(file_content)
+                    inp = Path(tmp.name)
+                
+                logger.info(f"☁️  Downloaded protein for preparation from cloud: {storage_path}")
+            except Exception as e:
+                logger.error(f"Failed to read from cloud: {str(e)}")
+                raise HTTPException(status_code=404, detail=f"File {file_name} not found in cloud storage")
+        else:
+            # Local mode: read from disk
+            session_dir = get_session_dir(session_id)
+            inp = session_dir / file_name
+            
+            # Validate resolved path is within session directory
+            if not inp.resolve().is_relative_to(session_dir.resolve()):
+                raise HTTPException(status_code=403, detail="Access denied")
+            
+            if not inp.exists():
+                raise HTTPException(status_code=404, detail=f"File {file_name} not found in session")
         
-        if not inp.exists():
-            raise HTTPException(status_code=404, detail=f"File {file_name} not found in session")
+        # Get session dir for output (only used in local mode)
+        session_dir = get_session_dir(session_id)
+        
+        # In cloud-only mode, use temp file for output. In local mode, use session_dir.
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            # Create output in temp file (will be uploaded to Supabase)
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix=".pdbqt", delete=False) as tmp:
+                out_pdbqt = Path(tmp.name)
+        else:
+            # Local mode: create in session directory
+            session_dir.mkdir(parents=True, exist_ok=True)
+            out_pdbqt = session_dir / "protein_prepared.pdbqt"
         
         # Parse comma-separated strings to lists with validation
         hetero_list = None
@@ -745,7 +1051,7 @@ async def prepare_protein(
         if keep_chains:
             chains_list = [x.strip().upper() for x in keep_chains.split(',') if x.strip()]
         
-        out_pdbqt = session_dir / "protein_prepared.pdbqt"
+        # out_pdbqt already set above based on cloud/local mode - don't overwrite it
         # Enhanced preparation with validation and optional structure completion
         tools.prepare_receptor_adfr(
             inp, 
@@ -756,6 +1062,32 @@ async def prepare_protein(
             fix_structure=fix_structure,
             validate_structure=validate_structure
         )
+        
+        # In cloud-only mode, upload prepared protein to Supabase
+        if CLOUD_ONLY_MODE and supabase_mgr and out_pdbqt.exists():
+            try:
+                save_session_file(session_id, "protein_prepared.pdbqt", out_pdbqt.read_bytes())
+                prepared_pdb = out_pdbqt.with_suffix('.pdb')
+                if prepared_pdb.exists():
+                    save_session_file(session_id, "protein_prepared.pdb", prepared_pdb.read_bytes())
+                logger.info(f"☁️  Uploaded prepared protein to cloud storage")
+            except Exception as e:
+                logger.warning(f"Failed to upload prepared protein to cloud: {str(e)}")
+        
+        # Clean up temp files if in cloud mode
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            # Clean up input temp file
+            if inp.exists() and str(inp).startswith(tempfile.gettempdir()):
+                try:
+                    inp.unlink()
+                except Exception:
+                    pass
+            # Clean up output temp file
+            if out_pdbqt.exists() and str(out_pdbqt).startswith(tempfile.gettempdir()):
+                try:
+                    out_pdbqt.unlink()
+                except Exception:
+                    pass
         
         return {
             "status": "ok", 
@@ -794,18 +1126,54 @@ async def prepare_ligand(session_id: str, file_name: str):
     This endpoint validates that the input is a small molecule (not protein/peptide) before preparation.
     """
     try:
-        session_dir = get_session_dir(session_id)
+        validate_session_id(session_id)
         
         # Validate filename to prevent path traversal
         file_name = validate_filename(file_name)
-        inp = session_dir / file_name
         
-        # Validate resolved path is within session directory
-        if not inp.resolve().is_relative_to(session_dir.resolve()):
-            raise HTTPException(status_code=403, detail="Access denied")
+        # In cloud-only mode, read from Supabase
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            try:
+                # Download from Supabase Storage
+                storage_path = f"{session_id}/uploads/{file_name}"
+                file_content = supabase_mgr.client.storage.from_(supabase_mgr.storage_bucket).download(storage_path)
+                
+                # Write to temp file for processing with correct file extension
+                import tempfile
+                file_ext = Path(file_name).suffix or ".mol2"
+                with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as tmp:
+                    tmp.write(file_content)
+                    inp = Path(tmp.name)
+                
+                logger.info(f"☁️  Downloaded ligand for preparation from cloud: {storage_path}")
+            except Exception as e:
+                logger.error(f"Failed to read from cloud: {str(e)}")
+                raise HTTPException(status_code=404, detail=f"File {file_name} not found in cloud storage")
+        else:
+            # Local mode: read from disk
+            session_dir = get_session_dir(session_id)
+            inp = session_dir / file_name
+            
+            # Validate resolved path is within session directory
+            if not inp.resolve().is_relative_to(session_dir.resolve()):
+                raise HTTPException(status_code=403, detail="Access denied")
+            
+            if not inp.exists():
+                raise HTTPException(status_code=404, detail=f"File {file_name} not found in session")
         
-        if not inp.exists():
-            raise HTTPException(status_code=404, detail=f"File {file_name} not found in session")
+        # Get session dir for output (only used in local mode)
+        session_dir = get_session_dir(session_id)
+        
+        # In cloud-only mode, use temp file for output. In local mode, use session_dir.
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            # Create output in temp file (will be uploaded to Supabase)
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix=".pdbqt", delete=False) as tmp:
+                out_pdbqt = Path(tmp.name)
+        else:
+            # Local mode: create in session directory
+            session_dir.mkdir(parents=True, exist_ok=True)
+            out_pdbqt = session_dir / "ligand_prepared.pdbqt"
         
         # VALIDATION: Check if ligand is a small molecule (not protein/peptide)
         logger.info(f"Validating ligand: {file_name}")
@@ -844,9 +1212,31 @@ async def prepare_ligand(session_id: str, file_name: str):
                 detail=f"Could not validate ligand file: {str(e)}"
             )
         
-        # Proceed with ligand preparation
-        out_pdbqt = session_dir / "ligand_prepared.pdbqt"
+        # Proceed with ligand preparation (out_pdbqt already set above based on mode)
         tools.prepare_ligand_adfr(inp, out_pdbqt)
+        
+        # In cloud-only mode, upload prepared ligand to Supabase
+        if CLOUD_ONLY_MODE and supabase_mgr and out_pdbqt.exists():
+            try:
+                save_session_file(session_id, "ligand_prepared.pdbqt", out_pdbqt.read_bytes())
+                logger.info(f"☁️  Uploaded prepared ligand to cloud storage")
+            except Exception as e:
+                logger.warning(f"Failed to upload prepared ligand to cloud: {str(e)}")
+        
+        # Clean up temp files if in cloud mode
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            # Clean up input temp file
+            if inp.exists() and str(inp).startswith(tempfile.gettempdir()):
+                try:
+                    inp.unlink()
+                except Exception:
+                    pass
+            # Clean up output temp file
+            if out_pdbqt.exists() and str(out_pdbqt).startswith(tempfile.gettempdir()):
+                try:
+                    out_pdbqt.unlink()
+                except Exception:
+                    pass
         
         return {
             "status": "ok",
@@ -941,6 +1331,7 @@ async def create_ligand_from_smiles(
         }
     """
     try:
+        validate_session_id(session_id)
         session_dir = get_session_dir(session_id)
         
         # Validate SMILES string
@@ -954,8 +1345,18 @@ async def create_ligand_from_smiles(
         ligand_name = re.sub(r'[^a-zA-Z0-9_-]', '_', ligand_name)
         
         # Generate output filename
-        output_pdbqt = session_dir / f"ligand_{ligand_name}.pdbqt"
-        prepared_pdbqt = session_dir / "ligand_prepared.pdbqt"
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix=".pdbqt", delete=False) as tmp_out:
+                output_pdbqt = Path(tmp_out.name)
+            with tempfile.NamedTemporaryFile(suffix=".pdbqt", delete=False) as tmp_prepared:
+                prepared_pdbqt = Path(tmp_prepared.name)
+            metadata_file = None
+        else:
+            session_dir.mkdir(parents=True, exist_ok=True)
+            output_pdbqt = session_dir / f"ligand_{ligand_name}.pdbqt"
+            prepared_pdbqt = session_dir / "ligand_prepared.pdbqt"
+            metadata_file = session_dir / "ligand_metadata.json"
         
         # Convert SMILES to 3D structure (pH fixed at 7.4)
         tools.smiles_to_3d(
@@ -969,22 +1370,40 @@ async def create_ligand_from_smiles(
         
         # Save SMILES metadata
         import json
-        metadata_file = session_dir / "ligand_metadata.json"
         metadata = {
             "source": "smiles",
             "smiles": smiles,
             "ligand_name": ligand_name,
             "ph": 7.4,  # Fixed value
             "optimized": optimize,
-            "file": str(output_pdbqt.name)
+            "file": f"ligand_{ligand_name}.pdbqt"
         }
-        with open(metadata_file, 'w') as f:
-            json.dump(metadata, f, indent=2)
+
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            # Upload generated files to cloud storage
+            save_session_file(session_id, f"ligand_{ligand_name}.pdbqt", output_pdbqt.read_bytes())
+            save_session_file(session_id, "ligand_prepared.pdbqt", prepared_pdbqt.read_bytes())
+            save_session_file(session_id, "ligand_metadata.json", json.dumps(metadata, indent=2).encode("utf-8"))
+
+            # Cleanup temp outputs
+            if output_pdbqt.exists():
+                try:
+                    output_pdbqt.unlink()
+                except Exception:
+                    pass
+            if prepared_pdbqt.exists():
+                try:
+                    prepared_pdbqt.unlink()
+                except Exception:
+                    pass
+        else:
+            with open(metadata_file, 'w') as f:
+                json.dump(metadata, f, indent=2)
         
         return {
             "status": "ok",
-            "ligand_file": str(output_pdbqt.name),
-            "ligand_prepared": str(prepared_pdbqt.name),
+            "ligand_file": f"ligand_{ligand_name}.pdbqt",
+            "ligand_prepared": "ligand_prepared.pdbqt",
             "smiles": smiles,
             "ligand_name": ligand_name,
             "ph": 7.4,  # Fixed value
@@ -1011,15 +1430,124 @@ async def create_ligand_from_smiles(
 async def download_complex_from_results(session_id: str, pose_number: int):
     """Generate and download protein-ligand complex PDB for a specific pose."""
     try:
-        session_dir = get_session_dir(session_id)
+        validate_session_id(session_id)
         
         # Validate pose number
         if pose_number < 1:
             raise HTTPException(status_code=400, detail="Pose number must be >= 1")
+
+        # Cloud-first path for cloud-only mode
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            try:
+                complex_bytes = supabase_mgr.download_result_file(
+                    session_id,
+                    f"complexes/complex_pose_{pose_number}.pdb"
+                )
+                return Response(
+                    content=complex_bytes,
+                    media_type="chemical/x-pdb",
+                    headers={"Content-Disposition": f"attachment; filename=complex_pose_{pose_number}.pdb"}
+                )
+            except Exception as e:
+                logger.warning(f"Cloud complex download failed for {session_id} pose {pose_number}: {e}")
+
+                # On-demand cloud generation fallback
+                try:
+                    import tempfile
+                    import json
+
+                    # 1) Download prepared protein
+                    protein_bytes = supabase_mgr.download_result_file(
+                        session_id,
+                        "intermediate/protein_prepared.pdbqt"
+                    )
+                    with tempfile.NamedTemporaryFile(suffix=".pdbqt", delete=False) as tmp_protein:
+                        tmp_protein.write(protein_bytes)
+                        protein_pdbqt_cloud = Path(tmp_protein.name)
+
+                    # 2) Resolve pose source (mode + cavity) from report if available
+                    mode_in_file_cloud = pose_number
+                    ligand_candidates = []
+                    try:
+                        report_bytes = supabase_mgr.download_result_file(
+                            session_id,
+                            "reports/docking_report.json"
+                        )
+                        report_data = json.loads(report_bytes.decode("utf-8"))
+                        poses = report_data.get("poses", [])
+                        if pose_number <= len(poses):
+                            pose_info = poses[pose_number - 1]
+                            mode_in_file_cloud = int(pose_info.get("mode", pose_number))
+                            cavity_id = pose_info.get("cavity_id")
+                            if cavity_id is not None:
+                                ligand_candidates.append(f"intermediate/docking_cavity_{cavity_id}_out.pdbqt")
+                    except Exception as report_err:
+                        logger.warning(f"Could not read cloud docking report for complex generation: {report_err}")
+
+                    # Always include generic combined output fallback
+                    ligand_candidates.append("intermediate/docking_out_out.pdbqt")
+
+                    # 3) Download ligand pose source
+                    ligand_pdbqt_cloud = None
+                    for candidate in ligand_candidates:
+                        try:
+                            ligand_bytes = supabase_mgr.download_result_file(session_id, candidate)
+                            with tempfile.NamedTemporaryFile(suffix=".pdbqt", delete=False) as tmp_ligand:
+                                tmp_ligand.write(ligand_bytes)
+                                ligand_pdbqt_cloud = Path(tmp_ligand.name)
+                            break
+                        except Exception:
+                            continue
+
+                    if ligand_pdbqt_cloud is None:
+                        raise HTTPException(status_code=404, detail="Docking results not found in cloud storage")
+
+                    # 4) Generate complex and upload for future fast access
+                    complex_pdb = create_protein_ligand_complex(
+                        protein_pdbqt=protein_pdbqt_cloud,
+                        ligand_pdbqt=ligand_pdbqt_cloud,
+                        pose_number=mode_in_file_cloud,
+                        include_remarks=True
+                    )
+                    complex_bytes = complex_pdb.encode("utf-8")
+
+                    try:
+                        supabase_mgr.upload_result_file(
+                            session_id=session_id,
+                            filename=f"complexes/complex_pose_{pose_number}.pdb",
+                            file_content=complex_bytes
+                        )
+                    except Exception as upload_err:
+                        logger.warning(f"Could not cache generated complex to cloud: {upload_err}")
+
+                    return Response(
+                        content=complex_bytes,
+                        media_type="chemical/x-pdb",
+                        headers={"Content-Disposition": f"attachment; filename=complex_pose_{pose_number}.pdb"}
+                    )
+                finally:
+                    try:
+                        if 'protein_pdbqt_cloud' in locals() and protein_pdbqt_cloud.exists():
+                            protein_pdbqt_cloud.unlink()
+                    except Exception:
+                        pass
+                    try:
+                        if 'ligand_pdbqt_cloud' in locals() and ligand_pdbqt_cloud and ligand_pdbqt_cloud.exists():
+                            ligand_pdbqt_cloud.unlink()
+                    except Exception:
+                        pass
         
-        protein_pdbqt = session_dir / "protein_prepared.pdbqt"
-        if not protein_pdbqt.exists():
-            raise HTTPException(status_code=404, detail="Prepared protein not found. Please run protein preparation first.")
+        session_dir = None
+        try:
+            session_dir = get_session_dir(session_id)
+        except HTTPException:
+            session_dir = None
+
+        protein_pdbqt = None
+        if session_dir:
+            candidate = session_dir / "protein_prepared.pdbqt"
+            if candidate.exists():
+                protein_pdbqt = candidate
         
         # Try to read pose info from the docking report to find the correct source file
         # For multi-cavity docking, each pose may come from a different PDBQT file
@@ -1045,26 +1573,43 @@ async def download_complex_from_results(session_id: str, pose_number: int):
             except Exception as e:
                 logger.warning(f"Could not read docking report: {e}")
         
-        # Fallback to main docking output if report not available
-        if ligand_pdbqt is None:
-            ligand_pdbqt = session_dir / "docking_out_out.pdbqt"
-        
-        if not ligand_pdbqt.exists():
-            raise HTTPException(status_code=404, detail="Docking results not found. Please run docking first.")
-        
-        # Generate complex on-the-fly
-        complex_pdb = create_protein_ligand_complex(
-            protein_pdbqt=protein_pdbqt,
-            ligand_pdbqt=ligand_pdbqt,
-            pose_number=mode_in_file,
-            include_remarks=True
-        )
-        
-        return PlainTextResponse(
-            complex_pdb,
-            media_type="chemical/x-pdb",
-            headers={"Content-Disposition": f"attachment; filename=complex_pose_{pose_number}.pdb"}
-        )
+        # If local session data exists, generate complex on-the-fly
+        if session_dir and protein_pdbqt is not None:
+            if ligand_pdbqt is None:
+                ligand_pdbqt = session_dir / "docking_out_out.pdbqt"
+
+            if not ligand_pdbqt.exists():
+                raise HTTPException(status_code=404, detail="Docking results not found. Please run docking first.")
+
+            complex_pdb = create_protein_ligand_complex(
+                protein_pdbqt=protein_pdbqt,
+                ligand_pdbqt=ligand_pdbqt,
+                pose_number=mode_in_file,
+                include_remarks=True
+            )
+
+            return PlainTextResponse(
+                complex_pdb,
+                media_type="chemical/x-pdb",
+                headers={"Content-Disposition": f"attachment; filename=complex_pose_{pose_number}.pdb"}
+            )
+
+        # Cloud fallback (for non-cloud mode with expired local sessions)
+        if supabase_mgr:
+            try:
+                complex_bytes = supabase_mgr.download_result_file(
+                    session_id,
+                    f"complexes/complex_pose_{pose_number}.pdb"
+                )
+                return Response(
+                    content=complex_bytes,
+                    media_type="chemical/x-pdb",
+                    headers={"Content-Disposition": f"attachment; filename=complex_pose_{pose_number}.pdb"}
+                )
+            except Exception as e:
+                logger.warning(f"Cloud complex download failed for {session_id} pose {pose_number}: {e}")
+
+        raise HTTPException(status_code=404, detail="Complex file not found in local or cloud storage")
     
     except HTTPException:
         raise
@@ -1089,25 +1634,49 @@ async def download_report(session_id: str, report_name: str):
                 detail=f"Invalid report name. Allowed: {', '.join(allowed_reports)}"
             )
         
-        report_file = RESULTS_DIR / session_id / "reports" / report_name
-        
-        if not report_file.exists():
-            raise HTTPException(
-                status_code=404,
-                detail=f"Report {report_name} not found. Please run docking first."
-            )
-        
         # Determine media type
         media_type = "text/plain"
         if report_name.endswith(".csv"):
             media_type = "text/csv"
         elif report_name.endswith(".json"):
             media_type = "application/json"
+
+        # Cloud-first path for cloud-only mode
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            try:
+                report_bytes = supabase_mgr.download_result_file(session_id, f"reports/{report_name}")
+                return Response(
+                    content=report_bytes,
+                    media_type=media_type,
+                    headers={"Content-Disposition": f"attachment; filename={report_name}"}
+                )
+            except Exception as e:
+                logger.warning(f"Cloud report download failed for {session_id}/{report_name}: {e}")
+
+        report_file = RESULTS_DIR / session_id / "reports" / report_name
+
+        if report_file.exists():
+            return FileResponse(
+                report_file,
+                filename=report_name,
+                media_type=media_type
+            )
+
+        # Cloud fallback
+        if supabase_mgr:
+            try:
+                report_bytes = supabase_mgr.download_result_file(session_id, f"reports/{report_name}")
+                return Response(
+                    content=report_bytes,
+                    media_type=media_type,
+                    headers={"Content-Disposition": f"attachment; filename={report_name}"}
+                )
+            except Exception as e:
+                logger.warning(f"Cloud report download failed for {session_id}/{report_name}: {e}")
         
-        return FileResponse(
-            report_file,
-            filename=report_name,
-            media_type=media_type
+        raise HTTPException(
+            status_code=404,
+            detail=f"Report {report_name} not found in local or cloud storage."
         )
     
     except HTTPException:
@@ -1124,6 +1693,43 @@ async def download_prepared_protein(session_id: str):
     
     try:
         validate_session_id(session_id)
+
+        # Cloud-first path for cloud-only mode
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            cloud_candidates = [
+                "intermediate/protein_for_cavity_detection.pdb",
+                "intermediate/protein_prepared.pdb",
+                "protein_for_cavity_detection.pdb",
+                "protein_prepared.pdb",
+            ]
+            for candidate in cloud_candidates:
+                try:
+                    pdb_bytes = supabase_mgr.download_result_file(session_id, candidate)
+                    return PlainTextResponse(
+                        content=pdb_bytes.decode("utf-8", errors="replace"),
+                        media_type="chemical/x-pdb"
+                    )
+                except Exception:
+                    continue
+
+            # Fallback: serve first uploaded PDB file if prepared PDB is unavailable
+            try:
+                uploaded_files = supabase_mgr.list_result_files(session_id, "uploads")
+                pdb_upload = next((f for f in uploaded_files if str(f.get("name", "")).lower().endswith(".pdb")), None)
+                if pdb_upload:
+                    pdb_bytes = supabase_mgr.download_result_file(session_id, f"uploads/{pdb_upload['name']}")
+                    return PlainTextResponse(
+                        content=pdb_bytes.decode("utf-8", errors="replace"),
+                        media_type="chemical/x-pdb"
+                    )
+            except Exception:
+                pass
+
+            raise HTTPException(
+                status_code=404,
+                detail="Protein PDB file not found in cloud storage. Please upload and prepare a protein first."
+            )
+
         session_dir = get_session_dir(session_id)
         
         # Look for protein PDB file in order of preference
@@ -1167,10 +1773,101 @@ async def list_results(session_id: str):
     """List all available results for a session."""
     try:
         validate_session_id(session_id)
+
+        # Cloud-first listing for cloud-only mode
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            try:
+                cloud_complexes_raw = supabase_mgr.list_result_files(session_id, "complexes")
+                cloud_reports_raw = supabase_mgr.list_result_files(session_id, "reports")
+                cloud_readme_raw = supabase_mgr.list_result_files(session_id)
+                cloud_db_results = supabase_mgr.get_docking_results(session_id)
+
+                cloud_complexes = [
+                    {
+                        "name": f.get("name"),
+                        "size": f.get("metadata", {}).get("size") or 0,
+                        "download_url": f"/api/results/download/complex/{session_id}/{f.get('name', '').replace('complex_pose_', '').replace('.pdb', '')}"
+                    }
+                    for f in cloud_complexes_raw
+                    if f.get("name", "").endswith(".pdb")
+                ]
+
+                cloud_reports = [
+                    {
+                        "name": f.get("name"),
+                        "size": f.get("metadata", {}).get("size") or 0,
+                        "download_url": f"/api/results/download/report/{session_id}/{f.get('name')}"
+                    }
+                    for f in cloud_reports_raw
+                    if f.get("name") in ["docking_summary.csv", "docking_report.json", "parameters.txt"]
+                ]
+
+                readme_exists = any(f.get("name") == "README.txt" for f in cloud_readme_raw)
+                latest = cloud_db_results[-1] if cloud_db_results else {}
+
+                if cloud_complexes or cloud_reports or latest:
+                    return {
+                        "status": "ok",
+                        "session_id": session_id,
+                        "complexes": cloud_complexes,
+                        "reports": cloud_reports,
+                        "readme_available": readme_exists,
+                        "total_files": len(cloud_complexes) + len(cloud_reports) + (1 if readme_exists else 0),
+                        "poses": (latest.get("report_json") or {}).get("poses", []),
+                        "docking_parameters": (latest.get("report_json") or {}).get("docking_parameters", {}),
+                        "source": "supabase"
+                    }
+            except Exception as e:
+                logger.warning(f"Supabase list failed for {session_id}: {e}")
         
         session_results_dir = RESULTS_DIR / session_id
         
         if not session_results_dir.exists():
+            if supabase_mgr:
+                try:
+                    cloud_complexes_raw = supabase_mgr.list_result_files(session_id, "complexes")
+                    cloud_reports_raw = supabase_mgr.list_result_files(session_id, "reports")
+                    cloud_readme_raw = supabase_mgr.list_result_files(session_id)
+                    cloud_db_results = supabase_mgr.get_docking_results(session_id)
+
+                    cloud_complexes = [
+                        {
+                            "name": f.get("name"),
+                            "size": f.get("metadata", {}).get("size") or 0,
+                            "download_url": f"/api/results/download/complex/{session_id}/{f.get('name', '').replace('complex_pose_', '').replace('.pdb', '')}"
+                        }
+                        for f in cloud_complexes_raw
+                        if f.get("name", "").endswith(".pdb")
+                    ]
+
+                    cloud_reports = [
+                        {
+                            "name": f.get("name"),
+                            "size": f.get("metadata", {}).get("size") or 0,
+                            "download_url": f"/api/results/download/report/{session_id}/{f.get('name')}"
+                        }
+                        for f in cloud_reports_raw
+                        if f.get("name") in ["docking_summary.csv", "docking_report.json", "parameters.txt"]
+                    ]
+
+                    readme_exists = any(f.get("name") == "README.txt" for f in cloud_readme_raw)
+                    latest = cloud_db_results[-1] if cloud_db_results else {}
+
+                    if cloud_complexes or cloud_reports or latest:
+                        return {
+                            "status": "ok",
+                            "session_id": session_id,
+                            "complexes": cloud_complexes,
+                            "reports": cloud_reports,
+                            "readme_available": readme_exists,
+                            "total_files": len(cloud_complexes) + len(cloud_reports) + (1 if readme_exists else 0),
+                            "poses": (latest.get("report_json") or {}).get("poses", []),
+                            "docking_parameters": (latest.get("report_json") or {}).get("docking_parameters", {}),
+                            "source": "supabase"
+                        }
+                except Exception as e:
+                    logger.warning(f"Supabase list fallback failed for {session_id}: {e}")
+
             return {
                 "status": "no_results",
                 "message": "No results available. Please run docking first."
@@ -1253,6 +1950,79 @@ async def get_protein_center(session_id: str):
         Response: {"centerX": 10.5, "centerY": -5.2, "centerZ": 3.8}
     """
     try:
+        validate_session_id(session_id)
+
+        # Cloud-first path for cloud-only mode
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            protein_text = None
+            cloud_candidates = [
+                "intermediate/protein_for_cavity_detection.pdb",
+                "intermediate/protein_prepared.pdb",
+                "protein_for_cavity_detection.pdb",
+                "protein_prepared.pdb",
+            ]
+
+            for candidate in cloud_candidates:
+                try:
+                    protein_bytes = supabase_mgr.download_result_file(session_id, candidate)
+                    protein_text = protein_bytes.decode("utf-8", errors="replace")
+                    break
+                except Exception:
+                    continue
+
+            # Fallback: use first uploaded PDB file if prepared/intermediate file is not available yet
+            if not protein_text:
+                try:
+                    uploaded_files = supabase_mgr.list_result_files(session_id, "uploads")
+                    pdb_upload = next((f for f in uploaded_files if str(f.get("name", "")).lower().endswith(".pdb")), None)
+                    if pdb_upload:
+                        protein_bytes = supabase_mgr.download_result_file(session_id, f"uploads/{pdb_upload['name']}")
+                        protein_text = protein_bytes.decode("utf-8", errors="replace")
+                except Exception:
+                    pass
+
+            if not protein_text:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Protein PDB file not found in cloud storage. Please upload/prepare protein first."
+                )
+
+            # Parse PDB and calculate geometric center
+            x_coords, y_coords, z_coords = [], [], []
+
+            for line in protein_text.splitlines():
+                if line.startswith(('ATOM', 'HETATM')):
+                    try:
+                        # PDB format: columns 31-38 (x), 39-46 (y), 47-54 (z)
+                        x = float(line[30:38].strip())
+                        y = float(line[38:46].strip())
+                        z = float(line[46:54].strip())
+                        x_coords.append(x)
+                        y_coords.append(y)
+                        z_coords.append(z)
+                    except (ValueError, IndexError):
+                        continue
+
+            if not x_coords:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No valid atomic coordinates found in PDB file"
+                )
+
+            centerX = round(sum(x_coords) / len(x_coords), 3)
+            centerY = round(sum(y_coords) / len(y_coords), 3)
+            centerZ = round(sum(z_coords) / len(z_coords), 3)
+
+            logger.info(f"Calculated protein center for session {session_id}: ({centerX}, {centerY}, {centerZ})")
+
+            return {
+                "status": "ok",
+                "centerX": centerX,
+                "centerY": centerY,
+                "centerZ": centerZ,
+                "message": f"Protein center calculated from {len(x_coords)} atoms"
+            }
+
         session_dir = get_session_dir(session_id)
         
         # Look for protein PDB file - search for any protein file in order of preference
@@ -1392,18 +2162,50 @@ async def detect_cavities_endpoint(
             field indicating this occurred.
     """
     try:
+        validate_session_id(session_id)
         import p2rank_integration
         import consensus_cavity_detection
         from concurrent.futures import ThreadPoolExecutor
         
-        session_dir = get_session_dir(session_id)
-        protein_pdbqt = session_dir / "protein_prepared.pdbqt"
+        # In cloud-only mode, read prepared protein from Supabase
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            try:
+                # Download from Supabase Storage
+                storage_path = f"{session_id}/intermediate/protein_prepared.pdbqt"
+                file_content = supabase_mgr.client.storage.from_(supabase_mgr.storage_bucket).download(storage_path)
+                
+                # Write to temp file for processing
+                import tempfile
+                with tempfile.NamedTemporaryFile(suffix=".pdbqt", delete=False) as tmp:
+                    tmp.write(file_content)
+                    protein_pdbqt = Path(tmp.name)
+                
+                logger.info(f"☁️  Downloaded prepared protein for cavity detection from cloud: {storage_path}")
+            except Exception as e:
+                logger.error(f"Failed to read prepared protein from cloud: {str(e)}")
+                raise HTTPException(status_code=404, detail="Prepared protein not found in cloud storage. Please prepare protein first.")
+        else:
+            # Local mode: read from disk
+            session_dir = get_session_dir(session_id)
+            protein_pdbqt = session_dir / "protein_prepared.pdbqt"
+            
+            if not protein_pdbqt.exists():
+                raise HTTPException(status_code=404, detail="Prepared protein not found. Please prepare protein first.")
         
-        if not protein_pdbqt.exists():
-            raise HTTPException(status_code=404, detail="Prepared protein not found. Please prepare protein first.")
+        # Get session dir for output files (only used in local mode)
+        session_dir = get_session_dir(session_id)
         
         # Convert PDBQT to PDB (both fpocket and P2RANK require PDB format)
-        protein_pdb = session_dir / "protein_for_cavity_detection.pdb"
+        # In cloud-only mode, use temp files. In local mode, use session_dir.
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            # Create PDB in temp file
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix=".pdb", delete=False) as tmp:
+                protein_pdb = Path(tmp.name)
+        else:
+            # Local mode: create in session directory
+            session_dir.mkdir(parents=True, exist_ok=True)
+            protein_pdb = session_dir / "protein_for_cavity_detection.pdb"
         
         # Simple PDBQT to PDB conversion (remove charge and atom type columns)
         pdb_lines = []
@@ -1423,19 +2225,34 @@ async def detect_cavities_endpoint(
         if detection_method not in ["fpocket", "p2rank", "consensus"]:
             raise HTTPException(status_code=400, detail=f"Invalid detection_method: {detection_method}. Must be 'fpocket', 'p2rank', or 'consensus'")
         
+        # In cloud-only mode, use temp directory for outputs. In local mode, use session_dir.
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            import tempfile
+            output_dir = Path(tempfile.mkdtemp())
+        else:
+            output_dir = session_dir
+        
         # Execute detection based on method
         if detection_method == "fpocket":
             # Fpocket only
             cavities = cavity_detection.detect_cavities(
                 str(protein_pdb),
-                output_dir=session_dir,
+                output_dir=output_dir,
                 min_alpha_sphere=min_alpha_sphere,
                 max_cavities=top_n
             )
             
             # Save cavity metadata to standard location
-            cavity_file = session_dir / "cavities.json"
+            cavity_file = output_dir / "cavities.json"
             cavity_detection.save_cavity_metadata(cavities, cavity_file)
+            
+            # In cloud-only mode, upload cavities.json to Supabase
+            if CLOUD_ONLY_MODE and supabase_mgr and cavity_file.exists():
+                try:
+                    save_session_file(session_id, "cavities.json", cavity_file.read_bytes())
+                    logger.info(f"☁️  Uploaded cavity detection results to cloud storage")
+                except Exception as e:
+                    logger.warning(f"Failed to upload cavities to cloud: {str(e)}")
             
             return {
                 "status": "ok",
@@ -1449,14 +2266,22 @@ async def detect_cavities_endpoint(
             try:
                 cavities = p2rank_integration.detect_cavities_p2rank(
                     str(protein_pdb),
-                    output_dir=session_dir,
+                    output_dir=output_dir,
                     top_n=top_n,
                     use_cache=True
                 )
                 
                 # Save cavity metadata to standard location
-                cavity_file = session_dir / "cavities.json"
+                cavity_file = output_dir / "cavities.json"
                 p2rank_integration.save_p2rank_metadata(cavities, cavity_file)
+                
+                # In cloud-only mode, upload cavities.json to Supabase
+                if CLOUD_ONLY_MODE and supabase_mgr and cavity_file.exists():
+                    try:
+                        save_session_file(session_id, "cavities.json", cavity_file.read_bytes())
+                        logger.info(f"☁️  Uploaded cavity detection results to cloud storage")
+                    except Exception as e:
+                        logger.warning(f"Failed to upload cavities to cloud: {str(e)}")
                 
                 return {
                     "status": "ok",
@@ -1481,7 +2306,7 @@ async def detect_cavities_endpoint(
                 # Use new three-tier fallback function
                 result = consensus_cavity_detection.detect_cavities_with_fallback(
                     protein_pdb_path=str(protein_pdb),
-                    output_dir=session_dir,
+                    output_dir=output_dir,
                     top_n=top_n,
                     timeout=300
                 )
@@ -1493,8 +2318,16 @@ async def detect_cavities_endpoint(
                 warning = result.get('warning')
                 
                 # Save cavity metadata
-                cavity_file = session_dir / "cavities.json"
+                cavity_file = output_dir / "cavities.json"
                 cavity_file.write_text(json.dumps(cavities, indent=2))
+                
+                # In cloud-only mode, upload cavities.json to Supabase
+                if CLOUD_ONLY_MODE and supabase_mgr and cavity_file.exists():
+                    try:
+                        save_session_file(session_id, "cavities.json", cavity_file.read_bytes())
+                        logger.info(f"☁️  Uploaded cavity detection results to cloud storage")
+                    except Exception as e:
+                        logger.warning(f"Failed to upload cavities to cloud: {str(e)}")
                 
                 # Build response based on tier
                 response = {
@@ -1562,6 +2395,25 @@ async def detect_cavities_endpoint(
         import traceback
         traceback.print_exc()
         return json_error(str(e))
+    finally:
+        # Clean up temp files if in cloud mode
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            if 'protein_pdbqt' in locals() and protein_pdbqt.exists() and str(protein_pdbqt).startswith(tempfile.gettempdir()):
+                try:
+                    protein_pdbqt.unlink()
+                except Exception:
+                    pass
+            if 'protein_pdb' in locals() and protein_pdb.exists() and str(protein_pdb).startswith(tempfile.gettempdir()):
+                try:
+                    protein_pdb.unlink()
+                except Exception:
+                    pass
+            if 'output_dir' in locals() and output_dir != session_dir and output_dir.exists():
+                try:
+                    import shutil
+                    shutil.rmtree(output_dir)
+                except Exception:
+                    pass
 
 
 
@@ -1602,26 +2454,53 @@ async def calc_grid(
         }
     """
     try:
+        import json
+        validate_session_id(session_id)
         session_dir = get_session_dir(session_id)
-        protein = session_dir / "protein_prepared.pdbqt"
-        
-        if not protein.exists():
-            raise HTTPException(status_code=404, detail="Prepared protein not found. Please prepare protein first.")
+
+        # Resolve prepared protein input
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            import tempfile
+            try:
+                storage_path = f"{session_id}/intermediate/protein_prepared.pdbqt"
+                protein_content = supabase_mgr.client.storage.from_(supabase_mgr.storage_bucket).download(storage_path)
+                with tempfile.NamedTemporaryFile(suffix=".pdbqt", delete=False) as tmp:
+                    tmp.write(protein_content)
+                    protein = Path(tmp.name)
+                logger.info(f"☁️  Downloaded prepared protein for grid calculation from cloud: {storage_path}")
+            except Exception as e:
+                logger.error(f"Failed to read prepared protein from cloud: {str(e)}")
+                raise HTTPException(status_code=404, detail="Prepared protein not found. Please prepare protein first.")
+        else:
+            protein = session_dir / "protein_prepared.pdbqt"
+            if not protein.exists():
+                raise HTTPException(status_code=404, detail="Prepared protein not found. Please prepare protein first.")
         
         if mode == "cavity":
             # Cavity mode: Load cavity data and extract grid parameters
             if cavity_id is None:
                 raise HTTPException(status_code=400, detail="cavity_id is required for cavity mode")
             
-            cavity_file = session_dir / "cavities.json"
-            if not cavity_file.exists():
-                raise HTTPException(
-                    status_code=404,
-                    detail="No cavities detected. Please run cavity detection first."
-                )
-            
             # Load cavity metadata
-            cavities = cavity_detection.load_cavity_metadata(cavity_file)
+            if CLOUD_ONLY_MODE and supabase_mgr:
+                try:
+                    storage_path = f"{session_id}/intermediate/cavities.json"
+                    cavity_content = supabase_mgr.client.storage.from_(supabase_mgr.storage_bucket).download(storage_path)
+                    cavities = json.loads(cavity_content.decode('utf-8'))
+                    logger.info(f"☁️  Downloaded cavities for grid calculation from cloud: {storage_path}")
+                except Exception:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="No cavities detected. Please run cavity detection first."
+                    )
+            else:
+                cavity_file = session_dir / "cavities.json"
+                if not cavity_file.exists():
+                    raise HTTPException(
+                        status_code=404,
+                        detail="No cavities detected. Please run cavity detection first."
+                    )
+                cavities = cavity_detection.load_cavity_metadata(cavity_file)
             
             # Find the requested cavity
             cavity = next((c for c in cavities if c['cavity_id'] == cavity_id), None)
@@ -1636,14 +2515,22 @@ async def calc_grid(
             
             # Save grid parameters
             import json
-            grid_file = session_dir / "grid_params.json"
-            with open(grid_file, 'w') as f:
-                json.dump({
-                    'mode': 'cavity',
-                    'cavity_id': cavity_id,
-                    'center': center,
-                    'size': size
-                }, f)
+            grid_payload = {
+                'mode': 'cavity',
+                'cavity_id': cavity_id,
+                'center': center,
+                'size': size
+            }
+            if CLOUD_ONLY_MODE and supabase_mgr:
+                try:
+                    save_session_file(session_id, "grid_params.json", json.dumps(grid_payload).encode('utf-8'))
+                    logger.info(f"☁️  Uploaded grid parameters to cloud storage")
+                except Exception as e:
+                    logger.warning(f"Failed to upload grid parameters to cloud: {str(e)}")
+            else:
+                grid_file = session_dir / "grid_params.json"
+                with open(grid_file, 'w') as f:
+                    json.dump(grid_payload, f)
             
             return {
                 "status": "ok",
@@ -1686,13 +2573,21 @@ async def calc_grid(
             
             # Save grid parameters
             import json
-            grid_file = session_dir / "grid_params.json"
-            with open(grid_file, 'w') as f:
-                json.dump({
-                    'mode': 'manual',
-                    'center': center,
-                    'size': size
-                }, f)
+            grid_payload = {
+                'mode': 'manual',
+                'center': center,
+                'size': size
+            }
+            if CLOUD_ONLY_MODE and supabase_mgr:
+                try:
+                    save_session_file(session_id, "grid_params.json", json.dumps(grid_payload).encode('utf-8'))
+                    logger.info(f"☁️  Uploaded grid parameters to cloud storage")
+                except Exception as e:
+                    logger.warning(f"Failed to upload grid parameters to cloud: {str(e)}")
+            else:
+                grid_file = session_dir / "grid_params.json"
+                with open(grid_file, 'w') as f:
+                    json.dump(grid_payload, f)
             
             return {
                 "status": "ok",
@@ -1715,6 +2610,12 @@ async def calc_grid(
         raise
     except Exception as e:
         return json_error(str(e))
+    finally:
+        if CLOUD_ONLY_MODE and supabase_mgr and 'protein' in locals() and protein.exists() and str(protein).startswith(tempfile.gettempdir()):
+            try:
+                protein.unlink()
+            except Exception:
+                pass
 
 
 @app.post("/api/dock/run/{session_id}")
@@ -1743,6 +2644,8 @@ async def run_docking(
         Manual mode: Poses from single docking run
     """
     try:
+        validate_session_id(session_id)
+        
         # Fixed parameters
         exhaustiveness = 10
         num_modes = 9
@@ -1751,25 +2654,67 @@ async def run_docking(
         validate_docking_params(exhaustiveness, num_modes)
         
         session_dir = get_session_dir(session_id)
-        receptor = session_dir / "protein_prepared.pdbqt"
-        ligand = session_dir / "ligand_prepared.pdbqt"
         
-        if not receptor.exists():
-            raise HTTPException(status_code=404, detail="Prepared protein not found")
-        if not ligand.exists():
-            raise HTTPException(status_code=404, detail="Prepared ligand not found")
+        # In cloud-only mode, download all required files from Supabase
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            try:
+                import tempfile
+                
+                # Download prepared protein from Supabase
+                storage_path = f"{session_id}/intermediate/protein_prepared.pdbqt"
+                protein_content = supabase_mgr.client.storage.from_(supabase_mgr.storage_bucket).download(storage_path)
+                with tempfile.NamedTemporaryFile(suffix=".pdbqt", delete=False) as tmp:
+                    tmp.write(protein_content)
+                    receptor = Path(tmp.name)
+                
+                # Download prepared ligand from Supabase
+                storage_path = f"{session_id}/intermediate/ligand_prepared.pdbqt"
+                ligand_content = supabase_mgr.client.storage.from_(supabase_mgr.storage_bucket).download(storage_path)
+                with tempfile.NamedTemporaryFile(suffix=".pdbqt", delete=False) as tmp:
+                    tmp.write(ligand_content)
+                    ligand = Path(tmp.name)
+                
+                logger.info(f"☁️  Downloaded prepared protein and ligand from cloud for docking")
+            except Exception as e:
+                logger.error(f"Failed to download required files from cloud: {str(e)}")
+                raise HTTPException(status_code=404, detail="Prepared protein or ligand not found in cloud storage")
+        else:
+            # Local mode: read from disk
+            receptor = session_dir / "protein_prepared.pdbqt"
+            ligand = session_dir / "ligand_prepared.pdbqt"
+            
+            if not receptor.exists():
+                raise HTTPException(status_code=404, detail="Prepared protein not found")
+            if not ligand.exists():
+                raise HTTPException(status_code=404, detail="Prepared ligand not found")
         
         if docking_mode == "cavity":
             # Cavity mode: Multi-cavity docking
-            cavity_file = session_dir / "cavities.json"
-            if not cavity_file.exists():
-                raise HTTPException(
-                    status_code=404,
-                    detail="No cavities detected. Please run cavity detection first."
-                )
-            
-            # Load cavity metadata
-            cavities = cavity_detection.load_cavity_metadata(cavity_file)
+            # Download cavities.json from Supabase in cloud-only mode
+            if CLOUD_ONLY_MODE and supabase_mgr:
+                try:
+                    storage_path = f"{session_id}/intermediate/cavities.json"
+                    cavity_content = supabase_mgr.client.storage.from_(supabase_mgr.storage_bucket).download(storage_path)
+                    cavities_dict = json.loads(cavity_content.decode('utf-8'))
+                    cavities = cavities_dict if isinstance(cavities_dict, list) else cavities_dict.get('cavities', [])
+                    logger.info(f"☁️  Downloaded cavities from cloud: {len(cavities)} cavities")
+                except Exception as e:
+                    logger.error(f"Failed to download cavities from cloud: {str(e)}")
+                    raise HTTPException(
+                        status_code=404,
+                        detail="No cavities detected. Please run cavity detection first."
+                    )
+            else:
+                # Local mode: read from disk
+                cavity_file = session_dir / "cavities.json"
+                if not cavity_file.exists():
+                    raise HTTPException(
+                        status_code=404,
+                        detail="No cavities detected. Please run cavity detection first."
+                    )
+                
+                # Load cavity metadata
+                cavities = cavity_detection.load_cavity_metadata(cavity_file)
             
             # Filter by cavity_ids if specified
             if cavity_ids:
@@ -1790,8 +2735,11 @@ async def run_docking(
             
             print(f"\n[INFO] Running cavity-based docking for {len(cavities)} cavities")
             
-            # Run multi-cavity docking
-            out_prefix = str(session_dir / "docking_out")
+            # Run multi-cavity docking using temp directory in cloud-only mode
+            if CLOUD_ONLY_MODE and supabase_mgr:
+                out_prefix = str(Path(tempfile.gettempdir()) / f"docking_out_{session_id}")
+            else:
+                out_prefix = str(session_dir / "docking_out")
             
             cavity_results = docking_runner.run_vina_multi_cavity(
                 receptor_pdbqt=str(receptor),
@@ -1807,18 +2755,20 @@ async def run_docking(
             # Get best pose per cavity
             best_per_cavity = results.get_best_pose_per_cavity(all_poses)
             
-            # Save aggregated results to main output file for compatibility
-            # (Use the best cavity's output as the main output)
-            if all_poses:
-                best_cavity_id = all_poses[0]['cavity_id']
-                best_cavity_pdbqt = session_dir / f"docking_out_cavity_{best_cavity_id}_out.pdbqt"
-                main_output = session_dir / "docking_out_out.pdbqt"
-                
-                # Copy best cavity result to main output
-                if best_cavity_pdbqt.exists():
-                    shutil.copy(best_cavity_pdbqt, main_output)
+            # In cloud-only mode, upload docking results to Supabase
+            if CLOUD_ONLY_MODE and supabase_mgr:
+                try:
+                    # Upload all cavity results
+                    for cavity_result in cavity_results:
+                        if 'pdbqt_file' in cavity_result and Path(cavity_result['pdbqt_file']).exists():
+                            cavity_id = cavity_result.get('cavity_id', 'unknown')
+                            filename = f"docking_cavity_{cavity_id}_out.pdbqt"
+                            save_session_file(session_id, filename, Path(cavity_result['pdbqt_file']).read_bytes())
+                    logger.info(f"☁️  Uploaded cavity docking results to cloud storage")
+                except Exception as e:
+                    logger.warning(f"Failed to upload cavity docking results to cloud: {str(e)}")
             
-            # Export results to user-facing folder
+            # Export results to user-facing folder (optional, don't fail if export fails)
             try:
                 docking_params = {
                     "mode": "cavity",
@@ -1849,27 +2799,42 @@ async def run_docking(
         
         elif docking_mode == "manual":
             # Manual mode: Single docking with user-defined grid
-            grid_file = session_dir / "grid_params.json"
             
-            if not grid_file.exists():
-                raise HTTPException(
-                    status_code=404,
-                    detail="Grid parameters not found. Please calculate grid first."
-                )
-            
-            # Load grid parameters
-            import json
-            try:
-                with open(grid_file, 'r') as f:
-                    grid_params = json.load(f)
-            except json.JSONDecodeError:
-                raise HTTPException(
-                    status_code=500,
-                    detail="Grid parameters file is corrupted. Please recalculate grid."
-                )
-            except Exception as e:
-                logger.error(f"Failed to load grid parameters: {e}")
-                raise HTTPException(status_code=500, detail="Failed to load grid parameters")
+            # Download grid parameters from Supabase in cloud-only mode
+            if CLOUD_ONLY_MODE and supabase_mgr:
+                try:
+                    storage_path = f"{session_id}/intermediate/grid_params.json"
+                    grid_content = supabase_mgr.client.storage.from_(supabase_mgr.storage_bucket).download(storage_path)
+                    grid_params = json.loads(grid_content.decode('utf-8'))
+                    logger.info(f"☁️  Downloaded grid parameters from cloud")
+                except Exception as e:
+                    logger.error(f"Failed to download grid parameters from cloud: {str(e)}")
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Grid parameters not found. Please calculate grid first."
+                    )
+            else:
+                # Local mode: read from disk
+                grid_file = session_dir / "grid_params.json"
+                
+                if not grid_file.exists():
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Grid parameters not found. Please calculate grid first."
+                    )
+                
+                # Load grid parameters
+                try:
+                    with open(grid_file, 'r') as f:
+                        grid_params = json.load(f)
+                except json.JSONDecodeError:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="Grid parameters file is corrupted. Please recalculate grid."
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to load grid parameters: {e}")
+                    raise HTTPException(status_code=500, detail="Failed to load grid parameters")
             
             # Verify it's manual mode
             if grid_params.get('mode') != 'manual':
@@ -1882,7 +2847,12 @@ async def run_docking(
             center = tuple(grid_params['center'])
             size = tuple(grid_params['size'])
             
-            out_prefix = str(session_dir / "docking_out")
+            # Use temp directory in cloud-only mode
+            if CLOUD_ONLY_MODE and supabase_mgr:
+                out_prefix = str(Path(tempfile.gettempdir()) / f"docking_out_{session_id}")
+            else:
+                out_prefix = str(session_dir / "docking_out")
+            
             log, out_pdbqt = docking_runner.run_vina(
                 str(receptor),
                 str(ligand),
@@ -1895,7 +2865,15 @@ async def run_docking(
             # Parse results
             parsed = results.parse_vina_output(str(out_pdbqt))
             
-            # Export results to user-facing folder
+            # In cloud-only mode, upload docking results to Supabase
+            if CLOUD_ONLY_MODE and supabase_mgr and out_pdbqt.exists():
+                try:
+                    save_session_file(session_id, "docking_out_out.pdbqt", out_pdbqt.read_bytes())
+                    logger.info(f"☁️  Uploaded docking results to cloud storage")
+                except Exception as e:
+                    logger.warning(f"Failed to upload docking results to cloud: {str(e)}")
+            
+            # Export results to user-facing folder (optional, don't fail if export fails)
             try:
                 docking_params = {
                     "mode": "manual",
@@ -1933,6 +2911,19 @@ async def run_docking(
         error_details = traceback.format_exc()
         print(f"Error in docking: {error_details}")
         return json_error(str(e))
+    finally:
+        # Clean up temp files if in cloud mode
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            if 'receptor' in locals() and receptor.exists() and str(receptor).startswith(tempfile.gettempdir()):
+                try:
+                    receptor.unlink()
+                except Exception:
+                    pass
+            if 'ligand' in locals() and ligand.exists() and str(ligand).startswith(tempfile.gettempdir()):
+                try:
+                    ligand.unlink()
+                except Exception:
+                    pass
 
 
 @app.get("/api/file/{session_id}/{filename}")
@@ -2307,9 +3298,23 @@ async def download_top_poses(session_id: str, top_n: int = 5):
 async def get_results(session_id: str):
     """Get all docking results with cavity metadata if available."""
     try:
-        session_dir = get_session_dir(session_id)
-        out_pdbqt = session_dir / "docking_out_out.pdbqt"
-        if not out_pdbqt.exists():
+        session_dir = None
+        out_pdbqt = None
+        try:
+            session_dir = get_session_dir(session_id)
+            out_pdbqt = session_dir / "docking_out_out.pdbqt"
+        except HTTPException:
+            session_dir = None
+
+        if session_dir is None or not out_pdbqt.exists():
+            if supabase_mgr:
+                cloud_results = supabase_mgr.get_docking_results(session_id)
+                if cloud_results:
+                    latest = cloud_results[-1]
+                    report_json = latest.get("report_json") or {}
+                    cloud_poses = report_json.get("poses", [])
+                    if cloud_poses:
+                        return {"status": "ok", "results": cloud_poses, "source": "supabase"}
             raise HTTPException(status_code=404, detail="No docking results found")
         
         # Check if cavity-based docking was performed
@@ -2370,8 +3375,14 @@ def export_results_to_user_folder(session_id: str, docking_results: list, dockin
     from datetime import datetime
     
     # Create results directory structure
-    session_results_dir = RESULTS_DIR / session_id
-    session_results_dir.mkdir(parents=True, exist_ok=True)
+    using_temp_results_dir = False
+    if CLOUD_ONLY_MODE and supabase_mgr:
+        import tempfile
+        session_results_dir = Path(tempfile.mkdtemp(prefix=f"results_{session_id}_"))
+        using_temp_results_dir = True
+    else:
+        session_results_dir = RESULTS_DIR / session_id
+        session_results_dir.mkdir(parents=True, exist_ok=True)
     
     complexes_dir = session_results_dir / "complexes"
     interactions_dir = session_results_dir / "interactions"
@@ -2384,6 +3395,20 @@ def export_results_to_user_folder(session_id: str, docking_results: list, dockin
     # Copy validated complexes
     session_dir = WORK_DIR / session_id
     protein_pdbqt = session_dir / "protein_prepared.pdbqt"
+    temp_protein_pdbqt = None
+
+    # Cloud-only fallback: download prepared protein for complex generation
+    if (not protein_pdbqt.exists()) and supabase_mgr:
+        try:
+            import tempfile
+            protein_bytes = supabase_mgr.download_result_file(session_id, "intermediate/protein_prepared.pdbqt")
+            with tempfile.NamedTemporaryFile(suffix=".pdbqt", delete=False) as tmp:
+                tmp.write(protein_bytes)
+                temp_protein_pdbqt = Path(tmp.name)
+            protein_pdbqt = temp_protein_pdbqt
+            logger.info(f"☁️  Downloaded prepared protein from cloud for results export: {session_id}")
+        except Exception as e:
+            logger.warning(f"Could not download prepared protein from cloud for export: {e}")
     fallback_ligand_pdbqt = session_dir / "docking_out_out.pdbqt"
     
     for i, result in enumerate(docking_results, 1):
@@ -2411,6 +3436,13 @@ def export_results_to_user_folder(session_id: str, docking_results: list, dockin
                 logger.info(f"Exported complex_pose_{i}.pdb to results")
         except Exception as e:
             logger.error(f"Failed to export complex for pose {i}: {str(e)}")
+
+    # Cleanup temp protein file if used
+    if temp_protein_pdbqt and temp_protein_pdbqt.exists():
+        try:
+            temp_protein_pdbqt.unlink()
+        except Exception:
+            pass
     
     # Copy interaction analysis files
     for i in range(1, len(docking_results) + 1):
@@ -2427,8 +3459,51 @@ def export_results_to_user_folder(session_id: str, docking_results: list, dockin
     
     # Create README
     create_user_readme(session_results_dir, len(docking_results))
+
+    # Persist to Supabase storage + database
+    if supabase_mgr:
+        try:
+            # Upload all generated user-facing result files
+            for file_path in session_results_dir.rglob("*"):
+                if file_path.is_file():
+                    relative_path = str(file_path.relative_to(session_results_dir)).replace("\\", "/")
+                    supabase_mgr.upload_result_file(
+                        session_id=session_id,
+                        filename=relative_path,
+                        file_content=file_path.read_bytes()
+                    )
+
+            # Load report json for DB persistence
+            report_json = {}
+            report_path = reports_dir / "docking_report.json"
+            if report_path.exists():
+                with open(report_path, "r") as f:
+                    report_json = json.load(f)
+
+            supabase_mgr.save_docking_result(
+                session_id=session_id,
+                docking_data={
+                    "best_affinity": min((r.get("affinity") for r in docking_results if r.get("affinity") is not None), default=None),
+                    "num_poses": len(docking_results),
+                    "cavity_count": len({r.get("cavity_id") for r in docking_results if r.get("cavity_id") is not None}),
+                    "results_file_path": f"{session_id}/reports/docking_report.json",
+                    "docking_mode": docking_params.get("mode"),
+                    "report_json": report_json,
+                }
+            )
+            supabase_mgr.update_session_status(session_id, "completed")
+            logger.info(f"Results synced to Supabase for session {session_id}")
+        except Exception as e:
+            logger.error(f"Failed Supabase sync for session {session_id}: {e}")
     
     logger.info(f"Results exported to {session_results_dir}")
+
+    # Cleanup temp results directory in cloud-only mode
+    if using_temp_results_dir and session_results_dir.exists():
+        try:
+            shutil.rmtree(session_results_dir)
+        except Exception as e:
+            logger.warning(f"Could not cleanup temp results directory {session_results_dir}: {e}")
 
 
 def generate_docking_summary_csv(docking_results: list, output_dir: Path):
@@ -2610,8 +3685,19 @@ async def get_protein_metadata(session_id: str):
 async def delete_session(session_id: str):
     """Delete a session and all associated files."""
     try:
-        session_dir = get_session_dir(session_id)
-        shutil.rmtree(session_dir)
+        try:
+            session_dir = get_session_dir(session_id)
+            shutil.rmtree(session_dir)
+        except HTTPException:
+            # Allow cloud-only cleanup even if local session was already removed
+            pass
+
+        if supabase_mgr:
+            try:
+                supabase_mgr.delete_session_files(session_id)
+            except Exception as e:
+                logger.warning(f"Failed deleting Supabase files for {session_id}: {e}")
+
         return {"status": "ok", "message": f"Session {session_id} deleted"}
     except HTTPException:
         raise
@@ -2783,6 +3869,37 @@ async def get_2d_interaction_svg(session_id: str, pose: int):
     from interaction_2d import parse_pdb, detect, render_svg, extract_affinity_from_pdb
     from fastapi.responses import Response
 
+    validate_session_id(session_id)
+
+    # Cloud-first path for cloud-only mode
+    if CLOUD_ONLY_MODE and supabase_mgr:
+        import tempfile
+        try:
+            complex_bytes = supabase_mgr.download_result_file(
+                session_id,
+                f"complexes/complex_pose_{pose}.pdb"
+            )
+
+            with tempfile.NamedTemporaryFile(suffix=".pdb", delete=False) as tmp:
+                tmp.write(complex_bytes)
+                complex_path = Path(tmp.name)
+
+            try:
+                protein_atoms, ligand_atoms = parse_pdb(str(complex_path))
+                affinity = extract_affinity_from_pdb(str(complex_path))
+                interactions = detect(protein_atoms, ligand_atoms)
+                svg_content = render_svg(str(complex_path), interactions, affinity)
+                return Response(content=svg_content, media_type="image/svg+xml")
+            finally:
+                if complex_path.exists():
+                    try:
+                        complex_path.unlink()
+                    except Exception:
+                        pass
+
+        except Exception as e:
+            raise HTTPException(status_code=404, detail=f"2D interaction source not found for pose {pose}: {e}")
+
     session_dir = get_session_dir(session_id)
     protein_pdbqt = session_dir / "protein_prepared.pdbqt"
     
@@ -2834,23 +3951,40 @@ async def fetch_alphafold_from_uniprot(session_id: str, uniprot_id: str):
         Structure file metadata and confidence scores
     """
     try:
+        validate_session_id(session_id)
         session_dir = get_session_dir(session_id)
-        
-        # Output file path
-        output_file = session_dir / f"protein_alphafold_{uniprot_id}.pdb"
+
+        # Output file path (temp in cloud-only mode)
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix=".pdb", delete=False) as tmp:
+                output_file = Path(tmp.name)
+            output_name = f"protein_alphafold_{uniprot_id}.pdb"
+        else:
+            session_dir.mkdir(parents=True, exist_ok=True)
+            output_file = session_dir / f"protein_alphafold_{uniprot_id}.pdb"
+            output_name = output_file.name
         
         # Fetch structure from AlphaFold DB
         _, metadata = alphafold_integration.get_structure_from_uniprot_or_sequence(
             uniprot_id=uniprot_id,
             output_file=output_file
         )
+
+        # In cloud-only mode, upload generated structure and cleanup temp file
+        if CLOUD_ONLY_MODE and supabase_mgr and output_file.exists():
+            save_session_file(session_id, output_name, output_file.read_bytes())
+            try:
+                output_file.unlink()
+            except Exception:
+                pass
         
         # Get additional UniProt metadata
         uniprot_metadata = alphafold_integration.fetch_uniprot_metadata(uniprot_id)
         
         return {
             "status": "ok",
-            "filename": output_file.name,
+            "filename": output_name,
             "structure_metadata": metadata,
             "protein_info": uniprot_metadata
         }
@@ -2874,22 +4008,39 @@ async def predict_structure_from_sequence(session_id: str, fasta_sequence: str):
         Predicted structure file metadata and confidence scores
     """
     try:
+        validate_session_id(session_id)
         session_dir = get_session_dir(session_id)
         
         # Generate filename based on sequence hash
         import hashlib
         seq_hash = hashlib.md5(fasta_sequence.encode()).hexdigest()[:8]
-        output_file = session_dir / f"protein_predicted_{seq_hash}.pdb"
+        if CLOUD_ONLY_MODE and supabase_mgr:
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix=".pdb", delete=False) as tmp:
+                output_file = Path(tmp.name)
+            output_name = f"protein_predicted_{seq_hash}.pdb"
+        else:
+            session_dir.mkdir(parents=True, exist_ok=True)
+            output_file = session_dir / f"protein_predicted_{seq_hash}.pdb"
+            output_name = output_file.name
         
         # Predict structure using ESMFold
         _, metadata = alphafold_integration.get_structure_from_uniprot_or_sequence(
             fasta_sequence=fasta_sequence,
             output_file=output_file
         )
+
+        # In cloud-only mode, upload generated structure and cleanup temp file
+        if CLOUD_ONLY_MODE and supabase_mgr and output_file.exists():
+            save_session_file(session_id, output_name, output_file.read_bytes())
+            try:
+                output_file.unlink()
+            except Exception:
+                pass
         
         return {
             "status": "ok",
-            "filename": output_file.name,
+            "filename": output_name,
             "structure_metadata": metadata
         }
     except alphafold_integration.AlphaFoldError as e:

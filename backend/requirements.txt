@@ -20,6 +20,10 @@ biopython
 # HTTP requests for AlphaFold API
 requests
 
+# Supabase for database and storage
+supabase
+python-dotenv
+
 # ---------------------------------------------------------
 # Note: The following dependencies are recommended to be 
 # installed via conda instead of pip for better compatibility:

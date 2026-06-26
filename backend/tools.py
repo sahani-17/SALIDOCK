@@ -712,8 +712,12 @@ def _filter_pdb_residues(input_pdb, keep_hetero_residues=None, keep_chains=None)
     Raises:
         ValueError: If input file is malformed or contains no valid records
     """
+    import tempfile
     input_pdb = str(input_pdb)
-    output_pdb = input_pdb.replace('.pdb', '_filtered.pdb')
+    
+    # Create filtered PDB in system temp directory instead of session directory
+    with tempfile.NamedTemporaryFile(suffix='_filtered.pdb', delete=False) as tmp:
+        output_pdb = tmp.name
     
     # Validate input file
     if not os.path.exists(input_pdb):
@@ -1057,7 +1061,12 @@ def prepare_protein(input_pdb, output_pdbqt, remove_waters=True, keep_hetero_res
     
     # ── Stage 1: PDBFixer — Comprehensive Structure Repair ──
     logger.info("\nStage 1: PDBFixer — Comprehensive Structure Repair")
-    fixed_pdb = str(input_pdb).replace('.pdb', '_fixed.pdb')
+    
+    # Create fixed PDB in system temp directory instead of session directory
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix='_fixed.pdb', delete=False) as tmp:
+        fixed_pdb = tmp.name
+    
     pdbfixer_report = None
     
     try:
@@ -1068,10 +1077,22 @@ def prepare_protein(input_pdb, output_pdbqt, remove_waters=True, keep_hetero_res
         logger.warning("  PDBFixer not available — skipping structure repair")
         logger.info("  → Continuing with original structure")
         pdbfixer_report = {"missing_residues_remaining": -1}  # Unknown
+        # Clean up unused temp file
+        if os.path.exists(fixed_pdb):
+            try:
+                os.remove(fixed_pdb)
+            except (OSError, PermissionError):
+                pass
     except RuntimeError as e:
         logger.error(f"  ERROR: PDBFixer failed: {e}")
         logger.info("  → Continuing with original structure")
         pdbfixer_report = {"missing_residues_remaining": -1}  # Unknown
+        # Clean up unused temp file
+        if os.path.exists(fixed_pdb):
+            try:
+                os.remove(fixed_pdb)
+            except (OSError, PermissionError):
+                pass
     
     # ── Stage 1.5: AlphaFold Fallback (ONLY if PDBFixer couldn't resolve gaps) ──
     if use_alphafold_if_incomplete and pdbfixer_report.get("missing_residues_remaining", 0) > 0:
@@ -1088,8 +1109,9 @@ def prepare_protein(input_pdb, output_pdbqt, remove_waters=True, keep_hetero_res
                 # Import AlphaFold integration
                 import alphafold_integration
                 
-                # Create AlphaFold structure file path
-                alphafold_pdb = str(input_pdb).replace('.pdb', '_alphafold.pdb')
+                # Create AlphaFold structure file in temp directory
+                with tempfile.NamedTemporaryFile(suffix='_alphafold.pdb', delete=False) as tmp:
+                    alphafold_pdb = tmp.name
                 
                 # Predict structure using ESMFold (faster than full AlphaFold)
                 logger.info("  Fetching complete structure from ESMFold...")
@@ -1276,7 +1298,12 @@ def prepare_ligand(input_ligand, output_pdbqt, optimize=True):
     
     # Step 4: Save as PDB intermediate
     logger.info("Step 4/4: Converting to PDBQT format...")
-    temp_pdb = str(output_pdbqt).replace('.pdbqt', '_temp.pdb')
+    
+    # Create temp file in system temp directory instead of session directory
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix='_temp.pdb', delete=False) as tmp:
+        temp_pdb = tmp.name
+    
     Chem.MolToPDBFile(mol, temp_pdb)
     
     # Step 5: Convert to PDBQT using Open Babel (ONLY Open Babel step)
@@ -1400,8 +1427,10 @@ def smiles_to_3d(smiles: str, output_pdbqt: str, optimize: bool = True) -> Path:
     logger.info("    - Map atom types")
     logger.info("    - Detect rotatable bonds")
     logger.info("    - Format as PDBQT")
-    
-    temp_pdb = str(output_pdbqt).replace('.pdbqt', '_temp.pdb')
+
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix='_temp.pdb', delete=False) as tmp:
+        temp_pdb = tmp.name
     
     try:
         # Save as PDB intermediate

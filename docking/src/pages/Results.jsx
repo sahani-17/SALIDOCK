@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Download, Loader2, Eye, ChevronDown } from 'lucide-react';
+import { Download, Loader2, Eye, ChevronDown, Star, MessageSquareText, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { api } from '../services/api';
 import MolecularViewer from '../components/MolecularViewer';
 import Interaction2DViewer from '../components/Interaction2DViewer';
 import Navbar from '../components/Navbar';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 
 // ─── Definitions ────────────────────────────────────────────────────
 const PROTEIN_REPRESENTATIONS = [
@@ -162,6 +165,7 @@ function Results() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const sessionId = searchParams.get('session');
+  const { user } = useAuth();
 
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -171,6 +175,13 @@ function Results() {
   const [pdbData, setPdbData] = useState(null);
   const [loadingViewer, setLoadingViewer] = useState(false);
   const [viewMode, setViewMode] = useState('3d'); // '3d' or '2d'
+  const [feedbackRating, setFeedbackRating] = useState(0);
+  const [feedbackName, setFeedbackName] = useState('');
+  const [feedbackDescription, setFeedbackDescription] = useState('');
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const [feedbackChecked, setFeedbackChecked] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   // Viewer control state
   const [proteinRepr, setProteinRepr] = useState('cartoon');
@@ -251,6 +262,111 @@ function Results() {
   useEffect(() => {
     if (results?.poses && results.poses.length > 0) handleViewPose(1);
   }, [results, handleViewPose]);
+
+  // Prefill if this user already submitted feedback for this result session
+  useEffect(() => {
+    const defaultName = user?.user_metadata?.username || user?.user_metadata?.full_name || '';
+    setFeedbackName(defaultName);
+  }, [user?.user_metadata?.username, user?.user_metadata?.full_name]);
+
+  useEffect(() => {
+    if (!sessionId) {
+      setFeedbackChecked(true);
+      return;
+    }
+
+    if (!user?.id) {
+      setFeedbackChecked(true);
+      return;
+    }
+
+    const fetchExistingFeedback = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('result_feedback')
+          .select('rating, description, username')
+          .eq('session_id', sessionId)
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (error) return;
+        if (data) {
+          setFeedbackRating(data.rating || 0);
+          setFeedbackDescription(data.description || '');
+          setFeedbackName(data.username || user?.user_metadata?.username || user?.user_metadata?.full_name || '');
+          setFeedbackSubmitted(true);
+        }
+      } catch {
+        // no-op: feedback prefill is optional
+      } finally {
+        setFeedbackChecked(true);
+      }
+    };
+
+    fetchExistingFeedback();
+  }, [sessionId, user?.id]);
+
+  useEffect(() => {
+    if (loading || !results || !feedbackChecked) return;
+    if (!feedbackSubmitted) {
+      setShowFeedbackModal(true);
+    }
+  }, [loading, results, feedbackChecked, feedbackSubmitted]);
+
+  useEffect(() => {
+    document.body.style.overflow = showFeedbackModal ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [showFeedbackModal]);
+
+  const handleSubmitFeedback = async (e) => {
+    e.preventDefault();
+
+    if (!feedbackName.trim()) {
+      toast.error('Please provide your name.');
+      return;
+    }
+
+    if (!feedbackRating) {
+      toast.error('Please provide a rating out of 5.');
+      return;
+    }
+
+    if (!feedbackDescription.trim()) {
+      toast.error('Please add your feedback description.');
+      return;
+    }
+
+    if (!sessionId) {
+      toast.error('Invalid session.');
+      return;
+    }
+
+    setSubmittingFeedback(true);
+    try {
+      const { error } = await supabase.from('result_feedback').insert({
+        session_id: sessionId,
+        rating: feedbackRating,
+        description: feedbackDescription.trim(),
+        user_id: user?.id || null,
+        username: feedbackName.trim(),
+      });
+
+      if (error) throw error;
+
+      setFeedbackSubmitted(true);
+      setShowFeedbackModal(false);
+      toast.success('Thanks! Your feedback was submitted.');
+    } catch (err) {
+      console.error('Feedback submit error:', err);
+      toast.error(err?.message || 'Failed to submit feedback.');
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  };
 
   // ─── Mol* interaction helpers (completely outside the viewer) ─────
   const getPlugin = () => viewerRef.current?.getPlugin?.();
@@ -562,6 +678,103 @@ function Results() {
         </section>
 
       </div>
+
+      {showFeedbackModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowFeedbackModal(false)}
+          />
+
+          <div className="relative w-full max-w-lg rounded-2xl border border-primary/20 bg-card p-6 shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setShowFeedbackModal(false)}
+              className="absolute right-3 top-3 p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Close feedback popup"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-2 mb-2">
+              <MessageSquareText className="w-5 h-5 text-primary" />
+              <h2 className="text-lg sm:text-xl font-bold text-foreground">How was your result?</h2>
+            </div>
+            <p className="text-sm text-muted-foreground mb-5">
+              Please share a quick rating and your feedback description.
+            </p>
+
+            <form onSubmit={handleSubmitFeedback} className="space-y-4">
+              <div>
+                <label htmlFor="feedback-name-modal" className="text-sm font-medium text-foreground block mb-2">
+                  Name
+                </label>
+                <input
+                  id="feedback-name-modal"
+                  type="text"
+                  value={feedbackName}
+                  onChange={(e) => setFeedbackName(e.target.value)}
+                  placeholder="Enter your name"
+                  className="w-full rounded-lg bg-background border border-primary/20 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:ring-1 focus:ring-primary/30 focus:border-primary/50 outline-none transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-foreground block mb-2">Rating (out of 5)</label>
+                <div className="flex items-center gap-1.5">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setFeedbackRating(star)}
+                      className="p-1 rounded-md hover:bg-primary/10 transition-colors"
+                      aria-label={`Rate ${star} out of 5`}
+                    >
+                      <Star
+                        className={`w-6 h-6 ${star <= feedbackRating ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground/40'}`}
+                      />
+                    </button>
+                  ))}
+                  <span className="text-sm text-muted-foreground ml-2">
+                    {feedbackRating ? `${feedbackRating}/5` : 'Select rating'}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="feedback-description-modal" className="text-sm font-medium text-foreground block mb-2">
+                  Feedback description
+                </label>
+                <textarea
+                  id="feedback-description-modal"
+                  value={feedbackDescription}
+                  onChange={(e) => setFeedbackDescription(e.target.value)}
+                  placeholder="Tell us what worked well and what can be improved..."
+                  rows={4}
+                  className="w-full rounded-lg bg-background border border-primary/20 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:ring-1 focus:ring-primary/30 focus:border-primary/50 outline-none transition-all resize-y"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowFeedbackModal(false)}
+                  className="px-4 py-2 rounded-lg border border-primary/20 text-sm font-medium text-foreground hover:bg-primary/5 transition-all"
+                >
+                  Later
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingFeedback}
+                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:brightness-110 transition-all disabled:opacity-60"
+                >
+                  {submittingFeedback ? 'Submitting...' : 'Submit Feedback'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

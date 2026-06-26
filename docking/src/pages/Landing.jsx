@@ -450,7 +450,7 @@ const Landing = () => {
 
                     <Link
                       to={m.link}
-                      className="mt-auto inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:gap-2.5 transition-all group"
+                      className="mt-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:brightness-110 active:scale-95 transition-all group"
                     >
                       {m.cta} <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
                     </Link>

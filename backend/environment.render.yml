@@ -1,0 +1,28 @@
+name: salidock
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - openbabel
+  - rdkit
+  - pdbfixer
+  - fpocket
+  - vina
+  - gemmi
+  - openjdk=21
+  - numpy
+  - biopython
+  - requests
+  - pip:
+      - fastapi
+      - uvicorn
+      - pydantic
+      - python-multipart
+      - slowapi
+      - python-jose[cryptography]
+      - passlib[bcrypt]
+      - prolif
+      - MDAnalysis
+      - supabase
+      - python-dotenv
