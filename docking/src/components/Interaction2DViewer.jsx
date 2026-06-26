@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Download } from 'lucide-react';
+import { API_BASE_URL } from '../services/api';
 
 const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
   const [svgContent, setSvgContent]         = useState("");        // SVG string for primary pose
@@ -35,7 +36,7 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
     // Reset pan/zoom when pose changes
     setScale(1); setPanX(0); setPanY(0);
 
-    fetch(`https://salidock-backend.jollydune-d4ca90c7.eastus.azurecontainerapps.io/api/interactions/2d/${sessionId}/${poseNumber}`)
+    fetch(`${API_BASE_URL}/api/interactions/2d/${sessionId}/${poseNumber}`)
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.text();
@@ -51,10 +52,10 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
     setCompareLoading(true);
     setScaleB(1); setPanXB(0); setPanYB(0);
 
-    fetch(`http://localhost:8000/api/interactions/2d/${sessionId}/${comparePose}`)
+    fetch(`${API_BASE_URL}/api/interactions/2d/${sessionId}/${comparePose}`)
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.text();
+        return res.text();        
       })
       .then(svg => setCompareSvg(svg))
       .catch(err => console.error("Compare fetch failed:", err))
@@ -148,13 +149,115 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
   const uniqueToB   = [...residuesB].filter(r => !residuesA.has(r));
 
   const handleDownload = (svgString, filename) => {
-    const blob = new Blob([svgString], { type: "image/svg+xml" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href     = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+    // Render SVG to a high-resolution PNG (300 DPI)
+    const DPI = 300;
+    const SCALE = DPI / 96; // CSS reference is 96 DPI
+
+    // Parse the SVG to extract its intrinsic width/height
+    const parser = new DOMParser();
+    const svgDoc = parser.parseFromString(svgString, "image/svg+xml");
+    const svgEl = svgDoc.querySelector("svg");
+
+    let svgW = 800, svgH = 600; // sensible fallbacks
+    if (svgEl) {
+      // Strictly ensure the standard xmlns attribute is present for Image rendering context
+      if (!svgEl.hasAttribute("xmlns")) {
+        svgEl.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      }
+
+      // Try width/height attributes first, then viewBox
+      const attrW = parseFloat(svgEl.getAttribute("width"));
+      const attrH = parseFloat(svgEl.getAttribute("height"));
+      if (attrW && attrH) {
+        svgW = attrW;
+        svgH = attrH;
+      } else {
+        const vb = svgEl.getAttribute("viewBox");
+        if (vb) {
+          const parts = vb.split(/[\s,]+/).map(Number);
+          if (parts.length === 4) {
+            svgW = parts[2];
+            svgH = parts[3];
+          }
+        }
+      }
+      // Ensure explicit width/height so the Image renders at the right size
+      svgEl.setAttribute("width", svgW);
+      svgEl.setAttribute("height", svgH);
+    }
+
+    const canvasW = Math.round(svgW * SCALE);
+    const canvasH = Math.round(svgH * SCALE);
+
+    const serializer = new XMLSerializer();
+    const serializedSvg = serializer.serializeToString(svgDoc);
+
+    const svgBlob = new Blob([serializedSvg], {
+      type: "image/svg+xml;charset=utf-8",
+    });
+    const url = URL.createObjectURL(svgBlob);
+
+    const finalFilename = filename.replace(/\.svg$/i, ".png");
+
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvasW;
+      canvas.height = canvasH;
+      const ctx = canvas.getContext("2d");
+      // White background (SVG may have transparent bg)
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvasW, canvasH);
+      ctx.drawImage(img, 0, 0, canvasW, canvasH);
+      URL.revokeObjectURL(url);
+
+      canvas.toBlob((pngBlob) => {
+        const pngUrl = URL.createObjectURL(pngBlob);
+        const a = document.createElement("a");
+        a.href = pngUrl;
+        a.download = finalFilename;
+        a.click();
+        URL.revokeObjectURL(pngUrl);
+      }, "image/png");
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      console.error("Failed to render SVG via Blob URL — falling back to data URL approach");
+
+      // Secondary robust fallback for strict browsers: data URL embedding
+      const dataUrl = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(serializedSvg);
+      const fallbackImg = new Image();
+      fallbackImg.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = canvasW;
+        canvas.height = canvasH;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvasW, canvasH);
+        ctx.drawImage(fallbackImg, 0, 0, canvasW, canvasH);
+
+        canvas.toBlob((pngBlob) => {
+          const pngUrl = URL.createObjectURL(pngBlob);
+          const a = document.createElement("a");
+          a.href = pngUrl;
+          a.download = finalFilename;
+          a.click();
+          URL.revokeObjectURL(pngUrl);
+        }, "image/png");
+      };
+      fallbackImg.onerror = () => {
+        console.error("All SVG to PNG render methods failed. Downloading original SVG as fallback.");
+        const fallbackBlob = new Blob([svgString], { type: "image/svg+xml" });
+        const fallbackUrl = URL.createObjectURL(fallbackBlob);
+        const a = document.createElement("a");
+        a.href = fallbackUrl;
+        a.download = filename.replace(/\.png$/i, ".svg");
+        a.click();
+        URL.revokeObjectURL(fallbackUrl);
+      };
+      fallbackImg.src = dataUrl;
+    };
+    img.src = url;
   };
 
   const handleToggleCompare = () => {
@@ -179,12 +282,12 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
 
         {/* Left: download + reset view */}
         <div className="flex items-center gap-2">
-          {/* Download primary SVG */}
+          {/* Download primary PNG */}
           <button
-            onClick={() => handleDownload(svgContent, `pose_${poseNumber}_interactions.svg`)}
+            onClick={() => handleDownload(svgContent, `pose_${poseNumber}_interactions.png`)}
             disabled={!svgContent}
             className="p-1.5 text-slate-600 hover:text-primary hover:bg-slate-200 rounded transition-colors disabled:opacity-40"
-            title="Download SVG"
+            title="Download PNG (300 DPI)"
           >
             <Download className="w-4 h-4" />
           </button>
@@ -339,12 +442,12 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
             {/* Panel label */}
             <div className="px-3 py-1 bg-green-50 border-b border-green-100 text-xs font-semibold text-green-700 flex-shrink-0 flex items-center justify-between">
               <span>Pose {comparePose}</span>
-              {/* Download compare SVG */}
+              {/* Download compare PNG */}
               <button
-                onClick={() => handleDownload(compareSvg, `pose_${comparePose}_interactions.svg`)}
+                onClick={() => handleDownload(compareSvg, `pose_${comparePose}_interactions.png`)}
                 disabled={!compareSvg}
                 className="p-1 rounded text-slate-600 hover:text-primary hover:bg-green-100 disabled:opacity-40 transition-colors"
-                title="Download compare SVG"
+                title="Download compare PNG (300 DPI)"
               >
                 <Download className="w-4 h-4" />
               </button>

@@ -1,4 +1,4 @@
-﻿# results.py - parsing of Vina output and PDBQT pose extraction
+# results.py - parsing of Vina output and PDBQT pose extraction
 from pathlib import Path
 from typing import List, Dict, Tuple
 import re
@@ -113,7 +113,7 @@ def parse_vina_output_with_cavity(pdbqt_path: str, cavity_id: int, cavity_metada
         pose['cavity_id'] = cavity_id
         pose['cavity_rank'] = cavity_metadata.get('rank', 0)
         pose['cavity_volume'] = cavity_metadata.get('volume', 0.0)
-        pose['cavity_druggability'] = cavity_metadata.get('druggability_score', 0.0)
+        pose['cavity_druggability'] = cavity_metadata.get('cnn_score', cavity_metadata.get('druggability_score', 0.0))
         pose['cavity_center'] = cavity_metadata.get('center', (0, 0, 0))
         pose['cavity_size'] = cavity_metadata.get('size', (0, 0, 0))
     

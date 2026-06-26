@@ -7,7 +7,7 @@ import { api } from '../services/api';
  * Used by Docking, Active, and Cavity pages.
  * Encapsulates: session init, protein/ligand upload, SMILES, AlphaFold, protein preparation.
  */
-export function useDockingWorkflow() {
+export function useDockingWorkflow({ isBlind = false } = {}) {
     // Session state
     const [sessionId, setSessionId] = useState(null);
 
@@ -74,16 +74,26 @@ export function useDockingWorkflow() {
             const savedFilename = uploadResponse.saved_as;
             setSavedProteinFilename(savedFilename);
 
-            // Get chains using the saved filename from backend
-            const chainsData = await api.getChains(sessionId, savedFilename);
-            setChains(chainsData.chains || []);
+            // Get chains using the saved filename from backend if not blind
+            let chainsCount = 0;
+            if (!isBlind) {
+                const chainsData = await api.getChains(sessionId, savedFilename);
+                setChains(chainsData.chains || []);
+                chainsCount = chainsData.chains?.length || 0;
+            } else {
+                setChains([]);
+            }
 
             // Get heteroatoms
             const heteroData = await api.getHeteroatoms(sessionId, savedFilename);
             setHeteroatoms(heteroData.all_heteroatoms || []);
 
             setShowProteinPrep(true);
-            toast.success(`Protein uploaded — ${chainsData.chains?.length || 0} chains found`);
+            if (isBlind) {
+                toast.success('Protein uploaded successfully');
+            } else {
+                toast.success(`Protein uploaded — ${chainsCount} chains found`);
+            }
         } catch (err) {
             setError('Failed to upload protein: ' + (err.message || err));
             toast.error('Protein upload failed');
@@ -127,9 +137,10 @@ export function useDockingWorkflow() {
 
     // Handle SMILES input
     const handleSmilesSubmit = async () => {
-        // Use smilesString for AlphaFold mode, smilesInput for SMILES mode
-        const smiles = inputMode === 'alphafold' ? smilesString : smilesInput;
-        if (!smiles.trim()) return;
+        const preferredSmiles = ligandInputMethod === 'smiles' ? smilesString : smilesInput;
+        const fallbackSmiles = ligandInputMethod === 'smiles' ? smilesInput : smilesString;
+        const smiles = (preferredSmiles || fallbackSmiles || '').trim();
+        if (!smiles) return;
 
         setLoading(true);
         setLoadingMessage('Generating 3D structure from SMILES...');
@@ -160,9 +171,13 @@ export function useDockingWorkflow() {
             setSavedProteinFilename(response.filename);
             setUploadProgress(prev => ({ ...prev, protein: true }));
 
-            // Get chains
-            const chainsData = await api.getChains(sessionId, response.filename);
-            setChains(chainsData.chains || []);
+            // Get chains if not blind
+            if (!isBlind) {
+                const chainsData = await api.getChains(sessionId, response.filename);
+                setChains(chainsData.chains || []);
+            } else {
+                setChains([]);
+            }
 
             // Get heteroatoms
             const heteroData = await api.getHeteroatoms(sessionId, response.filename);
@@ -196,9 +211,13 @@ export function useDockingWorkflow() {
             setSavedProteinFilename(response.filename);
             setUploadProgress(prev => ({ ...prev, protein: true }));
 
-            // Get chains
-            const chainsData = await api.getChains(sessionId, response.filename);
-            setChains(chainsData.chains || []);
+            // Get chains if not blind
+            if (!isBlind) {
+                const chainsData = await api.getChains(sessionId, response.filename);
+                setChains(chainsData.chains || []);
+            } else {
+                setChains([]);
+            }
 
             // Get heteroatoms
             const heteroData = await api.getHeteroatoms(sessionId, response.filename);

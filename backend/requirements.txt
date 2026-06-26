@@ -12,6 +12,7 @@ passlib[bcrypt]
 # Chemistry & molecular modeling (Pip packages)
 prolif
 MDAnalysis
+pdb-tools
 
 # Scientific computing
 numpy
@@ -19,6 +20,9 @@ biopython
 
 # HTTP requests for AlphaFold API
 requests
+
+# ML rescoring (LambdaRank pocket re-ranking)
+lightgbm>=4.0.0
 
 # Supabase for database and storage
 supabase

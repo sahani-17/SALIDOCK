@@ -64,10 +64,10 @@ function Active() {
     }
   };
 
-  const inputClass = "w-full h-10 px-3 rounded-lg bg-background border border-primary/15 text-foreground text-sm focus:border-primary/50 focus:ring-1 focus:ring-primary/20 outline-none transition-all";
+  const inputClass = "w-full h-10 px-3 rounded-lg bg-white border border-slate-300 text-slate-900 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all";
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-slate-50">
       <WorkflowHeader
         title="Active-Site Docking"
         subtitle="Specify custom grid center and size for targeted docking"
@@ -85,21 +85,21 @@ function Active() {
         />
 
         {/* Grid Configuration */}
-        <section className="rounded-2xl bg-card border border-primary/10 p-6 mb-6">
+        <section className="rounded-2xl bg-white border border-slate-200 p-6 mb-6 shadow-sm">
           <div className="flex items-center gap-2 mb-1">
-            <Grid3x3 size={18} className="text-primary" />
-            <h2 className="font-bold text-foreground">Grid Configuration</h2>
+            <Grid3x3 size={18} className="text-blue-600" />
+            <h2 className="font-bold text-slate-900">Grid Configuration</h2>
           </div>
-          <p className="text-xs text-muted-foreground mb-5">Define the docking grid box position and dimensions</p>
+          <p className="text-xs text-slate-600 mb-5">Define the docking grid box position and dimensions</p>
 
           {/* Grid Center */}
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3">
-              <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Grid Center (Å)</label>
+              <label className="text-xs font-semibold uppercase tracking-widest text-slate-500">Grid Center (Å)</label>
               <button
                 onClick={handleAutoDetectCenter}
                 disabled={workflow.loading || !workflow.uploadProgress.protein}
-                className="px-4 py-1.5 rounded-full text-xs font-bold bg-primary text-primary-foreground hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
+                className="px-4 py-1.5 rounded-full text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50"
               >
                 Auto-Detect
               </button>
@@ -107,7 +107,7 @@ function Active() {
             <div className="grid grid-cols-3 gap-3">
               {['x', 'y', 'z'].map((axis) => (
                 <div key={axis}>
-                  <label className="text-xs text-muted-foreground mb-1 block uppercase font-medium">{axis}</label>
+                  <label className="text-xs text-slate-600 mb-1 block uppercase font-medium">{axis}</label>
                   <input
                     type="number" step="0.1" value={gridCenter[axis]}
                     onChange={(e) => { setGridCenter({ ...gridCenter, [axis]: parseFloat(e.target.value) || 0 }); setAutoDetectDone(true); }}
@@ -120,11 +120,11 @@ function Active() {
 
           {/* Grid Size */}
           <div className="mb-6">
-            <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3 block">Grid Size (Å)</label>
+            <label className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-3 block">Grid Size (Å)</label>
             <div className="grid grid-cols-3 gap-3">
               {['x', 'y', 'z'].map((axis) => (
                 <div key={axis}>
-                  <label className="text-xs text-muted-foreground mb-1 block uppercase font-medium">{axis}</label>
+                  <label className="text-xs text-slate-600 mb-1 block uppercase font-medium">{axis}</label>
                   <input
                     type="number" step="1" value={gridSize[axis]}
                     onChange={(e) => setGridSize({ ...gridSize, [axis]: parseInt(e.target.value) || 20 })}
@@ -138,10 +138,10 @@ function Active() {
           {/* Grid Box Visualization */}
           {workflow.uploadProgress.protein && autoDetectDone && (
             <div className="mb-6">
-              <h4 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Grid Box Preview</h4>
+              <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-3">Grid Box Preview</h4>
               <GridBoxViewer sessionId={workflow.sessionId} gridCenter={gridCenter} gridSize={gridSize} />
-              <div className="mt-3 p-3 bg-primary/5 border border-primary/10 rounded-xl">
-                <p className="text-xs text-muted-foreground mb-2"><span className="font-semibold text-foreground">Color Legend:</span> Grid box edges colored by dimension</p>
+              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                <p className="text-xs text-slate-600 mb-2"><span className="font-semibold text-slate-900">Color Legend:</span> Grid box edges colored by dimension</p>
                 <div className="grid grid-cols-3 gap-2 text-xs">
                   {[
                     { color: 'bg-red-500', label: 'X-axis (Red)' },
@@ -150,7 +150,7 @@ function Active() {
                   ].map((c) => (
                     <div key={c.label} className="flex items-center gap-2">
                       <div className={`w-3 h-3 ${c.color} rounded`} />
-                      <span className="text-muted-foreground">{c.label}</span>
+                      <span className="text-slate-600">{c.label}</span>
                     </div>
                   ))}
                 </div>
@@ -162,7 +162,7 @@ function Active() {
           <button
             onClick={handleRunDocking}
             disabled={workflow.loading || !workflow.uploadProgress.protein || !workflow.uploadProgress.ligand || !autoDetectDone}
-            className="flex items-center gap-2 px-7 py-3.5 rounded-full bg-primary text-primary-foreground font-bold text-base hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 glow-emerald"
+            className="flex items-center gap-2 px-7 py-3.5 rounded-full bg-blue-600 text-white font-bold text-base hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50"
           >
             {workflow.loading && workflow.loadingMessage.includes('docking') ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
             {workflow.loading && workflow.loadingMessage.includes('docking') ? 'Running...' : 'Run Docking Simulation'}
@@ -171,18 +171,18 @@ function Active() {
           {workflow.loading && workflow.loadingMessage.includes('docking') && (
             <div className="mt-4">
               <div className="w-full bg-border rounded-full h-2 overflow-hidden">
-                <div className="bg-primary h-2 rounded-full animate-pulse" style={{ width: '100%' }} />
+                <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{ width: '100%' }} />
               </div>
-              <p className="text-xs text-muted-foreground mt-2">Running molecular docking simulation... This may take several minutes.</p>
+              <p className="text-xs text-slate-600 mt-2">Running molecular docking simulation... This may take several minutes.</p>
             </div>
           )}
 
           {!autoDetectDone && (
-            <p className="text-sm text-warning mt-2">Please configure grid center coordinates before running docking simulation</p>
+            <p className="text-sm text-amber-600 mt-2">Please configure grid center coordinates before running docking simulation</p>
           )}
         </section>
       </div>
-      <Footer />
+      <Footer lightTheme />
     </div>
   );
 }

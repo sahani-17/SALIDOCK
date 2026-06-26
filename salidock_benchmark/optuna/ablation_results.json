@@ -1,0 +1,14 @@
+{
+  "fpocket": {
+    "delta_DCA": -0.0799,
+    "pruned": true
+  },
+  "p2rank": {
+    "delta_DCA": 1.2777,
+    "pruned": false
+  },
+  "puresnet": {
+    "delta_DCA": 16.0112,
+    "pruned": false
+  }
+}

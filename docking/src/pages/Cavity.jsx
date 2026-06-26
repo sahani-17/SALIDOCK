@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Grid3x3, Play, Loader2 } from 'lucide-react';
+import { Play, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../services/api';
 import { useDockingWorkflow } from '../hooks/useDockingWorkflow';
@@ -12,46 +12,32 @@ import Footer from '../components/Footer';
 
 function Cavity() {
   const navigate = useNavigate();
-  const workflow = useDockingWorkflow();
+  const workflow = useDockingWorkflow({ isBlind: true });
 
-  const [numCavities, setNumCavities] = useState(5);
-  const [detectedCavities, setDetectedCavities] = useState([]);
-  const [selectedCavities, setSelectedCavities] = useState([]);
-  const [cavityDetectionComplete, setCavityDetectionComplete] = useState(false);
-
-  const handleDetectCavities = async () => {
+  const handleBlindDocking = async () => {
     workflow.setLoading(true);
-    workflow.setLoadingMessage('Detecting binding sites');
-    setCavityDetectionComplete(false);
+    workflow.setLoadingMessage('Detecting binding sites (top 5 cavities)...');
     try {
-      const response = await api.detectCavities(workflow.sessionId, numCavities);
+      // 1. Detect binding sites (defaults to top 5)
+      const response = await api.detectCavities(workflow.sessionId);
       const cavities = response.cavities || [];
-      setDetectedCavities(cavities);
-      setSelectedCavities(cavities.map(c => c.cavity_id) || []);
-      setCavityDetectionComplete(true);
-      toast.success(`Found ${cavities.length} binding cavities`);
-    } catch (_err) {
-      workflow.setError('Failed to detect cavities');
-      toast.error('Cavity detection failed');
-      setCavityDetectionComplete(false);
-    } finally {
-      workflow.setLoading(false);
-      workflow.setLoadingMessage('');
-    }
-  };
+      
+      if (cavities.length === 0) {
+        throw new Error('No cavities detected on the protein surface');
+      }
 
-  const handleRunDocking = async () => {
-    workflow.setLoading(true);
-    workflow.setLoadingMessage('Running docking simulation...');
-    try {
-      let dockingData = {};
-      dockingData.cavity_indices = selectedCavities;
-      await api.runDocking(workflow.sessionId, dockingData);
+      // 2. Map all detected cavities to their IDs
+      const cavityIds = cavities.map(c => c.cavity_id);
+
+      // 3. Immediately run docking on these cavities
+      workflow.setLoadingMessage(`Running docking simulation on ${cavities.length} cavities...`);
+      await api.runDocking(workflow.sessionId, { cavity_indices: cavityIds });
+      
       toast.success('Docking complete! Viewing results...');
       navigate(`/results?session=${workflow.sessionId}`);
-    } catch (_err) {
-      workflow.setError('Failed to run docking');
-      toast.error('Docking simulation failed');
+    } catch (err) {
+      workflow.setError(err.message || 'Failed during blind docking workflow');
+      toast.error(err.message || 'Blind docking failed');
     } finally {
       workflow.setLoading(false);
       workflow.setLoadingMessage('');
@@ -59,7 +45,7 @@ function Cavity() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-slate-50">
       <WorkflowHeader
         title="Auto-Blind Docking"
         subtitle="Automatically detect and dock to binding sites"
@@ -74,100 +60,45 @@ function Cavity() {
           heteroatoms={workflow.heteroatoms} selectedHeteroatoms={workflow.selectedHeteroatoms} setSelectedHeteroatoms={workflow.setSelectedHeteroatoms}
           handleProteinPreparation={workflow.handleProteinPreparation}
           loading={workflow.loading} proteinPrepared={workflow.proteinPrepared}
+          isBlind={true}
         />
 
-        {/* Cavity Detection */}
-        <section className="rounded-2xl bg-card border border-primary/10 p-6 mb-6">
+        {/* Blind Docking */}
+        <section className="rounded-2xl bg-white border border-slate-200 p-6 mb-6 shadow-sm">
           <div className="flex items-center gap-2 mb-1">
-            <Grid3x3 size={18} className="text-primary" />
-            <h2 className="font-bold text-foreground">Cavity Detection</h2>
+            <Play size={18} className="text-blue-600" />
+            <h2 className="font-bold text-slate-900">Blind Docking</h2>
           </div>
-          <p className="text-xs text-muted-foreground mb-5">Automatically detect and select binding sites for docking</p>
-
-          <div className="mb-4">
-            <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 block">Number of Cavities (max 10)</label>
-            <input
-              type="number" min="1" max="10" value={numCavities}
-              onChange={(e) => setNumCavities(Math.min(10, Math.max(1, parseInt(e.target.value) || 1)))}
-              className="w-32 h-10 px-3 rounded-lg bg-background border border-primary/15 text-foreground text-sm focus:border-primary/50 focus:ring-1 focus:ring-primary/20 outline-none transition-all"
-            />
-          </div>
+          <p className="text-xs text-slate-600 mb-5">Automatically detect top 5 cavities and run docking simulation</p>
 
           <button
-            onClick={handleDetectCavities}
-            disabled={workflow.loading || !workflow.uploadProgress.protein}
-            className="px-5 py-2 rounded-full bg-primary text-primary-foreground font-bold text-sm hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 mb-4"
+            onClick={handleBlindDocking}
+            disabled={workflow.loading || !workflow.uploadProgress.protein || !workflow.uploadProgress.ligand || !workflow.proteinPrepared}
+            className="flex items-center gap-2 px-7 py-3.5 rounded-full bg-blue-600 text-white font-bold text-base hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50"
           >
-            {workflow.loading && workflow.loadingMessage.includes('Detecting') ? (
-              <span className="flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Detecting...</span>
-            ) : 'Detect Binding Sites'}
+            {workflow.loading && (workflow.loadingMessage.includes('Detecting') || workflow.loadingMessage.includes('docking')) ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <Play size={18} />
+            )}
+            {workflow.loading && (workflow.loadingMessage.includes('Detecting') || workflow.loadingMessage.includes('docking')) ? 'Running...' : 'Blind Docking'}
           </button>
 
-          {workflow.loading && workflow.loadingMessage.includes('Detecting') && (
-            <div className="mb-4">
-              <div className="w-full bg-border rounded-full h-2 overflow-hidden">
-                <div className="bg-primary h-2 rounded-full animate-pulse" style={{ width: '100%' }} />
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">Analyzing protein structure for binding pockets...</p>
-            </div>
-          )}
-
-          {detectedCavities.length > 0 && (
-            <div className="mt-6 p-4 bg-primary/5 border border-primary/10 rounded-xl">
-              <h4 className="font-bold text-foreground mb-3 text-sm">Detected Cavities</h4>
-              <div className="grid grid-cols-2 gap-2 mb-3">
-                {detectedCavities.map((cavity) => (
-                  <label key={cavity.cavity_id} className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${selectedCavities.includes(cavity.cavity_id) ? 'border-primary/40 bg-primary/10' : 'border-primary/10 hover:border-primary/20'
-                    }`}>
-                    <input
-                      type="checkbox"
-                      checked={selectedCavities.includes(cavity.cavity_id)}
-                      onChange={(e) => {
-                        if (e.target.checked) setSelectedCavities([...selectedCavities, cavity.cavity_id]);
-                        else setSelectedCavities(selectedCavities.filter(c => c !== cavity.cavity_id));
-                      }}
-                      className="accent-primary"
-                    />
-                    <span className="text-sm font-medium text-foreground">Cavity {cavity.cavity_id}</span>
-                    <span className="text-xs text-muted-foreground ml-auto">
-                      {cavity.consensus_score !== undefined ? `Consensus: ${cavity.consensus_score.toFixed(2)}` :
-                        cavity.rank !== undefined ? `Rank: ${cavity.rank}` :
-                          cavity.volume !== undefined ? `Vol: ${cavity.volume.toFixed(0)} Å³` : 'N/A'}
-                    </span>
-                  </label>
-                ))}
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Continue with <span className="font-semibold text-primary">{selectedCavities.length}</span> selected cavities
-              </p>
-            </div>
-          )}
-
-          {/* Run Docking */}
-          <button
-            onClick={handleRunDocking}
-            disabled={workflow.loading || !workflow.uploadProgress.protein || !workflow.uploadProgress.ligand || !cavityDetectionComplete}
-            className="mt-6 flex items-center gap-2 px-7 py-3.5 rounded-full bg-primary text-primary-foreground font-bold text-base hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 glow-emerald"
-          >
-            {workflow.loading && workflow.loadingMessage.includes('docking') ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
-            {workflow.loading && workflow.loadingMessage.includes('docking') ? 'Running...' : 'Run Docking Simulation'}
-          </button>
-
-          {workflow.loading && workflow.loadingMessage.includes('docking') && (
+          {workflow.loading && (workflow.loadingMessage.includes('Detecting') || workflow.loadingMessage.includes('docking')) && (
             <div className="mt-4">
               <div className="w-full bg-border rounded-full h-2 overflow-hidden">
-                <div className="bg-primary h-2 rounded-full animate-pulse" style={{ width: '100%' }} />
+                <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{ width: '100%' }} />
               </div>
-              <p className="text-xs text-muted-foreground mt-2">Running molecular docking simulation... This may take several minutes.</p>
+              <p className="text-xs text-slate-600 mt-2">{workflow.loadingMessage || 'Processing blind docking...'}</p>
             </div>
           )}
 
-          {!cavityDetectionComplete && (
-            <p className="text-sm text-warning mt-2">Please detect binding sites before running docking simulation</p>
+          {!workflow.proteinPrepared && workflow.uploadProgress.protein && workflow.uploadProgress.ligand && (
+            <p className="text-sm text-amber-600 mt-2">Please prepare the protein before running docking simulation</p>
           )}
         </section>
       </div>
-      <Footer />
+      <Footer lightTheme />
     </div>
   );
 }

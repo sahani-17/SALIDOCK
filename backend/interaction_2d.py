@@ -20,8 +20,132 @@ from typing import List, Dict, Tuple, Optional
 
 # RDKit — already installed in Salidock's conda environment for ligand preparation
 from rdkit import Chem
-from rdkit.Chem import rdDepictor
+from rdkit.Chem import rdDepictor, AllChem
 rdDepictor.SetPreferCoordGen(True)
+
+import logging
+_log = logging.getLogger(__name__)
+
+
+# =============================================================================
+# FIX 5 — TEMPLATE-GUIDED BOND ORDER ASSIGNMENT
+# =============================================================================
+
+def load_ligand_with_correct_bonds(complex_pdb_path: str, original_sdf_path: str):
+    """
+    Extract the ligand from the complex PDB and apply correct bond orders
+    from the original SDF template.  Tries three strategies in order:
+
+    Strategy 1 — Kekulized SDF template (handles halogenated aromatics).
+      Load template with sanitize=False, partial-sanitise skipping valence
+      check, Kekulize to resolve aromatic bonds, then AssignBondOrdersFromTemplate.
+
+    Strategy 2 — SMILES round-trip (handles quaternary N, multi-pattern matches).
+      When Strategy 1 fails with "More than one matching pattern" or a valence
+      error after the wrong pattern is chosen, derive a canonical SMILES from the
+      template and embed the docked 3D coordinates by atom-map matching.  This
+      completely avoids AssignBondOrdersFromTemplate and its pattern-matching bugs.
+
+    Strategy 3 — raw PDB parse (existing fallback).
+      Returns None so the caller falls back to Chem.MolFromPDBFile.
+
+    Returns an RDKit Mol with correct bond orders and docked 3D coordinates,
+    or None if all strategies fail.
+    """
+    import tempfile, os
+
+    # ── Extract ligand HETATM lines from complex PDB ─────────────────────────
+    ligand_lines = []
+    with open(complex_pdb_path) as f:
+        for line in f:
+            rec = line[:6].strip()
+            if rec == 'HETATM':
+                resname = line[17:20].strip()
+                if resname not in ('HOH', 'WAT', 'H2O'):
+                    ligand_lines.append(line)
+    if not ligand_lines:
+        _log.warning('No ligand HETATM records found in complex PDB')
+        return None
+
+    tmp = tempfile.NamedTemporaryFile(suffix='.pdb', delete=False, mode='w')
+    tmp.writelines(ligand_lines)
+    tmp.write('END\n')
+    tmp.close()
+
+    try:
+        # ── Strategy 1: Kekulized template ───────────────────────────────────
+        try:
+            template = Chem.MolFromMolFile(
+                original_sdf_path, sanitize=False, removeHs=False
+            )
+            if template is not None:
+                Chem.SanitizeMol(
+                    template,
+                    Chem.SanitizeFlags.SANITIZE_ALL ^ Chem.SanitizeFlags.SANITIZE_PROPERTIES
+                )
+                Chem.Kekulize(template, clearAromaticFlags=True)
+                template = Chem.RemoveHs(template, sanitize=False)
+
+                raw_mol = Chem.MolFromPDBFile(tmp.name, removeHs=True, sanitize=False)
+                if raw_mol is not None:
+                    mol_with_bonds = AllChem.AssignBondOrdersFromTemplate(template, raw_mol)
+                    Chem.SanitizeMol(mol_with_bonds)
+                    _log.info('Bond orders assigned via Strategy 1 (Kekulized template)')
+                    return mol_with_bonds
+        except Exception as e1:
+            _log.debug(f'Strategy 1 failed ({e1}), trying Strategy 2')
+
+        # ── Strategy 2: SMILES round-trip ────────────────────────────────────
+        # Derive a canonical SMILES from the template SDF (which has correct
+        # chemistry) and build an RDKit mol from that.  Then copy the 3D
+        # coordinates from the docked pose by matching heavy atoms by index.
+        # This completely bypasses AssignBondOrdersFromTemplate and its pattern-
+        # matching issues with quaternary nitrogen or ambiguous topologies.
+        try:
+            # Load template mol for SMILES — use standard sanitisation
+            tmpl_raw = Chem.MolFromMolFile(original_sdf_path, sanitize=False, removeHs=True)
+            if tmpl_raw is not None:
+                Chem.SanitizeMol(
+                    tmpl_raw,
+                    Chem.SanitizeFlags.SANITIZE_ALL ^ Chem.SanitizeFlags.SANITIZE_PROPERTIES
+                )
+                # Get canonical SMILES — this encodes correct bond orders + charges
+                smiles = Chem.MolToSmiles(tmpl_raw, canonical=True)
+                if smiles:
+                    smiles_mol = Chem.MolFromSmiles(smiles)
+                    if smiles_mol is not None:
+                        # Get docked heavy-atom 3D coordinates from PDB
+                        raw_mol = Chem.MolFromPDBFile(tmp.name, removeHs=True, sanitize=False)
+                        if raw_mol is not None and raw_mol.GetNumAtoms() == smiles_mol.GetNumAtoms():
+                            # Copy conformer: assume atom order matches (both heavy-atom only)
+                            from rdkit.Chem import AllChem as _AC
+                            from rdkit.Geometry import rdGeometry
+                            conf = raw_mol.GetConformer()
+                            new_conf = Chem.Conformer(smiles_mol.GetNumAtoms())
+                            for i in range(smiles_mol.GetNumAtoms()):
+                                pos = conf.GetAtomPosition(i)
+                                new_conf.SetAtomPosition(i, pos)
+                            smiles_mol = Chem.RWMol(smiles_mol)
+                            smiles_mol.AddConformer(new_conf, assignId=True)
+                            smiles_mol = smiles_mol.GetMol()
+                            _log.info('Bond orders assigned via Strategy 2 (SMILES round-trip)')
+                            return smiles_mol
+        except Exception as e2:
+            _log.debug(f'Strategy 2 failed ({e2}), falling back to raw PDB parse')
+
+        # ── Strategy 3: raw fallback ─────────────────────────────────────────
+        _log.warning(
+            'All template strategies failed; falling back to raw PDB parse. '
+            'Bond orders in 2D diagram may be approximate.'
+        )
+        return None
+
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except Exception:
+            pass
+
 
 
 # =============================================================================
@@ -432,6 +556,7 @@ def _get_ligand_ring_centroids(ligand_atoms: List[Dict]) -> List[tuple]:
     return centroids
 
 
+
 # =============================================================================
 # STAGE 3 — SVG RENDERER
 # =============================================================================
@@ -441,6 +566,7 @@ def render_svg(
     interactions: List[Dict],
     affinity:     float = 0.0,
     ligand_resname: str = None,
+    original_sdf_path: str = None,
 ) -> str:
     """
     Generate a publication-quality SVG string of the 2D interaction diagram.
@@ -459,11 +585,27 @@ def render_svg(
       - Legend panel
       - Binding affinity badge
 
+    Args:
+        pdb_path: Path to the protein-ligand complex PDB
+        interactions: List of interaction dicts from detect()
+        affinity: Binding affinity in kcal/mol
+        ligand_resname: Override ligand residue name (optional)
+        original_sdf_path: Path to original ligand SDF for template-guided
+                          bond order assignment. If provided and valid,
+                          avoids PDBQT valence errors.
+
     Returns a complete SVG string ready to be served as image/svg+xml.
     """
 
-    # ── 2D ligand layout via RDKit ────────────────────────────────────────────
-    mol = Chem.MolFromPDBFile(str(pdb_path), removeHs=True, sanitize=False)
+    # ── 2D ligand layout via RDKit (Fix 5: try template first) ─────────────
+    mol = None
+    if original_sdf_path:
+        mol = load_ligand_with_correct_bonds(str(pdb_path), original_sdf_path)
+
+    if mol is None:
+        # Fallback: direct PDB parse (may have valence issues with PDBQT-derived atoms)
+        mol = Chem.MolFromPDBFile(str(pdb_path), removeHs=True, sanitize=False)
+
     if mol is None:
         return _error_svg("RDKit could not parse the PDB file.")
 

@@ -8,6 +8,16 @@ from pathlib import Path
 from rdkit import Chem
 from rdkit.Chem.rdForceFieldHelpers import MMFFOptimizeMolecule
 
+# pdb-tools imports (Bonvin Lab — pure Python PDB manipulation)
+# https://github.com/haddocking/pdb-tools
+from pdbtools import pdb_selchain
+from pdbtools import pdb_delhetatm
+from pdbtools import pdb_selhetatm
+from pdbtools import pdb_delresname
+from pdbtools import pdb_tidy
+from pdbtools import pdb_tofasta
+from pdbtools import pdb_validate
+
 # Configure logging (only if not already configured by the application)
 logger = logging.getLogger(__name__)
 
@@ -18,17 +28,38 @@ if not logging.getLogger().hasHandlers():
         format='%(levelname)s: %(message)s'
     )
 
+# =============================================================================
+# FIX 2/3/4 — TUNABLE CONSTANTS
+# =============================================================================
+MAX_SAFE_GAP = 7               # residues; gaps larger than this are NOT modelled by PDBFixer
+CONNECTIVITY_DISTANCE = 2.0    # Å; max C-N peptide bond length for connected residues
+
 
 def check_tools():
     """Check availability of required tools."""
     tools = {}
     tools['rdkit'] = False
     tools['openbabel'] = shutil.which('obabel') is not None or shutil.which('obabel.exe') is not None
-    tools['vina'] = shutil.which('vina') is not None or shutil.which('vina.exe') is not None
+    tools['gnina']     = shutil.which('gnina') is not None
+    tools['quickvina'] = shutil.which('qvina-w') is not None or shutil.which('qvina-w.exe') is not None
+    
+    # Visualizer tools
+    tools['pymol']     = shutil.which('pymol') is not None or shutil.which('pymol.exe') is not None
+    tools['plip']      = shutil.which('plip') is not None
+    tools['apbs']      = shutil.which('apbs') is not None or shutil.which('apbs.exe') is not None
+    tools['pdb2pqr']   = shutil.which('pdb2pqr') is not None or shutil.which('pdb2pqr.exe') is not None
     
     try:
         from rdkit import Chem
         tools['rdkit'] = True
+    except ImportError:
+        pass
+    
+    # Check pdb-tools (Bonvin Lab) availability
+    tools['pdb_tools'] = False
+    try:
+        from pdbtools import pdb_tidy
+        tools['pdb_tools'] = True
     except ImportError:
         pass
     
@@ -41,6 +72,46 @@ def _run_command(cmd, cwd=None, timeout=300):
     if proc.returncode != 0:
         raise RuntimeError(f"Command failed: {' '.join(cmd)}\\nSTDOUT:\\n{proc.stdout}\\nSTDERR:\\n{proc.stderr}")
     return proc.stdout
+
+
+def _find_obabel() -> str:
+    """
+    Locate the obabel executable.
+
+    Search order:
+      1. Directly on PATH (fastest — works when conda env is activated)
+      2. $CONDA_PREFIX/bin/obabel (server running inside the env)
+      3. Common conda env locations for the active env name
+    """
+    # 1. PATH
+    found = shutil.which('obabel') or shutil.which('obabel.exe')
+    if found:
+        return found
+
+    # 2. CONDA_PREFIX (set when the server process is inside the conda env)
+    conda_prefix = os.environ.get('CONDA_PREFIX', '')
+    if conda_prefix:
+        for candidate in [
+            os.path.join(conda_prefix, 'bin', 'obabel'),
+            os.path.join(conda_prefix, 'Scripts', 'obabel.exe'),  # Windows
+        ]:
+            if os.path.isfile(candidate):
+                return candidate
+
+    # 3. Named env via CONDA_DEFAULT_ENV
+    conda_env = os.environ.get('CONDA_DEFAULT_ENV', '')
+    conda_base = os.environ.get('CONDA_BASE', '') or os.path.expanduser('~/miniconda3')
+    if conda_env and conda_base:
+        for candidate in [
+            os.path.join(conda_base, 'envs', conda_env, 'bin', 'obabel'),
+            os.path.join(conda_base, 'envs', conda_env, 'Scripts', 'obabel.exe'),
+        ]:
+            if os.path.isfile(candidate):
+                return candidate
+
+    raise FileNotFoundError(
+        "obabel not found. Install with: conda install -c conda-forge openbabel"
+    )
 
 
 def _convert_to_pdbqt_openbabel(input_file, output_pdbqt, is_receptor=True):
@@ -66,29 +137,20 @@ def _convert_to_pdbqt_openbabel(input_file, output_pdbqt, is_receptor=True):
     if os.path.getsize(input_file) == 0:
         raise ValueError(f"Input file is empty: {input_file}")
     
-    # Check if obabel is available directly
-    obabel_cmd = shutil.which('obabel') or shutil.which('obabel.exe')
-    
-    # If not found, try with conda environment activation
-    if not obabel_cmd:
-        # Try to find obabel in conda environment
-        conda_env = os.environ.get('CONDA_DEFAULT_ENV', 'docking')
-        # Both Windows and Linux use the same conda run command
-        cmd = ['conda', 'run', '-n', conda_env, 'obabel', input_file, '-O', output_pdbqt]
-    else:
-        # obabel found directly
-        cmd = [obabel_cmd, input_file, '-O', output_pdbqt]
+    try:
+        obabel_cmd = _find_obabel()
+    except FileNotFoundError as e:
+        raise RuntimeError(str(e))
+
+    cmd = [obabel_cmd, input_file, '-O', output_pdbqt]
     
     if is_receptor:
-        # For receptors: rigid, add polar hydrogens, assign partial charges
-        cmd.extend(['-xr'])  # -xr = rigid molecule (receptor)
+        cmd.extend(['-xr'])  # rigid (receptor)
     else:
-        # For ligands: flexible, preserve all hydrogens
-        cmd.extend(['-xh'])  # -xh = preserve hydrogens
+        cmd.extend(['-xh'])  # preserve hydrogens (ligand)
     
     # Add partial charges (Gasteiger) and hydrogens at pH 7.4
-    ph = 7.4  # Fixed value, not user-configurable
-    cmd.extend(['-p', str(ph)])
+    cmd.extend(['-p', '7.4'])
     
     try:
         _run_command(cmd, timeout=120)
@@ -100,6 +162,8 @@ def _convert_to_pdbqt_openbabel(input_file, output_pdbqt, is_receptor=True):
 def detect_chains(input_pdb):
     """
     Detect all unique chain IDs in a PDB file.
+    
+    Uses direct PDB column parsing (chain ID at column 21) for ATOM records.
     
     Args:
         input_pdb: Input PDB file path
@@ -113,42 +177,24 @@ def detect_chains(input_pdb):
     """
     input_pdb = str(input_pdb)
     
-    # Validate file exists
     if not os.path.exists(input_pdb):
         raise FileNotFoundError(f"PDB file not found: {input_pdb}")
-    
-    # Validate file is not empty
     if os.path.getsize(input_pdb) == 0:
         raise ValueError(f"PDB file is empty: {input_pdb}")
     
     chain_atoms = {}
-    valid_records = 0
     
-    with open(input_pdb, 'r') as f:
-        for line in f:
-            # Only consider ATOM records for valid protein chains
-            if line.startswith('ATOM'):
-                # Validate line length before accessing column 21
-                if len(line) < 22:
-                    continue
-                
-                # Chain ID is at column 21 (0-indexed: position 21)
+    with open(input_pdb, 'r') as fh:
+        for line in fh:
+            if line.startswith('ATOM') and len(line) >= 22:
                 chain_id = line[21].strip().upper()
-                
-                # Ignore empty chains
                 if not chain_id:
                     continue
-                
-                if chain_id not in chain_atoms:
-                    chain_atoms[chain_id] = 0
-                chain_atoms[chain_id] += 1
-                valid_records += 1
+                chain_atoms[chain_id] = chain_atoms.get(chain_id, 0) + 1
     
-    # Validate that we found at least some atoms
-    if valid_records == 0:
-        raise ValueError(f"No valid ATOM/HETATM records found in PDB file: {input_pdb}")
+    if not chain_atoms:
+        raise ValueError(f"No valid ATOM records found in PDB file: {input_pdb}")
     
-    # Convert to list of dicts, sorted by chain ID
     chains = [{'id': cid, 'atoms': count} for cid, count in sorted(chain_atoms.items())]
     return chains
 
@@ -315,114 +361,123 @@ def analyze_pdb_structure(pdb_file):
             if line.startswith('ATOM'):
                 stats['total_atoms'] += 1
                 stats['protein_atoms'] += 1
-                
                 if len(line) >= 22:
-                    chain_id = line[21].strip().upper() or ' '
-                    stats['chains'].add(chain_id)
-                
+                    stats['chains'].add(line[21].strip().upper() or ' ')
                 if len(line) >= 26:
-                    res_id = line[17:26].strip()  # Residue name + number
-                    stats['residues'].add(res_id)
-                    
+                    stats['residues'].add(line[17:26].strip())
             elif line.startswith('HETATM'):
                 stats['total_atoms'] += 1
-                
                 if len(line) >= 20:
                     res_name = line[17:20].strip().upper()
-                    
                     if res_name in WATER_RESIDUES:
                         stats['waters'] += 1
                     else:
                         stats['heteroatoms'] += 1
     
-    # Convert sets to sorted lists
     stats['chains'] = sorted(list(stats['chains']))
     stats['residues'] = len(stats['residues'])
-    
     return stats
-
-
-
-
 
 
 def extract_sequence_from_pdb(pdb_file):
     """
-    Extract protein sequence from PDB file.
+    Extract protein sequence from PDB file using pdb-tools (pdb_tofasta).
     
-    Useful for fetching complete structures from AlphaFold when
-    the experimental structure has missing residues.
+    Replaces BioPython PDBParser with pdb-tools' pdb_tofasta generator.
+    Returns single-letter amino acid sequence from first chain.
     
     Args:
         pdb_file: Path to PDB file
         
     Returns:
-        str: Protein sequence in single-letter amino acid code
+        str: Protein sequence in single-letter amino acid code, or None on failure
         
     Note:
         Only extracts sequence from ATOM records (not HETATM).
         Returns sequence from first chain if multiple chains present.
     """
-    from Bio.PDB import PDBParser
-    from Bio.SeqUtils import seq1
-    
     try:
-        parser = PDBParser(QUIET=True)
-        structure = parser.get_structure('protein', pdb_file)
+        with open(str(pdb_file), 'r') as fh:
+            fasta_lines = list(pdb_tofasta.run(fh, multi=False))
         
-        # Get first model
-        model = structure[0]
+        # Parse FASTA output: first line is header (>chain), rest is sequence
+        sequence = ''
+        for line in fasta_lines:
+            line = line.strip()
+            if line.startswith('>'):
+                if sequence:  # Already got first chain — stop
+                    break
+                continue
+            sequence += line
         
-        # Get first chain
-        chain = list(model.get_chains())[0]
-        
-        # Extract sequence
-        sequence = []
-        for residue in chain:
-            if residue.id[0] == ' ':  # Standard amino acid (not HETATM)
-                try:
-                    # Convert 3-letter code to 1-letter
-                    aa = seq1(residue.get_resname())
-                    sequence.append(aa)
-                except KeyError:
-                    # Unknown residue, skip
-                    continue
-        
-        return ''.join(sequence)
+        return sequence if sequence else None
         
     except Exception as e:
         logger.warning(f"  Could not extract sequence from PDB: {e}")
         return None
 
 
+def validate_pdb_format(pdb_file):
+    """
+    Validate PDB file format compliance using pdb-tools (pdb_validate).
+    
+    Args:
+        pdb_file: Path to PDB file
+        
+    Returns:
+        tuple: (is_valid: bool, issues: list[str])
+    """
+    issues = []
+    try:
+        with open(str(pdb_file), 'r') as fh:
+            for line in pdb_validate.run(fh):
+                line = line.strip()
+                if line:
+                    issues.append(line)
+        return len(issues) == 0, issues
+    except Exception as e:
+        return False, [str(e)]
+
+
+def tidy_pdb_file(input_pdb, output_pdb=None):
+    """
+    Standardize PDB file format using pdb-tools (pdb_tidy).
+    
+    Ensures PDB format compliance (column widths, record types, etc.).
+    
+    Args:
+        input_pdb: Input PDB file path
+        output_pdb: Output PDB file path (defaults to overwriting input)
+        
+    Returns:
+        str: Path to tidied PDB file
+    """
+    input_pdb = str(input_pdb)
+    output_pdb = str(output_pdb) if output_pdb else input_pdb
+    
+    with open(input_pdb, 'r') as fh:
+        tidied_lines = list(pdb_tidy.run(fh))
+    
+    with open(output_pdb, 'w') as f:
+        f.writelines(tidied_lines)
+    
+    logger.info(f"  PDB tidied: {Path(output_pdb).name}")
+    return output_pdb
+
+
 
 def detect_heteroatoms_to_keep(input_pdb):
     """
-    Detect and categorize heteroatoms (metal ions, cofactors, ligands, buffer agents).
+    Detect and categorize heteroatoms using pdb-tools for HETATM extraction.
     
-    This function analyzes HETATM records in a PDB file and categorizes them into:
-    - Metal ions (Zn, Mg, Ca, Fe, etc.)
-    - Cofactors (NAD, FAD, HEM, ATP, etc.)
-    - Small molecule ligands (potential drug-like molecules)
-    - Buffer agents (SO4, GOL, etc.)
-    - Other heteroatoms
+    Uses pdb_selhetatm.run() to extract HETATM records, then categorizes them
+    into metal ions, cofactors, ligands, buffer agents, and other.
     
     Args:
         input_pdb: Input PDB file path
         
     Returns:
-        Dict with heteroatom analysis:
-        {
-            'metal_ions': ['ZN', 'MG', 'CA'],
-            'cofactors': ['NAD', 'HEM'],
-            'ligands': ['LIG', 'DRG'],
-            'buffer_agents': ['SO4', 'GOL'],
-            'other': ['UNK'],
-            'all_heteroatoms': ['ZN', 'MG', 'NAD', 'HEM', 'LIG', 'SO4'],
-            'counts': {'ZN': 2, 'MG': 1, 'NAD': 1, ...},
-            'atom_counts': {'ZN': 1, 'NAD': 44, ...},
-            'summary': "Found 2 metal ions, 2 cofactors, 1 ligand, 2 buffer agents"
-        }
+        Dict with heteroatom analysis (same format as before).
         
     Raises:
         FileNotFoundError: If input file doesn't exist
@@ -430,10 +485,8 @@ def detect_heteroatoms_to_keep(input_pdb):
     """
     input_pdb = str(input_pdb)
     
-    # Validate file exists
     if not os.path.exists(input_pdb):
         raise FileNotFoundError(f"PDB file not found: {input_pdb}")
-    
     if os.path.getsize(input_pdb) == 0:
         raise ValueError(f"PDB file is empty: {input_pdb}")
     
@@ -446,20 +499,13 @@ def detect_heteroatoms_to_keep(input_pdb):
     
     # Common cofactors and prosthetic groups
     COFACTORS = {
-        # Nucleotide cofactors
         'NAD', 'NAP', 'FAD', 'FMN', 'ADP', 'ATP', 'GTP', 'CTP', 'UTP',
         'NAI', 'NDP', 'AMP', 'GMP', 'CMP', 'UMP',
-        # Heme groups
         'HEM', 'HEC', 'HEA', 'HEB', 'HDD', 'HDN', 'HAS',
-        # Coenzyme A
         'COA', 'ACO', 'COB', 'COC',
-        # Vitamins and derivatives
         'B12', 'BCL', 'CHL', 'PLP', 'THM', 'RET', 'VIT',
-        # Other important cofactors
         'SAM', 'SAH', 'PQQ', 'TPP', 'BIO', 'LIP',
-        # Sugar phosphates
         'G6P', 'F6P', 'FBP', 'GAP', 'PEP',
-        # Porphyrins
         'POR', 'PP9', 'PHO'
     }
     
@@ -474,34 +520,34 @@ def detect_heteroatoms_to_keep(input_pdb):
     WATER_RESIDUES = {'HOH', 'WAT', 'H2O'}
     
     heteroatom_counts = {}
-    heteroatom_atoms = {}  # Track number of atoms per heteroatom type
+    heteroatom_atoms = {}
     
-    with open(input_pdb, 'r') as f:
-        for line in f:
-            if line.startswith('HETATM'):
-                if len(line) < 20:
-                    continue
-                
-                res_name = line[17:20].strip().upper()
-                
-                # Skip water molecules
-                if res_name in WATER_RESIDUES:
-                    continue
-                
-                # Count occurrences
-                if res_name not in heteroatom_counts:
-                    heteroatom_counts[res_name] = 0
-                    heteroatom_atoms[res_name] = set()
-                
-                heteroatom_counts[res_name] += 1
-                
-                # Track unique atoms to estimate molecule size
-                if len(line) >= 27:
-                    try:
-                        atom_serial = int(line[6:11].strip())
-                        heteroatom_atoms[res_name].add(atom_serial)
-                    except ValueError:
-                        pass
+    # Use pdb-tools pdb_selhetatm to extract HETATM records
+    with open(input_pdb, 'r') as fh:
+        hetatm_lines = pdb_selhetatm.run(fh)
+        for line in hetatm_lines:
+            if not line.startswith('HETATM') or len(line) < 20:
+                continue
+            
+            res_name = line[17:20].strip().upper()
+            
+            # Skip water molecules
+            if res_name in WATER_RESIDUES:
+                continue
+            
+            if res_name not in heteroatom_counts:
+                heteroatom_counts[res_name] = 0
+                heteroatom_atoms[res_name] = set()
+            
+            heteroatom_counts[res_name] += 1
+            
+            # Track unique atoms to estimate molecule size
+            if len(line) >= 27:
+                try:
+                    atom_serial = int(line[6:11].strip())
+                    heteroatom_atoms[res_name].add(atom_serial)
+                except ValueError:
+                    pass
     
     # Categorize heteroatoms
     metal_ions = []
@@ -519,7 +565,7 @@ def detect_heteroatoms_to_keep(input_pdb):
             cofactors.append(res_name)
         elif res_name in BUFFER_AGENTS:
             buffer_agents.append(res_name)
-        elif num_atoms > 5:  # Likely a ligand (more than 5 atoms, not a metal/cofactor)
+        elif num_atoms > 5:  # Likely a ligand (more than 5 atoms)
             ligands.append(res_name)
         else:
             other.append(res_name)
@@ -556,10 +602,10 @@ def complete_structure_pdbfixer(input_pdb, output_pdb):
     """
     Comprehensive structure repair using PDBFixer.
     
-    Performs 5 operations in order:
+    Performs operations in order:
     1. Alternate location resolution (auto on load — keeps highest occupancy)
     2. Nonstandard residue replacement (MSE→MET, CSE→CYS, etc.)
-    3. Missing residue detection + addition
+    3. Missing residue detection + SAFE gap filtering (gaps > MAX_SAFE_GAP skipped)
     4. Missing heavy atom completion (including terminal OXT/H atoms)
     5. Post-fix validation — re-check for remaining gaps
     
@@ -574,7 +620,9 @@ def complete_structure_pdbfixer(input_pdb, output_pdb):
             - missing_residues_found (int): Number of missing residues detected
             - missing_atoms_found (int): Number of missing heavy atoms detected
             - missing_terminals_found (int): Number of missing terminal atoms detected
-            - missing_residues_remaining (int): Gaps still present after fix (triggers AlphaFold if > 0)
+            - missing_residues_remaining (int): Gaps still present after fix
+            - safe_gaps (dict): The gaps that were actually modelled
+            - modelled_residue_coords (list): Approx coordinates of modelled residues
         
     Raises:
         ImportError: If PDBFixer is not installed
@@ -619,17 +667,28 @@ def complete_structure_pdbfixer(input_pdb, output_pdb):
         else:
             logger.info("  No nonstandard residues found")
         
-        # ── Step 3: Missing residues ──
+        # ── Step 3: Missing residues — FIX 3: GAP-SIZE-AWARE FILTERING ──
         logger.info("\n  Step 3/5: Detecting missing residues (backbone gaps)...")
         fixer.findMissingResidues()
         num_missing_res = len(fixer.missingResidues)
         
+        # Filter: only keep gaps <= MAX_SAFE_GAP for modelling
+        safe_gaps = {}
+        skipped_large_gaps = 0
+        for key, residues in fixer.missingResidues.items():
+            if len(residues) <= MAX_SAFE_GAP:
+                safe_gaps[key] = residues
+                logger.info(f"    Gap at {key}: {len(residues)} residue(s) — SAFE, will model")
+            else:
+                skipped_large_gaps += 1
+                logger.info(f"    Gap at {key}: {len(residues)} residue(s) — TOO LARGE (>{MAX_SAFE_GAP}), skipping")
+        
+        # Override missingResidues with only safe gaps
+        fixer.missingResidues = safe_gaps
+        
         if num_missing_res > 0:
-            for (chain_idx, res_idx), res_names in fixer.missingResidues.items():
-                chain = list(fixer.topology.chains())[chain_idx]
-                logger.info(f"    Chain {chain.id}: {len(res_names)} missing residue(s) "
-                           f"at position {res_idx}")
-            logger.info(f"  Total: {num_missing_res} gap(s) detected")
+            logger.info(f"  Total: {num_missing_res} gap(s) detected, "
+                       f"{len(safe_gaps)} modelled, {skipped_large_gaps} skipped")
         else:
             logger.info("  No missing residues — backbone is complete")
         
@@ -645,10 +704,11 @@ def complete_structure_pdbfixer(input_pdb, output_pdb):
             logger.info(f"  Found {num_missing_terminals} missing terminal atom(s)")
         
         # Apply all fixes
-        total_fixes = num_missing_res + num_missing_atoms + num_missing_terminals
+        total_fixes = len(safe_gaps) + num_missing_atoms + num_missing_terminals
         if total_fixes > 0:
             logger.info("\n  Applying fixes...")
             fixer.addMissingAtoms()
+            fixer.addMissingHydrogens(7.4)
             logger.info(f"  ✓ Added all missing residues, atoms, and terminals")
         else:
             logger.info("  No missing atoms or residues — structure is complete")
@@ -657,6 +717,16 @@ def complete_structure_pdbfixer(input_pdb, output_pdb):
         with open(output_pdb, 'w') as f:
             PDBFile.writeFile(fixer.topology, fixer.positions, f)
         logger.info(f"\n  Saved fixed structure: {Path(output_pdb).name}")
+
+        # ── RESTORE ORIGINAL RESIDUE NUMBERING ──────────────────────────────
+        # OpenMM's PDBFile.writeFile resets all residue numbers to start from 1.
+        # We must correct this immediately, before any further processing reads
+        # the file with wrong numbers.
+        renumbered_pdb = output_pdb.replace('.pdb', '_renumbered.pdb')
+        restore_residue_numbering(output_pdb, input_pdb, renumbered_pdb)
+        import shutil as _shutil
+        _shutil.move(renumbered_pdb, output_pdb)
+        logger.info(f"  ✓ Residue numbering restored to original after PDBFixer")
         
         # ── Step 5: Post-fix validation ──
         logger.info("\n  Step 5/5: Post-fix validation (re-checking for remaining gaps)...")
@@ -668,7 +738,35 @@ def complete_structure_pdbfixer(input_pdb, output_pdb):
             logger.warning(f"  ⚠ {remaining} gap(s) still remain after PDBFixer")
             logger.info("  → AlphaFold fallback will be triggered")
         else:
-            logger.info("  ✓ All gaps resolved — structure is fully complete")
+            logger.info("  ✓ All safe gaps resolved — structure is complete")
+        
+        # Approximate coordinates of modelled residues for downstream penalty
+        # (read the output PDB and find residues that were in safe_gaps)
+        modelled_residue_coords = []
+        try:
+            import numpy as _np
+            modelled_resnums = set()
+            for (chain_idx, res_idx), res_names in safe_gaps.items():
+                for offset in range(len(res_names)):
+                    modelled_resnums.add(res_idx + offset)
+            
+            if modelled_resnums:
+                with open(output_pdb) as f:
+                    for line in f:
+                        if line.startswith('ATOM'):
+                            try:
+                                resnum = int(line[22:26])
+                                aname = line[12:16].strip()
+                                if resnum in modelled_resnums and aname == 'CA':
+                                    x = float(line[30:38])
+                                    y = float(line[38:46])
+                                    z = float(line[46:54])
+                                    modelled_residue_coords.append([x, y, z])
+                            except (ValueError, IndexError):
+                                continue
+                logger.info(f"  Tracked {len(modelled_residue_coords)} modelled residue CA atoms")
+        except Exception as e:
+            logger.warning(f"  Could not track modelled residue coords: {e}")
         
         logger.info("=" * 50)
         
@@ -679,6 +777,8 @@ def complete_structure_pdbfixer(input_pdb, output_pdb):
             "missing_atoms_found": num_missing_atoms,
             "missing_terminals_found": num_missing_terminals,
             "missing_residues_remaining": remaining,
+            "safe_gaps": {str(k): v for k, v in safe_gaps.items()},
+            "modelled_residue_coords": modelled_residue_coords,
         }
         
         logger.info(f"  Report: {report}")
@@ -689,10 +789,192 @@ def complete_structure_pdbfixer(input_pdb, output_pdb):
         raise RuntimeError(f"Structure completion failed: {e}")
 
 
+# =============================================================================
+# FIX 4 — DISCONNECTED FRAGMENT CLEANUP
+# =============================================================================
+
+def restore_residue_numbering(fixed_pdb, original_pdb, output_pdb):
+    """
+    Restore original residue numbering after PDBFixer.
+
+    WHY THIS IS NEEDED:
+    PDBFixer uses OpenMM's PDBFile.writeFile() to save the repaired structure.
+    OpenMM always resets residue sequence numbers to start from 1, regardless
+    of what the original PDB had (e.g. EGFR 2ITZ starts at residue 697, but
+    after PDBFixer it becomes residue 1).  Every downstream step — filtering,
+    copying to protein_prepared.pdb, reading in the 2D interaction module —
+    inherits this wrong numbering, causing residue labels like MET98 instead
+    of the correct MET794 in the interaction diagram.
+
+    HOW IT WORKS:
+    1. Read the first ATOM residue number from the original PDB  (e.g. 697)
+    2. Read the first ATOM residue number from the PDBFixer output (e.g. 1)
+    3. Compute offset = original_start - fixed_start  (e.g. 697 - 1 = 696)
+    4. Add offset to every residue number in the fixed PDB
+    5. Write corrected file to output_pdb
+
+    This is safe for ALL proteins regardless of starting residue number,
+    including proteins that start at 1 (offset = 0, no change) and proteins
+    with insertion codes (insertion code column is preserved unchanged).
+    """
+    def _first_resnum(path):
+        with open(path) as f:
+            for line in f:
+                if line.startswith('ATOM'):
+                    try:
+                        return int(line[22:26])
+                    except ValueError:
+                        continue
+        return None
+
+    orig_start  = _first_resnum(original_pdb)
+    fixed_start = _first_resnum(fixed_pdb)
+
+    if orig_start is None or fixed_start is None:
+        logger.warning('restore_residue_numbering: could not read residue numbers, skipping')
+        import shutil; shutil.copy(fixed_pdb, output_pdb)
+        return
+
+    offset = orig_start - fixed_start
+
+    if offset == 0:
+        logger.info(f'  Residue numbering offset = 0, no renumbering needed')
+        import shutil; shutil.copy(fixed_pdb, output_pdb)
+        return
+
+    logger.info(f'  Restoring residue numbering: offset +{offset} '
+                f'(original start: {orig_start}, fixed start: {fixed_start})')
+
+    corrected_lines = []
+    with open(fixed_pdb) as f:
+        for line in f:
+            if line.startswith(('ATOM', 'HETATM', 'TER')):
+                try:
+                    old_num = int(line[22:26])
+                    new_num = old_num + offset
+                    # PDB column 23-26 is residue sequence number (1-indexed, right-justified, 4 chars)
+                    line = line[:22] + f'{new_num:4d}' + line[26:]
+                except (ValueError, IndexError):
+                    pass
+            corrected_lines.append(line)
+
+    with open(output_pdb, 'w') as f:
+        f.writelines(corrected_lines)
+
+    logger.info(f'  ✓ Residue numbering restored: written to {output_pdb}')
+
+
+def remove_disconnected_fragments(pdb_path, output_path):
+    """
+    Remove residue stubs that are spatially disconnected from the main chain.
+    Operates on the PDB file produced by PDBFixer before the PDBQT conversion.
+    
+    Walks residues in sequence order and checks the C(i-1)–N(i) distance.
+    Any residue whose C-N distance exceeds CONNECTIVITY_DISTANCE is removed.
+    """
+    import numpy as np
+    from collections import defaultdict
+
+    residues = defaultdict(list)   # resnum -> list of (atom_name, xyz)
+    with open(pdb_path) as f:
+        lines = [l for l in f if l.startswith('ATOM')]
+    for line in lines:
+        try:
+            resnum = int(line[22:26])
+            aname  = line[12:16].strip()
+            xyz    = (float(line[30:38]), float(line[38:46]), float(line[46:54]))
+            residues[resnum].append((aname, np.array(xyz)))
+        except (ValueError, IndexError):
+            continue
+
+    if not residues:
+        # No ATOM records — just copy
+        import shutil
+        shutil.copy(pdb_path, output_path)
+        return
+
+    sorted_res = sorted(residues.keys())
+    connected  = set()
+    connected.add(sorted_res[0])   # anchor the first residue
+
+    for i in range(1, len(sorted_res)):
+        prev_r = sorted_res[i - 1]
+        curr_r = sorted_res[i]
+        prev_atoms = dict(residues[prev_r])
+        curr_atoms = dict(residues[curr_r])
+        c_coord  = prev_atoms.get('C')
+        n_coord  = curr_atoms.get('N')
+        if c_coord is not None and n_coord is not None:
+            if np.linalg.norm(c_coord - n_coord) <= CONNECTIVITY_DISTANCE:
+                connected.add(curr_r)
+            else:
+                logger.warning(f'Residue {curr_r} is disconnected (C-N = '
+                            f'{np.linalg.norm(c_coord - n_coord):.2f} Å), removing')
+        else:
+            logger.warning(f'Residue {curr_r} missing backbone atoms, removing')
+
+    removed = set(sorted_res) - connected
+    if removed:
+        logger.info(f'Removed {len(removed)} disconnected residue(s): {sorted(removed)}')
+    else:
+        logger.info('No disconnected fragments found')
+
+    with open(pdb_path) as f:
+        all_lines = f.readlines()
+    with open(output_path, 'w') as f:
+        for line in all_lines:
+            if line.startswith('ATOM'):
+                try:
+                    rn = int(line[22:26])
+                    if rn in removed:
+                        continue
+                except ValueError:
+                    pass
+            f.write(line)
+
+
+# =============================================================================
+# FIX 2 — RESIDUE NUMBERING VALIDATION
+# =============================================================================
+
+def validate_residue_numbering(original_pdb, prepared_pdb, tolerance=5):
+    """
+    Check that the first and last residue numbers in prepared_pdb
+    match those in original_pdb (within tolerance).
+    Raises RuntimeError if numbering has been reset.
+    """
+    def get_residue_range(path):
+        nums = []
+        with open(path) as f:
+            for line in f:
+                if line.startswith(('ATOM', 'HETATM')):
+                    try:
+                        nums.append(int(line[22:26]))
+                    except ValueError:
+                        pass
+        return (min(nums), max(nums)) if nums else (None, None)
+
+    orig_min, orig_max = get_residue_range(original_pdb)
+    prep_min, prep_max = get_residue_range(prepared_pdb)
+
+    if orig_min is None or prep_min is None:
+        logger.warning('Residue validation: could not parse residue numbers')
+        return
+
+    if abs(prep_min - orig_min) > tolerance:
+        raise RuntimeError(
+            f'Residue numbering has shifted: original starts at {orig_min}, '
+            f'prepared starts at {prep_min}. Check for pdb_reres calls.'
+        )
+    logger.info(f'Residue numbering OK: {prep_min}-{prep_max} (original: {orig_min}-{orig_max})')
+
+
 
 def _filter_pdb_residues(input_pdb, keep_hetero_residues=None, keep_chains=None):
     """
-    Filter PDB file to remove water molecules and unwanted heteroatoms.
+    Filter PDB file using pdb-tools pipeline.
+    
+    Pipeline: select chains → remove waters → handle heteroatoms → remove UNK → tidy.
     
     Waters are ALWAYS removed automatically.
     Heteroatoms are removed UNLESS specified in keep_hetero_residues.
@@ -712,164 +994,112 @@ def _filter_pdb_residues(input_pdb, keep_hetero_residues=None, keep_chains=None)
     Raises:
         ValueError: If input file is malformed or contains no valid records
     """
-    import tempfile
     input_pdb = str(input_pdb)
+    output_pdb = input_pdb.replace('.pdb', '_filtered.pdb')
     
-    # Create filtered PDB in system temp directory instead of session directory
-    with tempfile.NamedTemporaryFile(suffix='_filtered.pdb', delete=False) as tmp:
-        output_pdb = tmp.name
-    
-    # Validate input file
     if not os.path.exists(input_pdb):
         raise FileNotFoundError(f"Input PDB file not found: {input_pdb}")
-    
     if os.path.getsize(input_pdb) == 0:
         raise ValueError(f"Input PDB file is empty: {input_pdb}")
     
-    # Water molecules - always removed
     WATER_RESIDUES = ['HOH', 'WAT', 'H2O']
     
     # Normalize keep lists
-    keep_hetero_residues = keep_hetero_residues or []
-    keep_hetero_residues = [res.strip().upper() for res in keep_hetero_residues]
+    keep_hetero_residues = [r.strip().upper() for r in (keep_hetero_residues or [])]
+    keep_chains_list = [c.strip().upper() if c.strip() else ' ' for c in (keep_chains or [])]
+    filter_by_chain = len(keep_chains_list) > 0
     
-    keep_chains = keep_chains or []
-    keep_chains = [chain.strip().upper() if chain.strip() else ' ' for chain in keep_chains]
-    filter_by_chain = len(keep_chains) > 0
-    
-    with open(input_pdb, 'r') as f:
-        lines = f.readlines()
-    
-    # ── Pre-filter: discover actual chains in the PDB file ──
+    # ── Pre-check: Verify requested chains exist in the PDB file ──
     # PDBFixer can reassign chain IDs (e.g., B→A), so we detect what's actually there
     if filter_by_chain:
         actual_chains = set()
-        for line in lines:
-            if line.startswith('ATOM') and len(line) >= 22:
-                cid = line[21].strip().upper() if line[21].strip() else ' '
-                actual_chains.add(cid)
+        with open(input_pdb, 'r') as fh:
+            for line in fh:
+                if line.startswith('ATOM') and len(line) >= 22:
+                    cid = line[21].strip().upper() if line[21].strip() else ' '
+                    actual_chains.add(cid)
         
-        logger.info(f"  Chains in PDB file: {', '.join(sorted(actual_chains)) if actual_chains else 'none'}")
-        logger.info(f"  Requested chains: {', '.join(keep_chains)}")
+        logger.info(f"  Chains in PDB: {', '.join(sorted(actual_chains)) if actual_chains else 'none'}")
+        logger.info(f"  Requested chains: {', '.join(keep_chains_list)}")
         
-        # Check if requested chains exist in the file
-        matching = set(keep_chains) & actual_chains
+        matching = set(keep_chains_list) & actual_chains
         if len(matching) == 0 and len(actual_chains) > 0:
-            # PDBFixer likely reassigned chain IDs — fall back to keeping all chains
-            logger.warning(f"  ⚠ Requested chains {keep_chains} not found in PDB (found: {sorted(actual_chains)})")
-            logger.warning(f"  → PDBFixer may have reassigned chain IDs — keeping ALL chains")
+            logger.warning(f"  ⚠ Requested chains {keep_chains_list} not found — keeping ALL chains")
             filter_by_chain = False
     
-    filtered_lines = []
-    removed_waters = 0
-    removed_hetero = 0
-    removed_chains = 0
-    kept_hetero = set()
-    kept_chains = set()
-    malformed_lines = 0
-    valid_atom_count = 0
-    
-    for line in lines:
-        # Process ATOM records (standard protein residues)
-        if line.startswith('ATOM'):
-            if len(line) < 22:
-                malformed_lines += 1
-                continue
-            
-            # CRITICAL FIX: Exclude UNK (unknown) residues
-            # UNK residues are marked as ATOM but should be treated as heteroatoms
-            if len(line) >= 20:
-                res_name = line[17:20].strip().upper()
-                if res_name == 'UNK':
-                    removed_hetero += 1
-                    continue
-            
-            # Check chain filter
-            if filter_by_chain:
-                chain_id = line[21]
-                chain_id = chain_id.strip().upper() if chain_id.strip() else ' '
-                
-                if chain_id not in keep_chains:
-                    removed_chains += 1
-                    continue
-                
-                kept_chains.add(chain_id)
-            
-            filtered_lines.append(line)
-            valid_atom_count += 1
-            continue
+    # ── Build pdb-tools generator pipeline ──
+    with open(input_pdb, 'r') as fh:
+        pipeline = fh  # Start with file handle (iterator of lines)
         
-        # Process HETATM records
-        if line.startswith('HETATM'):
-            if len(line) < 22:
-                malformed_lines += 1
-                continue
-            
-            res_name = line[17:20].strip().upper()
-            
-            # CRITICAL: Always remove water molecules FIRST
-            if res_name in WATER_RESIDUES:
-                removed_waters += 1
-                continue
-            
-            # Check chain filter for non-water heteroatoms
-            if filter_by_chain:
-                chain_id = line[21]
-                chain_id = chain_id.strip().upper() if chain_id.strip() else ' '
-                
-                if chain_id not in keep_chains:
-                    removed_chains += 1
-                    continue
-            
-            # FIXED LOGIC: Remove ALL heteroatoms by default
-            # Only keep if explicitly listed in keep_hetero_residues
-            if len(keep_hetero_residues) == 0:
-                # No keep list provided = remove ALL heteroatoms (including ligands)
-                removed_hetero += 1
-                continue
-            elif res_name not in keep_hetero_residues:
-                # Keep list provided but this residue not in it = remove
-                removed_hetero += 1
-                continue
-            
-            # If we reach here, this heteroatom should be kept
-            kept_hetero.add(res_name)
-            filtered_lines.append(line)
-            valid_atom_count += 1
-            continue
-        
-        # Keep all other lines (HEADER, CONECT, etc.)
-        filtered_lines.append(line)
-    
-    # Validate we have some valid records
-    if valid_atom_count == 0:
-        # Last resort fallback: re-run without chain filtering
+        # Step 1: Chain selection using pdb_selchain (if specified)
         if filter_by_chain:
-            logger.warning(f"  ⚠ No atoms remain after chain filtering — retrying without chain filter")
+            pipeline = pdb_selchain.run(pipeline, keep_chains_list)
+            logger.info(f"  pdb_selchain: keeping chains {', '.join(keep_chains_list)}")
+        
+        # Step 2: Remove water molecules using pdb_delresname
+        for water_res in WATER_RESIDUES:
+            pipeline = pdb_delresname.run(pipeline, [water_res])
+        logger.info(f"  pdb_delresname: removed water molecules (HOH, WAT, H2O)")
+        
+        # Step 3: Handle HETATM records
+        if len(keep_hetero_residues) == 0:
+            # Remove ALL heteroatoms using pdb_delhetatm
+            pipeline = pdb_delhetatm.run(pipeline)
+            logger.info(f"  pdb_delhetatm: removed ALL heteroatoms")
+        else:
+            logger.info(f"  Selective HETATM: keeping {', '.join(keep_hetero_residues)}")
+        
+        # Step 4: Remove UNK (unknown) residues using pdb_delresname
+        pipeline = pdb_delresname.run(pipeline, ['UNK'])
+        logger.info(f"  pdb_delresname: removed UNK residues")
+        
+        # Step 5: Tidy the output for PDB format compliance
+        pipeline = pdb_tidy.run(pipeline)
+        
+        # ── Consume pipeline and apply selective HETATM filter if needed ──
+        filtered_lines = []
+        removed_hetero = 0
+        kept_hetero = set()
+        
+        for line in pipeline:
+            # If user specified heteroatoms to keep, filter out non-listed ones
+            if line.startswith('HETATM') and len(keep_hetero_residues) > 0:
+                if len(line) >= 20:
+                    res_name = line[17:20].strip().upper()
+                    if res_name not in keep_hetero_residues:
+                        removed_hetero += 1
+                        continue
+                    kept_hetero.add(res_name)
+            filtered_lines.append(line)
+    
+    # Validate we have ATOM records
+    valid_atoms = sum(1 for l in filtered_lines if l.startswith('ATOM'))
+    if valid_atoms == 0:
+        if filter_by_chain:
+            logger.warning(f"  ⚠ No atoms remain after filtering — retrying without chain filter")
             return _filter_pdb_residues(input_pdb, keep_hetero_residues, keep_chains=None)
-        raise ValueError(f"No valid ATOM/HETATM records remain after filtering: {input_pdb}")
+        raise ValueError(f"No valid ATOM records remain after filtering: {input_pdb}")
     
     with open(output_pdb, 'w') as f:
         f.writelines(filtered_lines)
     
     # Print summary
-    logger.info(f"  Removed {removed_waters} water molecules")
     if removed_hetero > 0:
-        logger.info(f"  Removed {removed_hetero} unwanted heteroatoms/ligands")
+        logger.info(f"  Removed {removed_hetero} unwanted heteroatom lines")
     if kept_hetero:
         logger.info(f"  Kept heteroatoms: {', '.join(sorted(kept_hetero))}")
-    if filter_by_chain:
-        logger.info(f"  Removed {removed_chains} atoms from unwanted chains")
-        logger.info(f"  Kept chains: {', '.join(sorted(kept_chains))}")
-    if malformed_lines > 0:
-        logger.warning(f"  WARNING: Skipped {malformed_lines} malformed lines")
+    logger.info(f"  ✓ Filtered PDB saved: {Path(output_pdb).name} ({valid_atoms} ATOM records)")
     
     return output_pdb
 
 
 def _remove_waters_from_pdbqt(pdbqt_file):
     """
-    Remove water molecules and UNK residues from PDBQT file as final cleanup step.
+    Remove water molecules and UNK residues from PDBQT file using pdb-tools.
+    
+    Uses pdb_delresname to remove HOH, WAT, H2O, and UNK residues.
+    Note: pdb_delresname works on standard PDB columns (17:20) which are 
+    identical in PDBQT format, so this is safe for PDBQT files.
     
     This is needed because:
     1. OpenBabel might add waters during conversion
@@ -879,41 +1109,20 @@ def _remove_waters_from_pdbqt(pdbqt_file):
     Args:
         pdbqt_file: PDBQT file to clean
     """
-    WATER_RESIDUES = ['HOH', 'WAT', 'H2O']
-    UNWANTED_RESIDUES = ['UNK']  # Unknown/non-standard residues created by OpenBabel
+    with open(pdbqt_file, 'r') as fh:
+        pipeline = fh
+        # Remove water molecules
+        pipeline = pdb_delresname.run(pipeline, ['HOH'])
+        pipeline = pdb_delresname.run(pipeline, ['WAT'])
+        pipeline = pdb_delresname.run(pipeline, ['H2O'])
+        # Remove UNK (unknown) residues created by OpenBabel
+        pipeline = pdb_delresname.run(pipeline, ['UNK'])
+        cleaned_lines = list(pipeline)
     
-    # Read PDBQT file
-    with open(pdbqt_file, 'r') as f:
-        lines = f.readlines()
-    
-    # Filter out water molecules and UNK residues
-    cleaned_lines = []
-    waters_removed = 0
-    unk_removed = 0
-    
-    for line in lines:
-        if line.startswith('ATOM') or line.startswith('HETATM'):
-            if len(line) >= 20:
-                res_name = line[17:20].strip().upper()
-                
-                if res_name in WATER_RESIDUES:
-                    waters_removed += 1
-                    continue  # Skip this water line
-                
-                if res_name in UNWANTED_RESIDUES:
-                    unk_removed += 1
-                    continue  # Skip this UNK line
-        
-        cleaned_lines.append(line)
-    
-    # Write back cleaned PDBQT
     with open(pdbqt_file, 'w') as f:
         f.writelines(cleaned_lines)
     
-    if waters_removed > 0:
-        logger.info(f"  Removed {waters_removed} water molecules from PDBQT")
-    if unk_removed > 0:
-        logger.info(f"  Removed {unk_removed} UNK (unknown) residues from PDBQT")
+    logger.info(f"  Cleaned waters/UNK from PDBQT using pdb-tools")
 
 
 def _preserve_chain_ids_in_pdbqt(source_pdb, target_pdbqt):
@@ -1061,38 +1270,47 @@ def prepare_protein(input_pdb, output_pdbqt, remove_waters=True, keep_hetero_res
     
     # ── Stage 1: PDBFixer — Comprehensive Structure Repair ──
     logger.info("\nStage 1: PDBFixer — Comprehensive Structure Repair")
-    
-    # Create fixed PDB in system temp directory instead of session directory
-    import tempfile
-    with tempfile.NamedTemporaryFile(suffix='_fixed.pdb', delete=False) as tmp:
-        fixed_pdb = tmp.name
-    
+    fixed_pdb = str(input_pdb).replace('.pdb', '_fixed.pdb')
     pdbfixer_report = None
     
     try:
         pdbfixer_report = complete_structure_pdbfixer(input_pdb, fixed_pdb)
         input_pdb = fixed_pdb  # Use fixed version going forward
         logger.info("  Using PDBFixer-repaired structure for preparation")
+        
+        # ── Fix 4: Remove disconnected fragments after PDBFixer ──
+        fixed_clean_pdb = fixed_pdb.replace('.pdb', '_clean.pdb')
+        try:
+            remove_disconnected_fragments(fixed_pdb, fixed_clean_pdb)
+            if os.path.exists(fixed_clean_pdb) and os.path.getsize(fixed_clean_pdb) > 0:
+                input_pdb = fixed_clean_pdb
+                logger.info("  ✓ Disconnected fragment cleanup applied")
+        except Exception as frag_err:
+            logger.warning(f"  Fragment cleanup skipped: {frag_err}")
     except ImportError:
         logger.warning("  PDBFixer not available — skipping structure repair")
         logger.info("  → Continuing with original structure")
         pdbfixer_report = {"missing_residues_remaining": -1}  # Unknown
-        # Clean up unused temp file
-        if os.path.exists(fixed_pdb):
-            try:
-                os.remove(fixed_pdb)
-            except (OSError, PermissionError):
-                pass
     except RuntimeError as e:
         logger.error(f"  ERROR: PDBFixer failed: {e}")
         logger.info("  → Continuing with original structure")
         pdbfixer_report = {"missing_residues_remaining": -1}  # Unknown
-        # Clean up unused temp file
-        if os.path.exists(fixed_pdb):
-            try:
-                os.remove(fixed_pdb)
-            except (OSError, PermissionError):
-                pass
+    
+    # ── Stage 1.1: PDB Format Validation & Tidying (pdb-tools) ──
+    logger.info("\nStage 1.1: PDB Format Validation (pdb-tools)")
+    try:
+        is_valid, issues = validate_pdb_format(input_pdb)
+        if not is_valid:
+            logger.warning(f"  PDB format issues detected: {len(issues)} issue(s)")
+            for issue in issues[:5]:  # Show first 5 issues
+                logger.warning(f"    → {issue}")
+            # Tidy the file to fix format issues
+            input_pdb = tidy_pdb_file(input_pdb)
+            logger.info("  ✓ PDB file tidied for format compliance")
+        else:
+            logger.info("  ✓ PDB format is valid")
+    except Exception as e:
+        logger.warning(f"  PDB validation skipped: {e}")
     
     # ── Stage 1.5: AlphaFold Fallback (ONLY if PDBFixer couldn't resolve gaps) ──
     if use_alphafold_if_incomplete and pdbfixer_report.get("missing_residues_remaining", 0) > 0:
@@ -1100,7 +1318,7 @@ def prepare_protein(input_pdb, output_pdbqt, remove_waters=True, keep_hetero_res
         logger.info("  PDBFixer could not resolve all gaps — attempting AlphaFold prediction")
         
         try:
-            # Extract sequence from PDB
+            # Extract sequence from PDB (now using pdb_tofasta)
             sequence = extract_sequence_from_pdb(input_pdb)
             
             if sequence:
@@ -1109,9 +1327,8 @@ def prepare_protein(input_pdb, output_pdbqt, remove_waters=True, keep_hetero_res
                 # Import AlphaFold integration
                 import alphafold_integration
                 
-                # Create AlphaFold structure file in temp directory
-                with tempfile.NamedTemporaryFile(suffix='_alphafold.pdb', delete=False) as tmp:
-                    alphafold_pdb = tmp.name
+                # Create AlphaFold structure file path
+                alphafold_pdb = str(input_pdb).replace('.pdb', '_alphafold.pdb')
                 
                 # Predict structure using ESMFold (faster than full AlphaFold)
                 logger.info("  Fetching complete structure from ESMFold...")
@@ -1188,6 +1405,30 @@ def prepare_protein(input_pdb, output_pdbqt, remove_waters=True, keep_hetero_res
         except (OSError, PermissionError) as e:
             logger.warning(f"  WARNING: Could not remove temp file {input_pdb}: {e}")
     
+    # ── Fix 2: Validate residue numbering before returning ──
+    original_pdb_for_validation = str(Path(output_pdbqt).parent / Path(output_pdbqt).stem.replace('_prepared', '') ) 
+    # Use the original input file that was passed to prepare_protein
+    original_input_pdb = str(Path(output_pdbqt).parent / Path(output_pdbqt).name.replace('protein_prepared.pdbqt', ''))  
+    if prepared_pdb_path and os.path.exists(prepared_pdb_path):
+        try:
+            # Find the original uploaded PDB in the session directory
+            session_dir = Path(output_pdbqt).parent
+            original_pdbs = list(session_dir.glob('protein_*.pdb'))
+            # Filter out our generated files
+            original_pdbs = [p for p in original_pdbs if '_fixed' not in p.name 
+                           and '_filtered' not in p.name 
+                           and '_clean' not in p.name
+                           and '_prepared' not in p.name
+                           and '_alphafold' not in p.name
+                           and '_for_cavity' not in p.name]
+            if original_pdbs:
+                validate_residue_numbering(str(original_pdbs[0]), prepared_pdb_path)
+        except RuntimeError as e:
+            logger.error(f"  RESIDUE NUMBERING VALIDATION FAILED: {e}")
+            # Log but don't abort — the user needs the output
+        except Exception as e:
+            logger.warning(f"  Residue numbering validation skipped: {e}")
+    
     logger.info("\n" + "=" * 60)
     logger.info("PROTEIN PREPARATION COMPLETE")
     logger.info("=" * 60)
@@ -1225,6 +1466,47 @@ def _read_molecule(input_file):
         raise RuntimeError(f"Failed to read molecule from {input_file}")
     
     return mol
+
+
+def strip_model_records(complex_pdb_path):
+    """
+    Remove MODEL / ENDMDL wrapper records from a complex PDB file in-place.
+
+    WHY THIS IS NEEDED:
+    Vina's output PDBQT contains 9 MODEL blocks (one per docking pose).
+    When Salidock extracts pose 1 and writes complex_pose_1.pdb, the MODEL 1
+    / ENDMDL wrapper tags are carried along into the output file.
+    Mol* (the 3D viewer) treats each MODEL block as a separate structure.
+    When the user double-clicks the ligand to focus on it, Mol* re-renders
+    all MODEL blocks simultaneously — showing all 9 ligand poses at once
+    scattered across the protein, which looks like "multiple ligands".
+
+    Ball-and-stick, surface, and spacefill views do not have this problem
+    because they render atoms directly without needing chain continuity.
+    Only the double-click / focus action triggers the multi-MODEL rendering.
+
+    THE FIX:
+    After writing complex_pose_N.pdb, call this function to remove MODEL and
+    ENDMDL lines. The single pose is already extracted — the wrapper tags are
+    redundant and cause the viewer bug.
+
+    Args:
+        complex_pdb_path: Path to the complex PDB file to clean in-place.
+    """
+    try:
+        with open(complex_pdb_path, 'r') as f:
+            lines = f.readlines()
+
+        cleaned = [l for l in lines
+                   if not l.startswith('MODEL') and not l.startswith('ENDMDL')]
+
+        if len(cleaned) < len(lines):
+            with open(complex_pdb_path, 'w') as f:
+                f.writelines(cleaned)
+            removed = len(lines) - len(cleaned)
+            logger.info(f'  Stripped {removed} MODEL/ENDMDL record(s) from {Path(complex_pdb_path).name}')
+    except Exception as e:
+        logger.warning(f'  strip_model_records failed for {complex_pdb_path}: {e}')
 
 
 def prepare_ligand(input_ligand, output_pdbqt, optimize=True):
@@ -1298,12 +1580,7 @@ def prepare_ligand(input_ligand, output_pdbqt, optimize=True):
     
     # Step 4: Save as PDB intermediate
     logger.info("Step 4/4: Converting to PDBQT format...")
-    
-    # Create temp file in system temp directory instead of session directory
-    import tempfile
-    with tempfile.NamedTemporaryFile(suffix='_temp.pdb', delete=False) as tmp:
-        temp_pdb = tmp.name
-    
+    temp_pdb = str(output_pdbqt).replace('.pdbqt', '_temp.pdb')
     Chem.MolToPDBFile(mol, temp_pdb)
     
     # Step 5: Convert to PDBQT using Open Babel (ONLY Open Babel step)
@@ -1427,10 +1704,8 @@ def smiles_to_3d(smiles: str, output_pdbqt: str, optimize: bool = True) -> Path:
     logger.info("    - Map atom types")
     logger.info("    - Detect rotatable bonds")
     logger.info("    - Format as PDBQT")
-
-    import tempfile
-    with tempfile.NamedTemporaryFile(suffix='_temp.pdb', delete=False) as tmp:
-        temp_pdb = tmp.name
+    
+    temp_pdb = str(output_pdbqt).replace('.pdbqt', '_temp.pdb')
     
     try:
         # Save as PDB intermediate

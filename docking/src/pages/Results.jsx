@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Download, Loader2, Eye, ChevronDown, Star, MessageSquareText, X } from 'lucide-react';
+import { Download, Loader2, Eye, ChevronDown, Star, MessageSquareText, Sparkles, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../services/api';
 import MolecularViewer from '../components/MolecularViewer';
@@ -52,80 +52,38 @@ function ControlDropdown({ label, value, options, onChange, disabled }) {
   const selected = options.find((o) => o.value === value);
 
   return (
-    <div ref={ref} style={{ position: 'relative', minWidth: '140px' }}>
+    <div ref={ref} className="relative min-w-[160px]">
       <button
+        type="button"
         onClick={() => !disabled && setOpen(!open)}
         disabled={disabled}
-        style={{
-          background: 'hsl(215, 25%, 15%)',
-          color: '#f0f0f0',
-          border: '1px solid hsl(160, 60%, 30%)',
-          borderRadius: '8px',
-          padding: '7px 12px',
-          fontSize: '12px',
-          fontWeight: 600,
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          width: '100%',
-          gap: '6px',
-          transition: 'all 0.15s ease',
-          opacity: disabled ? 0.5 : 1,
-        }}
+        className="w-full flex items-center justify-between gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-800 transition-all hover:border-blue-300 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        <span style={{ opacity: 0.5, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: '4px' }}>
+        <span className="mr-1 text-[10px] uppercase tracking-wider text-slate-500">
           {label}
         </span>
-        <span>{selected?.label || value}</span>
+        <span className="truncate text-slate-900">{selected?.label || value}</span>
         <ChevronDown
           size={13}
-          style={{ opacity: 0.5, flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
+          className={`shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`}
         />
       </button>
 
       {open && (
-        <div
-          style={{
-            position: 'absolute',
-            top: '100%',
-            left: 0,
-            marginTop: '4px',
-            background: 'hsl(215, 25%, 12%)',
-            border: '1px solid hsl(160, 60%, 30%)',
-            borderRadius: '8px',
-            overflow: 'hidden',
-            zIndex: 100,
-            minWidth: '100%',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-          }}
-        >
+        <div className="absolute left-0 top-full z-50 mt-1 min-w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
           {options.map((opt) => (
             <button
               key={opt.value}
+              type="button"
               onClick={() => {
                 onChange(opt.value);
                 setOpen(false);
               }}
-              style={{
-                display: 'block',
-                width: '100%',
-                padding: '8px 14px',
-                fontSize: '12px',
-                fontWeight: opt.value === value ? 700 : 400,
-                textAlign: 'left',
-                cursor: 'pointer',
-                border: 'none',
-                background: opt.value === value ? 'hsl(160, 84%, 39%)' : 'transparent',
-                color: opt.value === value ? '#000' : '#d0d0d0',
-                transition: 'background 0.1s',
-              }}
-              onMouseEnter={(e) => {
-                if (opt.value !== value) e.target.style.background = 'hsl(215, 25%, 20%)';
-              }}
-              onMouseLeave={(e) => {
-                if (opt.value !== value) e.target.style.background = 'transparent';
-              }}
+              className={`block w-full px-3.5 py-2 text-left text-xs transition-colors ${
+                opt.value === value
+                  ? 'bg-blue-50 font-bold text-blue-700'
+                  : 'text-slate-700 hover:bg-slate-50'
+              }`}
             >
               {opt.label}
             </button>
@@ -174,19 +132,34 @@ function Results() {
   const [selectedPose, setSelectedPose] = useState(1);
   const [pdbData, setPdbData] = useState(null);
   const [loadingViewer, setLoadingViewer] = useState(false);
-  const [viewMode, setViewMode] = useState('3d'); // '3d' or '2d'
+  const [viewMode, setViewMode] = useState('3d'); // '3d', '2d', or 'premium'
+  const [premiumTheme, setPremiumTheme] = useState('light'); // 'light', 'dark', 'electrostatic'
+  const [premiumImageLoading, setPremiumImageLoading] = useState(false);
+  const [rebuildingPremium, setRebuildingPremium] = useState(false);
+  const [selectedCavityFilter, setSelectedCavityFilter] = useState('all');
+
+  // Set loading state when pose or theme changes
+  useEffect(() => {
+    if (viewMode === 'premium') {
+      setPremiumImageLoading(true);
+    }
+  }, [selectedPose, premiumTheme, viewMode]);
   const [feedbackRating, setFeedbackRating] = useState(0);
   const [feedbackName, setFeedbackName] = useState('');
   const [feedbackDescription, setFeedbackDescription] = useState('');
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [feedbackChecked, setFeedbackChecked] = useState(false);
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   // Viewer control state
   const [proteinRepr, setProteinRepr] = useState('cartoon');
   const [ligandRepr, setLigandRepr] = useState('ball-and-stick');
-  const [colorScheme, setColorScheme] = useState('default');
+  const [colorScheme, setColorScheme] = useState('element-symbol');
+  const [showPocketResidues, setShowPocketResidues] = useState(true);
+  const [showPocketLabels, setShowPocketLabels] = useState(true);
+  const [showPocketSurface, setShowPocketSurface] = useState(false);
+  const [showInteractions, setShowInteractions] = useState(true);
+  const [spin, setSpin] = useState(false);
 
   const viewerRef = useRef(null);
 
@@ -249,7 +222,12 @@ function Results() {
       // Reset controls to defaults when switching poses
       setProteinRepr('cartoon');
       setLigandRepr('ball-and-stick');
-      setColorScheme('default');
+      setColorScheme('element-symbol');
+      setShowPocketResidues(true);
+      setShowPocketLabels(true);
+      setShowPocketSurface(false);
+      setShowInteractions(true);
+      setSpin(false);
     } catch (err) {
       console.error('View pose error:', err);
       setError('Failed to load structure for visualization');
@@ -308,20 +286,6 @@ function Results() {
     fetchExistingFeedback();
   }, [sessionId, user?.id]);
 
-  useEffect(() => {
-    if (loading || !results || !feedbackChecked) return;
-    if (!feedbackSubmitted) {
-      setShowFeedbackModal(true);
-    }
-  }, [loading, results, feedbackChecked, feedbackSubmitted]);
-
-  useEffect(() => {
-    document.body.style.overflow = showFeedbackModal ? 'hidden' : '';
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [showFeedbackModal]);
-
   const handleSubmitFeedback = async (e) => {
     e.preventDefault();
 
@@ -358,7 +322,6 @@ function Results() {
       if (error) throw error;
 
       setFeedbackSubmitted(true);
-      setShowFeedbackModal(false);
       toast.success('Thanks! Your feedback was submitted.');
     } catch (err) {
       console.error('Feedback submit error:', err);
@@ -368,71 +331,34 @@ function Results() {
     }
   };
 
-  // ─── Mol* interaction helpers (completely outside the viewer) ─────
-  const getPlugin = () => viewerRef.current?.getPlugin?.();
-
-  const handleProteinReprChange = useCallback(async (value) => {
-    setProteinRepr(value);
-    const plugin = getPlugin();
-    if (!plugin) return;
+  const handleRebuildPremium = async () => {
+    setRebuildingPremium(true);
+    setPremiumImageLoading(true);
     try {
-      const comps = getComponents(plugin, 'protein');
-      if (!comps.length) return;
-      // removeRepresentations takes an ARRAY of components (Mol* v4 API)
-      await plugin.managers.structure.component.removeRepresentations(comps);
-      // Re-fetch fresh components after removal (hierarchy updates)
-      const freshComps = getComponents(plugin, 'protein');
-      if (freshComps.length) {
-        // addRepresentation takes (components[], type_string)
-        await plugin.managers.structure.component.addRepresentation(freshComps, value);
-      }
+      await api.generatePremiumVisuals(sessionId, selectedPose);
+      toast.success('Premium figures generated successfully!');
+      // Force reload the image by triggering load
+      setPremiumImageLoading(false);
     } catch (err) {
-      console.error('Error changing protein repr:', err);
+      console.error(err);
+      toast.error('Failed to rebuild premium visualizations.');
+      setPremiumImageLoading(false);
+    } finally {
+      setRebuildingPremium(false);
     }
-  }, []);
+  };
 
-  const handleLigandReprChange = useCallback(async (value) => {
-    setLigandRepr(value);
-    const plugin = getPlugin();
-    if (!plugin) return;
-    try {
-      const comps = getComponents(plugin, 'ligand');
-      if (!comps.length) return;
-      await plugin.managers.structure.component.removeRepresentations(comps);
-      const freshComps = getComponents(plugin, 'ligand');
-      if (freshComps.length) {
-        await plugin.managers.structure.component.addRepresentation(freshComps, value);
-      }
-    } catch (err) {
-      console.error('Error changing ligand repr:', err);
-    }
-  }, []);
 
-  const handleColorChange = useCallback(async (value) => {
-    setColorScheme(value);
-    const plugin = getPlugin();
-    if (!plugin) return;
-    try {
-      const comps = getComponents(plugin, 'all');
-      if (!comps.length) return;
-      // updateRepresentationsTheme takes (components[], params)
-      await plugin.managers.structure.component.updateRepresentationsTheme(comps, {
-        color: value === 'default' ? 'default' : value,
-      });
-    } catch (err) {
-      console.error('Error changing color scheme:', err);
-    }
-  }, []);
 
 
 
   // ─── Render guards ────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground font-medium">Loading results...</p>
+          <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
+          <p className="text-slate-600 font-medium">Loading results...</p>
         </div>
       </div>
     );
@@ -440,12 +366,12 @@ function Results() {
 
   if (error || !results) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-destructive font-medium mb-4">{error || 'No results found'}</p>
+          <p className="text-red-600 font-medium mb-4">{error || 'No results found'}</p>
           <button
             onClick={() => navigate('/docking')}
-            className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-lg hover:brightness-110 transition-all glow-emerald"
+            className="px-6 py-2.5 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-all"
           >
             Back to Docking
           </button>
@@ -454,22 +380,61 @@ function Results() {
     );
   }
 
-  const allPoses = results.poses || [];
+  const allPoses = results?.poses || [];
+
+  const uniqueCavityIds = Array.from(
+    new Set(allPoses.map((p) => p.cavity_id).filter((id) => id !== undefined))
+  ).sort((a, b) => a - b);
+
+  const filteredPoses = selectedCavityFilter === 'all'
+    ? allPoses
+    : allPoses.filter(pose => pose.cavity_id?.toString() === selectedCavityFilter);
+
+  const handleCavityFilterChange = (cavityId) => {
+    setSelectedCavityFilter(cavityId);
+
+    // Find the first pose belonging to this cavity
+    const firstPoseOfCavity = allPoses.find(pose =>
+      cavityId === 'all' ? true : pose.cavity_id?.toString() === cavityId.toString()
+    );
+
+    if (firstPoseOfCavity) {
+      const index = allPoses.indexOf(firstPoseOfCavity) + 1;
+      handleViewPose(index);
+
+      // Fly the Mol* camera to the cavity centre after the pose finishes loading.
+      // cavity_center is an [x, y, z] array set by cavity_bridge on every pose.
+      if (cavityId !== 'all' && firstPoseOfCavity.cavity_center) {
+        const [cx, cy, cz] = Array.isArray(firstPoseOfCavity.cavity_center)
+          ? firstPoseOfCavity.cavity_center
+          : [
+              firstPoseOfCavity.cavity_center.x ?? 0,
+              firstPoseOfCavity.cavity_center.y ?? 0,
+              firstPoseOfCavity.cavity_center.z ?? 0,
+            ];
+
+        // Short delay so the pose PDB finishes loading into Mol* before we move
+        setTimeout(() => {
+          viewerRef.current?.focusOnPoint(cx, cy, cz, 14);
+        }, 700);
+      }
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-background pt-16">
-      <Navbar />
+    <div className="min-h-screen bg-slate-50 pt-16">
+      <Navbar lightTheme />
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         {/* 3D Molecular Viewer Section */}
-        <section className="bg-card rounded-xl border border-primary/10 p-6 mb-6 shadow-sm">
+        <section className="bg-white rounded-2xl border border-slate-200 p-6 mb-6 shadow-sm">
           {/* Title row with pose selector */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-4">
-            <div className="flex bg-secondary/30 rounded-lg p-1 border border-primary/10">
+            <div className="flex bg-slate-100 rounded-lg p-1 border border-slate-200">
               <button
                 onClick={() => setViewMode('3d')}
                 className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-md transition-all ${
-                  viewMode === '3d' ? 'bg-background shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'
+                  viewMode === '3d' ? 'bg-white shadow-sm text-blue-700 border border-blue-200' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <Eye className="w-4 h-4" />
@@ -478,303 +443,500 @@ function Results() {
               <button
                 onClick={() => setViewMode('2d')}
                 className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-md transition-all ${
-                  viewMode === '2d' ? 'bg-background shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'
+                  viewMode === '2d' ? 'bg-white shadow-sm text-blue-700 border border-blue-200' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 2D Interactions
               </button>
-            </div>
-            <div className="flex items-center gap-3 bg-secondary/50 p-1.5 rounded-lg border border-primary/5">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-2">Viewing Pose:</span>
-              <select
-                value={selectedPose}
-                onChange={(e) => handleViewPose(parseInt(e.target.value))}
-                className="px-3 py-1.5 bg-background border border-primary/20 rounded-md text-sm font-medium focus:ring-1 focus:ring-primary/30 focus:border-primary/50 outline-none transition-all"
-                disabled={loadingViewer}
+              <button
+                onClick={() => setViewMode('premium')}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-md transition-all ${
+                  viewMode === 'premium' ? 'bg-white shadow-sm text-blue-700 border border-blue-200' : 'text-slate-600 hover:text-slate-900'
+                }`}
               >
-                {allPoses.map((pose, index) => (
-                  <option key={index} value={index + 1}>
-                    Pose {index + 1} - {pose.affinity?.toFixed(2) || 'N/A'} kcal/mol
-                  </option>
-                ))}
-              </select>
+                <Sparkles className="w-4 h-4" />
+                Premium Figures
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Cavity Filter Dropdown */}
+              {uniqueCavityIds.length > 0 && (
+                <div className="flex items-center gap-3 bg-slate-100 p-1.5 rounded-lg border border-slate-200">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 ml-2">Filter Cavity:</span>
+                  <select
+                    value={selectedCavityFilter}
+                    onChange={(e) => handleCavityFilterChange(e.target.value)}
+                    className="px-3 py-1.5 bg-white border border-slate-300 rounded-md text-sm font-medium text-slate-800 focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all"
+                  >
+                    <option value="all">All Pockets</option>
+                    {uniqueCavityIds.map(id => (
+                      <option key={id} value={id.toString()}>Pocket {id}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Viewing Pose Dropdown */}
+              <div className="flex items-center gap-3 bg-slate-100 p-1.5 rounded-lg border border-slate-200">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 ml-2">Viewing Pose:</span>
+                <select
+                  value={selectedPose}
+                  onChange={(e) => handleViewPose(parseInt(e.target.value))}
+                  className="px-3 py-1.5 bg-white border border-slate-300 rounded-md text-sm font-medium text-slate-800 focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all"
+                  disabled={loadingViewer}
+                >
+                  {filteredPoses.map((pose) => {
+                    const globalIndex = allPoses.indexOf(pose) + 1;
+                    return (
+                      <option key={globalIndex} value={globalIndex}>
+                        Pose {globalIndex} - {pose.affinity?.toFixed(2) || 'N/A'} kcal/mol {pose.cavity_id !== undefined ? `(Pocket ${pose.cavity_id})` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
             </div>
           </div>
 
-          {/* ─── Controls bar (OUTSIDE Mol* container) ─── */}
-          {viewMode === '3d' ? (
+          {viewMode === '3d' && (
             <>
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              gap: '10px',
-              padding: '12px 16px',
-              background: 'hsl(215, 25%, 10%)',
-              borderRadius: '10px 10px 0 0',
-              borderBottom: '1px solid hsl(160, 60%, 25%)',
-            }}
-          >
-            <ControlDropdown
-              label="Protein"
-              value={proteinRepr}
-              options={PROTEIN_REPRESENTATIONS}
-              onChange={handleProteinReprChange}
-              disabled={loadingViewer}
-            />
-            <ControlDropdown
-              label="Ligand"
-              value={ligandRepr}
-              options={LIGAND_REPRESENTATIONS}
-              onChange={handleLigandReprChange}
-              disabled={loadingViewer}
-            />
-            <ControlDropdown
-              label="Colour"
-              value={colorScheme}
-              options={COLOR_SCHEMES}
-              onChange={handleColorChange}
-              disabled={loadingViewer}
-            />
-          </div>
+              {/* Toolbar: Dropdowns and Actions */}
+              <div
+                className="flex flex-wrap items-center justify-between gap-3 rounded-t-xl border border-slate-200 border-b-0 bg-slate-50 px-4 py-3"
+              >
+                {/* Left: Dropdowns */}
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <ControlDropdown
+                    label="Protein"
+                    value={proteinRepr}
+                    options={PROTEIN_REPRESENTATIONS}
+                    onChange={setProteinRepr}
+                    disabled={loadingViewer}
+                  />
+                  <ControlDropdown
+                    label="Ligand"
+                    value={ligandRepr}
+                    options={LIGAND_REPRESENTATIONS}
+                    onChange={setLigandRepr}
+                    disabled={loadingViewer}
+                  />
+                  <ControlDropdown
+                    label="Colour"
+                    value={colorScheme}
+                    options={COLOR_SCHEMES}
+                    onChange={setColorScheme}
+                    disabled={loadingViewer}
+                  />
+                </div>
 
-          {/* Mol* Viewer (clean, no controls inside) */}
-          <div className="relative rounded-b-xl overflow-hidden ring-1 ring-primary/10">
-            {loadingViewer && (
-              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-card/60 backdrop-blur-sm rounded-xl">
-                <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
-                <p className="font-medium text-foreground pb-2 px-4 rounded-md shadow-sm">Loading molecular structure...</p>
+                {/* Right: Camera Actions */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => viewerRef.current?.zoomToPocket()}
+                    className="px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-md text-xs font-semibold text-slate-700 hover:text-slate-900 transition-all flex items-center gap-1 shadow-sm"
+                    title="Zoom to binding pocket"
+                  >
+                    🔍 Zoom Pocket
+                  </button>
+                  <button
+                    onClick={() => viewerRef.current?.resetCamera()}
+                    className="px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-md text-xs font-semibold text-slate-700 hover:text-slate-900 transition-all flex items-center gap-1 shadow-sm"
+                    title="Reset camera view"
+                  >
+                    🔄 Reset View
+                  </button>
+                  <button
+                    onClick={() => setSpin(prev => !prev)}
+                    className={`px-3 py-1.5 border rounded-md text-xs font-semibold transition-all flex items-center gap-1 shadow-sm ${
+                      spin
+                        ? 'bg-blue-50 border-blue-200 text-blue-700 font-bold'
+                        : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700 hover:text-slate-900'
+                    }`}
+                    title="Toggle automatic rotation"
+                  >
+                    🌀 Spin
+                  </button>
+                </div>
               </div>
-            )}
-            {pdbData ? (
-              <MolecularViewer ref={viewerRef} pdbData={pdbData} poseNumber={selectedPose} sessionId={sessionId} />
-            ) : (
-              <div className="w-full h-[500px] bg-secondary/20 rounded-xl flex items-center justify-center border-2 border-dashed border-primary/20">
-                {!loadingViewer && <p className="text-muted-foreground font-medium">No structure available</p>}
+
+              {/* Toggle Bar: Checkboxes for pocket, label, surface, interactions */}
+              <div className="flex flex-wrap items-center gap-6 border border-slate-200 border-b-0 bg-slate-50/50 px-4 py-2 text-xs font-medium text-slate-600">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showPocketResidues}
+                    onChange={(e) => setShowPocketResidues(e.target.checked)}
+                    className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <span>Show Pocket Residues</span>
+                </label>
+                <label className={`flex items-center gap-2 cursor-pointer select-none ${!showPocketResidues ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={showPocketLabels}
+                    onChange={(e) => setShowPocketLabels(e.target.checked)}
+                    className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
+                    disabled={!showPocketResidues}
+                  />
+                  <span>Pocket Labels</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showPocketSurface}
+                    onChange={(e) => setShowPocketSurface(e.target.checked)}
+                    className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <span>Pocket Surface</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showInteractions}
+                    onChange={(e) => setShowInteractions(e.target.checked)}
+                    className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <span>Interaction Lines</span>
+                </label>
               </div>
-            )}
-          </div>
+
+              {/* Mol* Viewer (clean, no controls inside) */}
+              <div className="relative rounded-b-xl overflow-hidden border border-slate-200">
+                {loadingViewer && (
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/75 backdrop-blur-sm rounded-xl">
+                    <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-4" />
+                    <p className="font-medium text-slate-800 pb-2 px-4 rounded-md shadow-sm">Loading molecular structure...</p>
+                  </div>
+                )}
+                {pdbData ? (
+                  <MolecularViewer
+                    ref={viewerRef}
+                    pdbData={pdbData}
+                    poseNumber={selectedPose}
+                    sessionId={sessionId}
+                    proteinRepr={proteinRepr}
+                    ligandRepr={ligandRepr}
+                    colorScheme={colorScheme}
+                    showPocketResidues={showPocketResidues}
+                    showPocketLabels={showPocketLabels}
+                    showPocketSurface={showPocketSurface}
+                    showInteractions={showInteractions}
+                    spin={spin}
+                  />
+                ) : (
+                  <div className="w-full h-[500px] bg-slate-100/70 rounded-xl flex items-center justify-center border-2 border-dashed border-slate-300">
+                    {!loadingViewer && <p className="text-slate-600 font-medium">No structure available</p>}
+                  </div>
+                )}
+              </div>
             </>
-          ) : (
-            <div className="rounded-xl overflow-hidden ring-1 ring-primary/10">
+          )}
+
+          {viewMode === '2d' && (
+            <div className="rounded-xl overflow-hidden border border-slate-200">
               <Interaction2DViewer sessionId={sessionId} poseNumber={selectedPose} totalPoses={allPoses.length || 9} />
+            </div>
+          )}
+
+          {viewMode === 'premium' && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 flex flex-col md:flex-row gap-6">
+              {/* Left Column: Image Display and Loader */}
+              <div className="flex-1 flex flex-col items-center justify-center bg-white rounded-xl p-4 border border-slate-200 shadow-sm relative min-h-[400px]">
+                {premiumImageLoading && (
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/80 rounded-xl">
+                    <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-3" />
+                    <p className="text-slate-600 text-sm font-semibold">Generating publication figures...</p>
+                  </div>
+                )}
+                <img
+                  src={api.getRenderUrl(sessionId, selectedPose, premiumTheme) + `?t=${rebuildingPremium ? Date.now() : ''}`}
+                  alt={`Pose ${selectedPose} ${premiumTheme} view`}
+                  className="max-h-[500px] object-contain rounded-lg max-w-full"
+                  onLoad={() => setPremiumImageLoading(false)}
+                  onError={() => setPremiumImageLoading(false)}
+                />
+              </div>
+
+              {/* Right Column: Interactive Panel controls */}
+              <div className="w-full md:w-80 flex flex-col gap-4">
+                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+                  <h3 className="text-sm font-bold text-slate-800 mb-3 uppercase tracking-wider">Figure Themes</h3>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={() => setPremiumTheme('light')}
+                      className={`w-full text-left px-4 py-2.5 rounded-lg border text-sm font-semibold transition-all ${
+                        premiumTheme === 'light'
+                          ? 'bg-blue-50 border-blue-200 text-blue-700 font-bold'
+                          : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      Ray-Traced (Light Background)
+                    </button>
+                    <button
+                      onClick={() => setPremiumTheme('dark')}
+                      className={`w-full text-left px-4 py-2.5 rounded-lg border text-sm font-semibold transition-all ${
+                        premiumTheme === 'dark'
+                          ? 'bg-blue-50 border-blue-200 text-blue-700 font-bold'
+                          : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      Ray-Traced (Dark Background)
+                    </button>
+                    <button
+                      onClick={() => setPremiumTheme('electrostatic')}
+                      className={`w-full text-left px-4 py-2.5 rounded-lg border text-sm font-semibold transition-all ${
+                        premiumTheme === 'electrostatic'
+                          ? 'bg-blue-50 border-blue-200 text-blue-700 font-bold'
+                          : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      Electrostatic Surface (APBS)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex flex-col gap-3">
+                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Downloads</h3>
+                  
+                  <a
+                    href={api.getRenderUrl(sessionId, selectedPose, premiumTheme)}
+                    download={`pose_${selectedPose}_${premiumTheme}.png`}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-lg transition-all shadow-sm"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download PNG (300 DPI)
+                  </a>
+
+                  <a
+                    href={api.getPseUrl(sessionId, selectedPose)}
+                    download={`pose_${selectedPose}_session.pse`}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-slate-300 hover:border-blue-300 text-slate-700 hover:text-slate-900 font-bold text-sm rounded-lg transition-all"
+                  >
+                    <Download className="w-4 h-4" />
+                    PyMOL Session (.pse)
+                  </a>
+
+                  <button
+                    onClick={handleRebuildPremium}
+                    disabled={rebuildingPremium}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 font-bold text-xs rounded-lg transition-all"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${rebuildingPremium ? 'animate-spin' : ''}`} />
+                    Re-render Figure
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
           {/* Viewer hints */}
           {viewMode === '3d' && (
-          <div className="mt-6 p-4 bg-primary/5 rounded-xl border border-primary/10 backdrop-blur-sm">
-            <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+          <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100 backdrop-blur-sm">
+            <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
               Viewer Controls
             </h3>
-            <ul className="text-xs text-muted-foreground flex flex-wrap gap-x-6 gap-y-2">
-              <li className="flex items-center gap-1.5"><span className="px-1.5 py-0.5 bg-background border border-primary/20 rounded text-[10px] font-mono">Left Click</span> rotate</li>
-              <li className="flex items-center gap-1.5"><span className="px-1.5 py-0.5 bg-background border border-primary/20 rounded text-[10px] font-mono">Right Click</span> pan</li>
-              <li className="flex items-center gap-1.5"><span className="px-1.5 py-0.5 bg-background border border-primary/20 rounded text-[10px] font-mono">Scroll</span> zoom</li>
-              <li className="flex items-center gap-1.5"><span className="text-primary font-bold">•</span> Click icons in viewer to reset/auto-rotate</li>
+            <ul className="text-xs text-slate-600 flex flex-wrap gap-x-6 gap-y-2">
+              <li className="flex items-center gap-1.5"><span className="px-1.5 py-0.5 bg-white border border-slate-300 rounded text-[10px] font-mono">Left Click</span> rotate</li>
+              <li className="flex items-center gap-1.5"><span className="px-1.5 py-0.5 bg-white border border-slate-300 rounded text-[10px] font-mono">Right Click</span> pan</li>
+              <li className="flex items-center gap-1.5"><span className="px-1.5 py-0.5 bg-white border border-slate-300 rounded text-[10px] font-mono">Scroll</span> zoom</li>
+              <li className="flex items-center gap-1.5"><span className="text-blue-600 font-bold">•</span> Click icons in viewer to reset/auto-rotate</li>
             </ul>
           </div>
           )}
         </section>
 
         {/* All Binding Poses */}
-        <section className="bg-card rounded-xl border border-primary/10 p-6 mb-6 shadow-sm">
+        <section className="bg-white rounded-2xl border border-slate-200 p-6 mb-6 shadow-sm">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
-            <h2 className="text-xl font-bold text-foreground">All Binding Poses</h2>
+            <h2 className="text-xl font-bold text-slate-900">All Binding Poses</h2>
             <button
               onClick={handleDownloadTop5}
               disabled={allPoses.length === 0}
-              className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-lg disabled:opacity-50 transition-colors text-sm font-medium border border-primary/10 hover:border-primary/30"
+              className="flex items-center gap-2 px-4 py-2 bg-white text-slate-700 hover:bg-slate-50 rounded-lg disabled:opacity-50 transition-colors text-sm font-medium border border-slate-300 hover:border-blue-300"
             >
               <Download className="w-4 h-4" />
               Download Top 5 (PDB)
             </button>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-primary/10">
+          <div className="overflow-x-auto rounded-lg border border-slate-200">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-secondary/30 border-b border-primary/10">
-                  <th className="px-4 py-3.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">Rank</th>
-                  <th className="px-4 py-3.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">Mode</th>
-                  <th className="px-4 py-3.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">Cavity</th>
-                  <th className="px-4 py-3.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">Affinity (kcal/mol)</th>
-                  <th className="px-4 py-3.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">RMSD (Å)</th>
-                  <th className="px-4 py-3.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">Volume (ų)</th>
-                  <th className="px-4 py-3.5 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Actions</th>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Cavity</th>
+                  <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Mode</th>
+                  <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Affinity (kcal/mol)</th>
+                  <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">XYZ Coordinates</th>
+                  <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-primary/5">
-                {allPoses.map((pose, index) => (
-                  <tr key={index} className="hover:bg-primary/5 transition-colors">
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-bold border border-primary/20">
-                        {index + 1}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-foreground font-medium">{pose.mode || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground">{pose.cavity_id !== undefined ? `Pocket ${pose.cavity_id}` : '-'}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <span className={`font-mono font-bold px-2.5 py-1 rounded-md text-xs ${pose.affinity && pose.affinity < -8
-                        ? 'bg-primary/10 text-primary border border-primary/20'
-                        : pose.affinity && pose.affinity < -6
-                          ? 'bg-warning/10 text-warning border border-warning/20'
-                          : 'bg-secondary text-muted-foreground'
-                        }`}>
-                        {pose.affinity?.toFixed(2) || '-'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground font-mono">{pose.rmsd_lb?.toFixed(2) || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground font-mono">{pose.cavity_volume?.toFixed(0) || '-'}</td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleViewPose(index + 1)}
-                          disabled={loadingViewer && selectedPose === index + 1}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${selectedPose === index + 1
-                            ? 'bg-primary text-primary-foreground shadow-[0_0_15px_-3px_hsl(160,84%,39%,0.4)]'
-                            : 'bg-secondary text-foreground hover:bg-secondary/80 border border-transparent hover:border-primary/20'
-                            } disabled:opacity-50`}
-                        >
-                          {loadingViewer && selectedPose === index + 1 ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Eye className="w-3.5 h-3.5" />
-                          )}
-                          {selectedPose === index + 1 ? 'Viewing' : 'View'}
-                        </button>
-                        <button
-                          onClick={() => handleDownloadPose(index + 1)}
-                          disabled={downloadingPose === index + 1}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-transparent text-muted-foreground hover:text-foreground border border-primary/10 hover:border-primary/30 rounded-md disabled:opacity-50 transition-all hover:bg-primary/5"
-                          title="Download PDB"
-                        >
-                          {downloadingPose === index + 1 ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Download className="w-3.5 h-3.5" />
-                          )}
-                          <span className="hidden lg:inline">Download</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+              <tbody className="divide-y divide-slate-100">
+                {filteredPoses.map((pose) => {
+                  const globalIndex = allPoses.indexOf(pose) + 1;
+                  return (
+                    <tr key={globalIndex} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3 text-sm">
+                        {pose.cavity_id !== undefined ? (
+                          <button
+                            onClick={() => handleCavityFilterChange(pose.cavity_id.toString())}
+                            className="text-blue-600 hover:text-blue-800 hover:underline font-semibold"
+                          >
+                            Pocket {pose.cavity_id}
+                          </button>
+                        ) : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-900 font-medium">{pose.mode || '-'}</td>
+                      <td className="px-4 py-3 text-sm">
+                        <span className={`font-mono font-bold px-2.5 py-1 rounded-md text-xs ${pose.affinity && pose.affinity < -8
+                          ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                          : pose.affinity && pose.affinity < -6
+                            ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                            : 'bg-slate-100 text-slate-600 border border-slate-200'
+                          }`}>
+                          {pose.affinity?.toFixed(2) || '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600 font-mono">
+                        {pose.cavity_center
+                          ? `(${Array.isArray(pose.cavity_center)
+                              ? pose.cavity_center.map(v => typeof v === 'number' ? v.toFixed(1) : v).join(', ')
+                              : pose.cavity_center})`
+                          : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleViewPose(globalIndex)}
+                            disabled={loadingViewer && selectedPose === globalIndex}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${selectedPose === globalIndex
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 hover:border-blue-300'
+                              } disabled:opacity-50`}
+                          >
+                            {loadingViewer && selectedPose === globalIndex ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Eye className="w-3.5 h-3.5" />
+                            )}
+                            {selectedPose === globalIndex ? 'Viewing' : 'View'}
+                          </button>
+                          <button
+                            onClick={() => handleDownloadPose(globalIndex)}
+                            disabled={downloadingPose === globalIndex}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white text-slate-600 hover:text-slate-900 border border-slate-300 hover:border-blue-300 rounded-md disabled:opacity-50 transition-all hover:bg-slate-50"
+                            title="Download PDB"
+                          >
+                            {downloadingPose === globalIndex ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Download className="w-3.5 h-3.5" />
+                            )}
+                            <span className="hidden lg:inline">Download</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
 
             {allPoses.length === 0 && (
               <div className="text-center py-16">
-                <div className="w-16 h-16 bg-secondary/50 rounded-full flex items-center justify-center mx-auto mb-4 border border-primary/10">
-                  <Eye className="w-8 h-8 text-muted-foreground/50" />
+                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-200">
+                  <Eye className="w-8 h-8 text-slate-400" />
                 </div>
-                <p className="text-muted-foreground font-medium">No binding poses found in results.</p>
-                <p className="text-xs text-muted-foreground/60 mt-1">Run a new docking simulation to generate poses.</p>
+                <p className="text-slate-600 font-medium">No binding poses found in results.</p>
+                <p className="text-xs text-slate-500 mt-1">Run a new docking simulation to generate poses.</p>
               </div>
             )}
           </div>
         </section>
 
-      </div>
-
-      {showFeedbackModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setShowFeedbackModal(false)}
-          />
-
-          <div className="relative w-full max-w-lg rounded-2xl border border-primary/20 bg-card p-6 shadow-2xl">
-            <button
-              type="button"
-              onClick={() => setShowFeedbackModal(false)}
-              className="absolute right-3 top-3 p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="Close feedback popup"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
+        {/* Feedback Section (inline, below results) */}
+        {feedbackChecked && (
+          <section className="bg-white rounded-2xl border border-slate-200 p-6 mb-6 shadow-sm">
             <div className="flex items-center gap-2 mb-2">
-              <MessageSquareText className="w-5 h-5 text-primary" />
-              <h2 className="text-lg sm:text-xl font-bold text-foreground">How was your result?</h2>
+              <MessageSquareText className="w-5 h-5 text-blue-600" />
+              <h2 className="text-xl font-bold text-slate-900">Feedback</h2>
             </div>
-            <p className="text-sm text-muted-foreground mb-5">
+            <p className="text-sm text-slate-600 mb-5">
               Please share a quick rating and your feedback description.
             </p>
 
-            <form onSubmit={handleSubmitFeedback} className="space-y-4">
-              <div>
-                <label htmlFor="feedback-name-modal" className="text-sm font-medium text-foreground block mb-2">
-                  Name
-                </label>
-                <input
-                  id="feedback-name-modal"
-                  type="text"
-                  value={feedbackName}
-                  onChange={(e) => setFeedbackName(e.target.value)}
-                  placeholder="Enter your name"
-                  className="w-full rounded-lg bg-background border border-primary/20 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:ring-1 focus:ring-primary/30 focus:border-primary/50 outline-none transition-all"
-                />
+            {feedbackSubmitted ? (
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                <p className="text-sm font-semibold text-slate-900 mb-1">Thanks! Your feedback has already been submitted.</p>
+                <p className="text-xs text-slate-600">Rating: {feedbackRating || 0}/5</p>
               </div>
-
-              <div>
-                <label className="text-sm font-medium text-foreground block mb-2">Rating (out of 5)</label>
-                <div className="flex items-center gap-1.5">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => setFeedbackRating(star)}
-                      className="p-1 rounded-md hover:bg-primary/10 transition-colors"
-                      aria-label={`Rate ${star} out of 5`}
-                    >
-                      <Star
-                        className={`w-6 h-6 ${star <= feedbackRating ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground/40'}`}
-                      />
-                    </button>
-                  ))}
-                  <span className="text-sm text-muted-foreground ml-2">
-                    {feedbackRating ? `${feedbackRating}/5` : 'Select rating'}
-                  </span>
+            ) : (
+              <form onSubmit={handleSubmitFeedback} className="space-y-4">
+                <div>
+                  <label htmlFor="feedback-name-inline" className="text-sm font-medium text-slate-900 block mb-2">
+                    Name
+                  </label>
+                  <input
+                    id="feedback-name-inline"
+                    type="text"
+                    value={feedbackName}
+                    onChange={(e) => setFeedbackName(e.target.value)}
+                    placeholder="Enter your name"
+                    className="w-full rounded-lg bg-white border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all"
+                  />
                 </div>
-              </div>
 
-              <div>
-                <label htmlFor="feedback-description-modal" className="text-sm font-medium text-foreground block mb-2">
-                  Feedback description
-                </label>
-                <textarea
-                  id="feedback-description-modal"
-                  value={feedbackDescription}
-                  onChange={(e) => setFeedbackDescription(e.target.value)}
-                  placeholder="Tell us what worked well and what can be improved..."
-                  rows={4}
-                  className="w-full rounded-lg bg-background border border-primary/20 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:ring-1 focus:ring-primary/30 focus:border-primary/50 outline-none transition-all resize-y"
-                />
-              </div>
+                <div>
+                  <label className="text-sm font-medium text-slate-900 block mb-2">Rating (out of 5)</label>
+                  <div className="flex items-center gap-1.5">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setFeedbackRating(star)}
+                        className="p-1 rounded-md hover:bg-blue-50 transition-colors"
+                        aria-label={`Rate ${star} out of 5`}
+                      >
+                        <Star
+                          className={`w-6 h-6 ${star <= feedbackRating ? 'text-amber-400 fill-amber-400' : 'text-slate-300'}`}
+                        />
+                      </button>
+                    ))}
+                    <span className="text-sm text-slate-600 ml-2">
+                      {feedbackRating ? `${feedbackRating}/5` : 'Select rating'}
+                    </span>
+                  </div>
+                </div>
 
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowFeedbackModal(false)}
-                  className="px-4 py-2 rounded-lg border border-primary/20 text-sm font-medium text-foreground hover:bg-primary/5 transition-all"
-                >
-                  Later
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingFeedback}
-                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:brightness-110 transition-all disabled:opacity-60"
-                >
-                  {submittingFeedback ? 'Submitting...' : 'Submit Feedback'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+                <div>
+                  <label htmlFor="feedback-description-inline" className="text-sm font-medium text-slate-900 block mb-2">
+                    Feedback description
+                  </label>
+                  <textarea
+                    id="feedback-description-inline"
+                    value={feedbackDescription}
+                    onChange={(e) => setFeedbackDescription(e.target.value)}
+                    placeholder="Tell us what worked well and what can be improved..."
+                    rows={4}
+                    className="w-full rounded-lg bg-white border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all resize-y"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end pt-1">
+                  <button
+                    type="submit"
+                    disabled={submittingFeedback}
+                    className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-all disabled:opacity-60"
+                  >
+                    {submittingFeedback ? 'Submitting...' : 'Submit Feedback'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </section>
+        )}
+
+      </div>
     </div>
   );
 }

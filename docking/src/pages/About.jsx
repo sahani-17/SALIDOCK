@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { useScrollAnimation } from "../hooks/useScrollAnimation";
@@ -12,6 +13,13 @@ import {
   Zap,
   Quote,
   FlaskConical,
+  History,
+  Microscope,
+  ClipboardList,
+  Eye,
+  Database,
+  Factory,
+  BookOpen
 } from "lucide-react";
 import { Mail, Linkedin, Globe, Github} from "lucide-react";
 
@@ -72,7 +80,7 @@ const TiltCard = ({ children, className = "" }) => {
       <div
         className="absolute inset-0 rounded-2xl pointer-events-none"
         style={{
-          background: `radial-gradient(circle at ${glare.x}% ${glare.y}%, hsl(160 84% 39% / ${glare.opacity}), transparent 60%)`,
+          background: `radial-gradient(circle at ${glare.x}% ${glare.y}%, hsl(221 83% 53% / ${glare.opacity}), transparent 60%)`,
           transition: "opacity 0.3s",
         }}
       />
@@ -99,148 +107,239 @@ const CursorGlow = () => {
     <div
       ref={glowRef}
       className="fixed w-[350px] h-[350px] rounded-full pointer-events-none z-[9999] -translate-x-1/2 -translate-y-1/2 blur-[100px] transition-[left,top] duration-150 ease-out hidden md:block"
-      style={{ background: "hsl(160 84% 39% / 0.04)" }}
+      style={{ background: "hsl(221 83% 53% / 0.05)" }}
     />
   );
 };
 
 const About = () => {
+  const sections = [
+    { id: "mission", label: "Our Mission", icon: Target },
+    { id: "story", label: "Our Story", icon: History },
+    { id: "what-we-do", label: "What We Do", icon: Microscope },
+    { id: "team", label: "The Team", icon: Users },
+    { id: "who-we-serve", label: "Who We Serve", icon: ClipboardList },
+  ];
+  const [activeSection, setActiveSection] = useState("mission");
+  const [showDockingOptions, setShowDockingOptions] = useState(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        if (visible.length > 0) setActiveSection(visible[0].target.id);
+      },
+      { rootMargin: "-10% 0px -20% 0px", threshold: [0.1, 0.3, 0.5] },
+    );
+
+    sections.forEach((s) => {
+      const el = document.getElementById(s.id);
+      if (el) observer.observe(el);
+    });
+
+    const handleScroll = () => {
+      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 50) {
+        setActiveSection(sections[sections.length - 1].id);
+      }
+    };
+    window.addEventListener("scroll", handleScroll);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
+
+  const scrollToSection = (id) => {
+    setActiveSection(id);
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans">
-      <CursorGlow />
-      <Navbar />
+    <div className="min-h-screen bg-white text-slate-900 font-sans">
+      <Navbar lightTheme />
 
-      {/* ─── HERO: Our Mission ─── */}
-      <section className="relative pt-32 pb-20 overflow-hidden min-h-[60vh] flex items-center">
-        <div
-          className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[800px] h-[400px] rounded-full blur-[150px] pointer-events-none opacity-40"
-          style={{ background: "hsl(160 84% 39% / 0.08)" }}
-        />
-
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 relative z-10 text-center">
-          <AnimatedSection>
-            <span className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-primary mb-6">
-              <Target size={16} /> Our Mission
-            </span>
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight mb-8 leading-[1.1]">
-              Seamless, Rigorous, and Accessible Drug Discovery.
-            </h1>
-            <p className="text-lg md:text-xl text-muted-foreground leading-relaxed max-w-3xl mx-auto">
-              At SALIDOCK, we believe that computational drug discovery
-              shouldn't be fragmented. We built this platform to solve a common
-              frustration in cheminformatics: the time-consuming nature of
-              molecular docking workflows. Our goal is to assemble the entire
-              process into one unified platform, saving researchers valuable
-              time and allowing them to focus on the science rather than the
-              software.
-            </p>
-          </AnimatedSection>
+      <aside className="hidden xl:flex fixed left-0 top-0 h-screen w-64 flex-col bg-white z-40 pt-24 border-r border-slate-100/50">
+        <div className="w-full mt-6 pl-2">
+          <h3 className="text-[10px] font-bold tracking-widest text-[#94a3b8] uppercase mb-4 pl-6">
+            ON THIS PAGE
+          </h3>
+          <nav className="flex flex-col gap-1">
+            {sections.map((s) => {
+              const Icon = s.icon;
+              const isActive = activeSection === s.id;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => scrollToSection(s.id)}
+                  className={`relative flex items-center gap-4 w-full pl-6 py-4 text-[13px] font-bold uppercase tracking-wider transition-colors ${
+                    isActive 
+                    ? "text-[#38bdf8] bg-slate-50/80" 
+                    : "text-[#8BA1BA] hover:text-slate-600 hover:bg-slate-50/50"
+                  }`}
+                >
+                  {isActive && (
+                    <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#38bdf8]" />
+                  )}
+                  <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className={isActive ? "text-[#38bdf8]" : "text-[#8BA1BA]"} />
+                  {s.label}
+                </button>
+              );
+            })}
+          </nav>
         </div>
-      </section>
+      </aside>
 
-      {/* ─── STORY: The "Lightbulb" Moment ─── */}
-      <section className="py-24 relative bg-card/20 border-y border-border backdrop-blur-sm">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMSIgZmlsbD0iIzIyMiIgZmlsbC1vcGFjaXR5PSIwLjUiLz48L3N2Zz4=')] opacity-20 pointer-events-none" />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-2 gap-16 items-center">
+      <div className="xl:pl-64">
+        <main className="max-w-5xl mx-auto px-8 md:px-12 py-24 flex flex-col gap-32">
+          {/* ─── OUR MISSION ─── */}
+          <section id="mission" className="scroll-mt-32">
             <AnimatedSection>
-              <div className="relative">
-                <Lightbulb
-                  size={48}
-                  className="text-primary/20 absolute -top-6 -left-6"
-                />
-                <h2 className="text-3xl lg:text-4xl font-black mb-6 relative z-10">
-                  Our Story: <br />
-                  <span className="text-primary">The "Lightbulb" Moment</span>
-                </h2>
-                <div className="space-y-6 text-muted-foreground leading-relaxed">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-8 h-[2px] bg-[#38bdf8]" />
+                <span className="text-[11px] font-bold tracking-widest text-[#38bdf8] uppercase">
+                  01 / CORE PURPOSE
+                </span>
+              </div>
+              <h1 className="text-4xl md:text-5xl font-medium text-slate-800 mb-6">
+                Our Mission
+              </h1>
+              <h2 className="text-[22px] md:text-2xl font-bold text-[#0ea5e9] mb-10">
+                Seamless, Rigorous, and Accessible Drug Discovery.
+              </h2>
+              
+              <div className="relative p-8 md:p-10 border border-slate-200/80 rounded-sm bg-white mt-4">
+                {/* Top left corner accent */}
+                <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-[2.5px] border-l-[2.5px] border-[#0ea5e9]" />
+                <p className="text-slate-500 font-medium leading-[1.8] text-[15px] md:text-[16px]">
+                  At SALIDOCK, we believe that computational drug discovery shouldn't be fragmented. We built this platform to solve a common frustration in cheminformatics: the time-consuming nature of molecular docking workflows. Our goal is to assemble the entire process into one unified platform, saving researchers valuable time and allowing them to focus on the science rather than the software.
+                </p>
+              </div>
+            </AnimatedSection>
+          </section>
+
+          {/* ─── OUR STORY ─── */}
+          <section id="story" className="scroll-mt-32">
+            <AnimatedSection>
+              <div className="flex items-center gap-3 mb-8">
+                <div className="w-8 h-[2px] bg-[#38bdf8]" />
+                <span className="text-[11px] font-bold tracking-widest text-[#38bdf8] uppercase">
+                  02 / GENESIS
+                </span>
+              </div>
+              <h2 className="text-4xl md:text-[42px] font-medium text-slate-800 mb-12">
+                Our Story: The "Lightbulb" Moment
+              </h2>
+
+              <div className="grid md:grid-cols-5 gap-12 lg:gap-16 items-start">
+                <div className="md:col-span-2 flex flex-col gap-6 text-slate-500 font-medium leading-[1.8] text-[15px]">
                   <p>
-                    The journey of SALIDOCK is rooted in scientific curiosity
-                    and the willingness to learn from mistakes. The project
-                    initially began as our undergraduate minor project, where we
-                    attempted to predict Drug-Target Interactions (DTI) solely
-                    using machine learning models.
+                    What started as a minor project utilizing basic machine learning evolved into something far more significant. During a rigorous molecular docking workshop, our founding team realized that current tools lacked biophysical grounding and cross-platform synergy.
                   </p>
                   <p>
-                    However, attending a molecular docking workshop sparked a
-                    crucial "lightbulb" moment for us. We realized that our
-                    purely data-driven ML approach lacked the necessary
-                    biophysical grounding—what we were doing wasn't
-                    scientifically robust enough for real-world application.
+                    The transition from a "black box" ML approach to a biophysically grounded platform was our turning point. We realized that researchers needed transparency and precision that only integrated workflows could provide.
                   </p>
-                  <p>
-                    Recognizing this gap, we sought out our mentor, and our
-                    project pivoted in an entirely new, structure-based
-                    direction. We moved away from fragmented tools and began
-                    developing a platform that integrates everything from robust
-                    pocket prediction to comprehensive interaction analysis.
+                </div>
+
+                <div className="md:col-span-3 relative bg-slate-50/60 p-8 md:py-10 md:px-12 border-l-[3.5px] border-[#0ea5e9]">
+                  {/* Faint big quote mark */}
+                  <div className="absolute top-4 left-6 text-[100px] font-serif text-[#0ea5e9] opacity-[0.12] leading-none select-none">
+                    "
+                  </div>
+                  <p className="relative z-10 text-lg md:text-[22px] font-bold italic text-[#1e293b] leading-relaxed pt-4">
+                    "We moved away from fragmented tools and built a platform that integrates everything, allowing you to focus on the science."
                   </p>
                 </div>
               </div>
             </AnimatedSection>
-            <AnimatedSection delay={200}>
-              <TiltCard>
-                <div className="relative rounded-2xl overflow-hidden glass border border-border p-1 bg-gradient-to-b from-card/80 to-background/40 h-full">
-                  <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 via-transparent to-transparent opacity-50" />
-                  <div className="p-10 flex flex-col items-center justify-center text-center h-full min-h-[350px]">
-                    <Quote size={40} className="text-primary/30 mb-6" />
-                    <p className="text-xl md:text-2xl font-semibold italic text-foreground tracking-tight leading-snug">
-                      "We moved away from fragmented tools and built a platform
-                      that integrates everything, allowing you to focus on the
-                      science."
-                    </p>
-                  </div>
-                </div>
-              </TiltCard>
-            </AnimatedSection>
-          </div>
-        </div>
-      </section>
+          </section>
 
-      {/* ─── WHAT WE DO ─── */}
-      <section className="py-24">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 text-center">
-          <AnimatedSection>
-            <span className="inline-block text-xs font-semibold uppercase tracking-widest text-primary/70 mb-4">
-              What We Do
-            </span>
-            <h2 className="text-3xl lg:text-4xl font-black mb-8">
-              Streamlining the Workflow
-            </h2>
-            <p className="text-lg text-muted-foreground leading-relaxed">
-              Traditional docking forces researchers to juggle multiple
-              disparate tools to get results.
-              <span className="text-foreground font-semibold">
-                {" "}
-                SALIDOCK eliminates this bottleneck.
-              </span>{" "}
-              By integrating the core docking engine with built-in features for
-              visualizing 2D ligand-receptor interactions, we provide a
-              complete, end-to-end solution. Whether you are benchmarking
-              against complex datasets like PDBbind or running high-throughput
-              screens, SALIDOCK is designed to handle it effortlessly.
-            </p>
-          </AnimatedSection>
-        </div>
-      </section>
+          {/* ─── WHAT WE DO ─── */}
+          <section id="what-we-do" className="scroll-mt-32">
+            <AnimatedSection>
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-8 h-[2px] bg-[#38bdf8]" />
+                <span className="text-[11px] font-bold tracking-widest text-[#38bdf8] uppercase">
+                  03 / CAPABILITIES
+                </span>
+              </div>
+              <h2 className="text-4xl md:text-[42px] font-medium text-slate-800 mb-6">
+                What We Do
+              </h2>
+              <h3 className="text-[20px] md:text-2xl font-bold text-[#0ea5e9] mb-12">
+                Streamlining the Workflow
+              </h3>
+
+              <div className="grid md:grid-cols-3 gap-5 lg:gap-8 mb-12">
+                {/* Card 1 */}
+                <div className="relative p-8 border border-slate-200/80 rounded-sm bg-white min-h-[220px]">
+                  <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-[2.5px] border-l-[2.5px] border-[#0ea5e9]" />
+                  <Network className="w-6 h-6 text-[#0ea5e9] mb-6" strokeWidth={2.5} />
+                  <h4 className="text-[15px] md:text-base font-bold text-slate-800 mb-3 block">Integrated Engine</h4>
+                  <p className="text-slate-500 font-medium text-[13px] leading-[1.8]">
+                    Seamlessly connecting the docking engine with advanced analytical modules.
+                  </p>
+                </div>
+
+                {/* Card 2 */}
+                <div className="relative p-8 border border-slate-200/80 rounded-sm bg-white min-h-[220px]">
+                  <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-[2.5px] border-l-[2.5px] border-[#0ea5e9]" />
+                  <Eye className="w-6 h-6 text-[#0ea5e9] mb-6" strokeWidth={2.5} />
+                  <h4 className="text-[15px] md:text-base font-bold text-slate-800 mb-3 block">2D Visualization</h4>
+                  <p className="text-slate-500 font-medium text-[13px] leading-[1.8]">
+                    Real-time molecular rendering and 2D interaction mapping for immediate insights.
+                  </p>
+                </div>
+
+                {/* Card 3 */}
+                <div className="relative p-8 border border-slate-200/80 rounded-sm bg-white min-h-[220px]">
+                  <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-[2.5px] border-l-[2.5px] border-[#0ea5e9]" />
+                  <Database className="w-6 h-6 text-[#0ea5e9] mb-6" strokeWidth={2.5} />
+                  <h4 className="text-[15px] md:text-base font-bold text-slate-800 mb-3 block">Dataset Handling</h4>
+                  <p className="text-slate-500 font-medium text-[13px] leading-[1.8]">
+                    Native support for PDBbind and large-scale cheminformatics datasets.
+                  </p>
+                </div>
+              </div>
+
+              {/* Bottom text block */}
+              <div className="p-8 border border-slate-200/50 bg-slate-50/50 rounded-sm">
+                <p className="text-slate-500 font-medium text-[14px] md:text-[15px] leading-[1.8]">
+                  By eliminating technical bottlenecks and data fragmentation, SALIDOCK provides an end-to-end environment for molecular docking that is as powerful as it is intuitive.
+                </p>
+              </div>
+            </AnimatedSection>
+          </section>
+        </main>
+
 
       {/* ─── THE TEAM ─── */}
-      <section className="py-24 bg-card/10 relative">
+      <section id="team" className="py-24 bg-white relative border-y border-slate-200">
         <div
           className="absolute right-0 top-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[180px] pointer-events-none opacity-20"
-          style={{ background: "hsl(160 84% 39% / 0.15)" }}
+          style={{ background: "hsl(221 83% 53% / 0.12)" }}
         />
         <div
           className="absolute left-0 top-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full blur-[150px] pointer-events-none opacity-10"
-          style={{ background: "hsl(160 84% 39% / 0.1)" }}
+          style={{ background: "hsl(221 83% 53% / 0.08)" }}
         />
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <AnimatedSection className="text-center mb-16">
-            <h2 className="text-3xl lg:text-4xl font-black mb-4">
+        <div className="max-w-5xl mx-auto px-8 md:px-12 relative z-10">
+          <AnimatedSection className="mb-16">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-8 h-[2px] bg-[#38bdf8]" />
+              <span className="text-[11px] font-bold tracking-widest text-[#38bdf8] uppercase">
+                04 / LEADERSHIP
+              </span>
+            </div>
+            <h2 className="text-4xl md:text-[42px] font-medium text-slate-800 mb-6">
               Behind the Vision of Salidock
             </h2>
-            <p className="text-muted-foreground max-w-xl mx-auto">
+            <p className="text-slate-500 font-bold text-[15px]">
               Built by students, guided by industry experts.
             </p>
           </AnimatedSection>
@@ -248,8 +347,8 @@ const About = () => {
           <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             <AnimatedSection delay={100} className="md:col-span-1">
               <TiltCard className="h-full">
-                <div className="rounded-2xl border border-border bg-card/60 backdrop-blur-sm p-8 text-center h-full hover:border-primary/30 transition-colors">
-                  <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-6 border-2 border-primary/20 bg-primary/5">
+                <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center h-full hover:border-blue-300 transition-colors shadow-sm">
+                  <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-6 border-2 border-blue-200 bg-blue-50">
                     <img
                       src="/photo.png"
                       alt="Ahan Kumar Biswal"
@@ -265,7 +364,7 @@ const About = () => {
                   <div className="flex justify-center gap-4">
                     <a
                       href="mailto:ahanbiswal2003@gmail.com"
-                      className="text-muted-foreground hover:text-primary transition"
+                      className="text-slate-500 hover:text-blue-600 transition"
                       target="_blank"
                       rel="noopener noreferrer"
                     >
@@ -274,7 +373,7 @@ const About = () => {
 
                     <a
                       href="https://www.linkedin.com/in/ahan-biswal-56a614333"
-                      className="text-muted-foreground hover:text-primary transition"
+                      className="text-slate-500 hover:text-blue-600 transition"
                       target="_blank"
                       rel="noopener noreferrer"
                     >
@@ -283,7 +382,7 @@ const About = () => {
 
                     <a
                       href="https://github.com/Toxicvampire007"
-                      className="text-muted-foreground hover:text-primary transition"
+                      className="text-slate-500 hover:text-blue-600 transition"
                       target="_blank"
                       rel="noopener noreferrer"
                     >
@@ -296,8 +395,8 @@ const About = () => {
 
             <AnimatedSection delay={200} className="md:col-span-1">
               <TiltCard className="h-full">
-                <div className="rounded-2xl border border-border bg-card/60 backdrop-blur-sm p-8 text-center h-full hover:border-primary/30 transition-colors">
-                  <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-6 border-2 border-primary/20 bg-primary/5">
+                <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center h-full hover:border-blue-300 transition-colors shadow-sm">
+                  <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-6 border-2 border-blue-200 bg-blue-50">
                     <img
                       src="/photo2.png"
                       alt="Soumya Ranjan Sahani"
@@ -313,7 +412,7 @@ const About = () => {
                       href="mailto:sahanisoumya356@gmail.com"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                      className="text-slate-500 hover:text-blue-600 transition hover:scale-110"
                     >
                       <Mail size={20} />
                     </a>
@@ -322,7 +421,7 @@ const About = () => {
                       href="https://www.linkedin.com/in/soumya-ranjan-sahani-581874379"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                      className="text-slate-500 hover:text-blue-600 transition hover:scale-110"
                     >
                       <Linkedin size={20} />
                     </a>
@@ -331,7 +430,7 @@ const About = () => {
                       href="https://github.com/sahani-17"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                      className="text-slate-500 hover:text-blue-600 transition hover:scale-110"
                     >
                       <Github size={20} />
                     </a>
@@ -342,8 +441,8 @@ const About = () => {
 
             <AnimatedSection delay={200} className="md:col-span-1">
               <TiltCard className="h-full">
-                <div className="rounded-2xl border border-border bg-card/60 backdrop-blur-sm p-8 text-center h-full hover:border-primary/30 transition-colors">
-                  <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-6 border-2 border-primary/20 bg-primary/5">
+                <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center h-full hover:border-blue-300 transition-colors shadow-sm">
+                  <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-6 border-2 border-blue-200 bg-blue-50">
                     <img
                       src="/deep.jpeg"
                       alt="Deepan"
@@ -357,7 +456,7 @@ const About = () => {
                       href="mailto:deepanbalud@gmail.com.com"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                      className="text-slate-500 hover:text-blue-600 transition hover:scale-110"
                     >
                       <Mail size={20} />
                     </a>
@@ -366,7 +465,7 @@ const About = () => {
                       href="https://linkedin.com/in/deepan-balu"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                      className="text-slate-500 hover:text-blue-600 transition hover:scale-110"
                     >
                       <Linkedin size={20} />
                     </a>
@@ -375,7 +474,7 @@ const About = () => {
                       href="https://github.com/deepan-codebuster"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                      className="text-slate-500 hover:text-blue-600 transition hover:scale-110"
                     >
                       <Github size={20} />
                     </a>
@@ -384,7 +483,7 @@ const About = () => {
                       href="https://deepanbalu.vercel.app"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                      className="text-slate-500 hover:text-blue-600 transition hover:scale-110"
                     >
                       <Globe size={20} />
                     </a>
@@ -395,8 +494,8 @@ const About = () => {
 
             <AnimatedSection delay={200} className="md:col-span-1">
               <TiltCard className="h-full">
-                <div className="rounded-2xl border border-border bg-card/60 backdrop-blur-sm p-8 text-center h-full hover:border-primary/30 transition-colors">
-                  <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-6 border-2 border-primary/20 bg-primary/5">
+                <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center h-full hover:border-blue-300 transition-colors shadow-sm">
+                  <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-6 border-2 border-blue-200 bg-blue-50">
                     <img
                       src="/alaka.png"
                       alt="Dr. Alaka Sahoo"
@@ -410,7 +509,7 @@ const About = () => {
                       href="mailto:salixiras.bbsr@gmail.com"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                      className="text-slate-500 hover:text-blue-600 transition hover:scale-110"
                     >
                       <Mail size={20} />
                     </a>
@@ -419,16 +518,16 @@ const About = () => {
                       href="https://www.linkedin.com/in/salixiras-research-private-limited/"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                      className="text-slate-500 hover:text-blue-600 transition hover:scale-110"
                     >
                       <Linkedin size={20} />
                     </a>
 
                     <a
-                      href="https://salixiras.netlify.app/leadership"
+                      href="https://salixirax.com/leadership"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                      className="text-slate-500 hover:text-blue-600 transition hover:scale-110"
                     >
                       <Globe size={20} />
                     </a>
@@ -439,12 +538,12 @@ const About = () => {
 
             <AnimatedSection delay={300} className="md:col-span-1">
               <TiltCard className="h-full">
-                <div className="rounded-2xl border border-border bg-card/60 backdrop-blur-sm p-8 text-center h-full hover:border-primary/30 transition-colors relative overflow-hidden">
+                <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center h-full hover:border-blue-300 transition-colors relative overflow-hidden shadow-sm">
                   <div className="absolute top-0 right-0 p-4 opacity-10">
                     <Lightbulb size={100} />
                   </div>
                   <div className="relative z-10">
-                    <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-6 border-2 border-primary/20 bg-primary/5">
+                    <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-6 border-2 border-blue-200 bg-blue-50">
                       <img
                         src="/Shasank.JPG.png"
                         alt="Dr. Shasank Sekhar Swain"
@@ -460,7 +559,7 @@ const About = () => {
                         href="mailto:salixiras.bbsr@gmail.com"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                        className="text-slate-500 hover:text-blue-600 transition hover:scale-110"
                       >
                         <Mail size={20} />
                       </a>
@@ -469,16 +568,16 @@ const About = () => {
                         href="https://www.linkedin.com/in/salixiras-research-private-limited/"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                        className="text-slate-500 hover:text-blue-600 transition hover:scale-110"
                       >
                         <Linkedin size={20} />
                       </a>
 
                       <a
-                        href="https://salixiras.netlify.app/leadership"
+                        href="https://salixirax.com/leadership"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-muted-foreground hover:text-primary transition hover:scale-110"
+                        className="text-slate-500 hover:text-blue-600 transition hover:scale-110"
                       >
                         <Globe size={20} />
                       </a>
@@ -492,53 +591,68 @@ const About = () => {
       </section>
 
       {/* ─── WHO WE SERVE ─── */}
-      <section className="py-24">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <AnimatedSection className="text-center mb-16">
-            <h2 className="text-3xl lg:text-4xl font-black mb-4">
+      <section id="who-we-serve" className="py-20 lg:py-24 bg-white scroll-mt-24">
+        <div className="max-w-5xl mx-auto px-8 md:px-12 relative z-10">
+          <AnimatedSection>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-8 h-[2px] bg-[#38bdf8]" />
+              <span className="text-[11px] font-bold tracking-widest text-[#38bdf8] uppercase">
+                05 / IMPACT
+              </span>
+            </div>
+            <h2 className="text-4xl md:text-[42px] font-medium text-slate-800 mb-12">
               Who We Serve
             </h2>
-            <p className="text-muted-foreground max-w-xl mx-auto">
-              SALIDOCK is built for anyone whose work relies on accurate
-              molecular docking.
-            </p>
-          </AnimatedSection>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              {
-                icon: FlaskConical,
-                title: "Academic Researchers",
-                desc: "Conducting complex structural biology studies with confidence and reproducibility.",
-              },
-              {
-                icon: Briefcase,
-                title: "Industry Professionals",
-                desc: "Pharmaceutical teams looking to streamline and accelerate their drug discovery pipelines.",
-              },
-              {
-                icon: GraduationCap,
-                title: "Bioinformatics Students",
-                desc: "Needing an intuitive, all-in-one educational and research tool for learning and exploration.",
-              },
-            ].map((role, i) => (
-              <AnimatedSection key={i} delay={i * 150}>
-                <div className="group rounded-2xl p-6 bg-card border border-border hover:border-primary/40 transition-all duration-300">
-                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary mb-5 group-hover:scale-110 group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300">
-                    <role.icon size={22} />
-                  </div>
-                  <h3 className="text-lg font-bold mb-2">{role.title}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {role.desc}
+            <div className="flex flex-col gap-6 w-full max-w-4xl">
+              {/* Card 1 */}
+              <div className="flex flex-col md:flex-row items-center md:items-center gap-8 p-8 md:px-10 md:py-8 border border-slate-200/80 bg-white overflow-hidden relative">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-slate-50 to-transparent pointer-events-none -mr-16 -mt-16 transform rotate-12" />
+                <div className="w-[72px] h-[72px] shrink-0 bg-[#e2e8f0]/40 flex items-center justify-center relative z-10">
+                  <FlaskConical className="w-8 h-8 text-[#38bdf8]" strokeWidth={2} />
+                </div>
+                <div className="flex flex-col gap-2 relative z-10 text-center md:text-left">
+                  <h3 className="text-[20px] md:text-[22px] font-bold text-slate-800 tracking-tight">Academic Researchers</h3>
+                  <p className="text-slate-500 font-medium text-[14px] md:text-[15px] leading-[1.8]">
+                    Conducting complex structural biology studies with confidence and reproducibility in a controlled computational environment.
                   </p>
                 </div>
-              </AnimatedSection>
-            ))}
-          </div>
+              </div>
+
+              {/* Card 2 */}
+              <div className="flex flex-col md:flex-row items-center md:items-center gap-8 p-8 md:px-10 md:py-8 border border-slate-200/80 bg-white overflow-hidden relative">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-slate-50 to-transparent pointer-events-none -mr-16 -mt-16 transform rotate-12" />
+                <div className="w-[72px] h-[72px] shrink-0 bg-[#e2e8f0]/40 flex items-center justify-center relative z-10">
+                  <Factory className="w-8 h-8 text-[#38bdf8]" strokeWidth={2} />
+                </div>
+                <div className="flex flex-col gap-2 relative z-10 text-center md:text-left">
+                  <h3 className="text-[20px] md:text-[22px] font-bold text-slate-800 tracking-tight">Industry Professionals</h3>
+                  <p className="text-slate-500 font-medium text-[14px] md:text-[15px] leading-[1.8]">
+                    Pharmaceutical teams looking to streamline and accelerate their drug discovery pipelines with enterprise-grade stability.
+                  </p>
+                </div>
+              </div>
+
+              {/* Card 3 */}
+              <div className="flex flex-col md:flex-row items-center md:items-center gap-8 p-8 md:px-10 md:py-8 border border-slate-200/80 bg-white overflow-hidden relative">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-slate-50 to-transparent pointer-events-none -mr-16 -mt-16 transform rotate-12" />
+                <div className="w-[72px] h-[72px] shrink-0 bg-[#e2e8f0]/40 flex items-center justify-center relative z-10">
+                  <BookOpen className="w-8 h-8 text-[#38bdf8]" strokeWidth={2} />
+                </div>
+                <div className="flex flex-col gap-2 relative z-10 text-center md:text-left">
+                  <h3 className="text-[20px] md:text-[22px] font-bold text-slate-800 tracking-tight">Bioinformatics Students</h3>
+                  <p className="text-slate-500 font-medium text-[14px] md:text-[15px] leading-[1.8]">
+                    Needing an intuitive, all-in-one educational and research tool for learning computational docking and molecular exploration.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </AnimatedSection>
         </div>
       </section>
 
-      <Footer />
+      <Footer lightTheme />
+      </div>
     </div>
   );
 };

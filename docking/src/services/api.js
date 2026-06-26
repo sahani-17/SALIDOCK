@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 export const api = {
   // Session Management
@@ -86,8 +86,8 @@ export const api = {
   },
 
   // Cavity Detection
-  detectCavities: async (sessionId, numCavities) => {
-    const response = await fetch(`${API_BASE_URL}/api/cavities/detect/${sessionId}?top_n=${numCavities}`, {
+  detectCavities: async (sessionId) => {
+    const response = await fetch(`${API_BASE_URL}/api/cavities/detect/${sessionId}`, {
       method: 'POST',
     });
     if (!response.ok) throw new Error('Failed to detect cavities');
@@ -166,6 +166,23 @@ export const api = {
     const response = await fetch(`${API_BASE_URL}/api/results/download/complex/${sessionId}/${poseNumber}`);
     if (!response.ok) throw new Error('Failed to download complex');
     return response.blob();
+  },
+
+  // Premium Visualizations
+  generatePremiumVisuals: async (sessionId, poseNumber) => {
+    const response = await fetch(`${API_BASE_URL}/api/results/visualize/${sessionId}/${poseNumber}`, {
+      method: 'POST',
+    });
+    if (!response.ok) throw new Error('Failed to generate premium visuals');
+    return response.json();
+  },
+
+  getPseUrl: (sessionId, poseNumber) => {
+    return `${API_BASE_URL}/api/results/download/pse/${sessionId}/${poseNumber}`;
+  },
+
+  getRenderUrl: (sessionId, poseNumber, theme) => {
+    return `${API_BASE_URL}/api/results/download/render/${sessionId}/${poseNumber}/${theme}`;
   },
 
   // AlphaFold Integration

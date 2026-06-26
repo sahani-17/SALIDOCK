@@ -8,7 +8,6 @@ dependencies:
   - rdkit
   - pdbfixer
   - fpocket
-  - vina
   - gemmi
   - openjdk=21
   - numpy
