@@ -24,7 +24,7 @@ A comprehensive web-based molecular docking platform for drug discovery and prot
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/Toxicvampire007/SALIDOCK.git
+git clone https://github.com/sahani-17/SALIDOCK.git
 cd SALIDOCK
 ```
 
