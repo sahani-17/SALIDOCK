@@ -17,6 +17,9 @@ pdb-tools
 # Scientific computing
 numpy
 biopython
+optuna
+matplotlib
+
 
 # HTTP requests for AlphaFold API
 requests

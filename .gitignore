@@ -1,0 +1,28 @@
+# Python Caches
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local Environment & Settings
+backend/.env
+.vscode/
+
+# Build & Metadata
+build/
+dist/
+*.egg-info/
+salidock.egg-info/
+
+# Logs
+*.log
+nohup.out
+wget-log*
+
+# Benchmark PDBs & Outputs
+salidock_benchmark/pdb/
+salidock_benchmark/pdb_isolated/
+salidock_benchmark/preproc_benchmark/
+salidock_benchmark/preprocessing_results/
+astex_benchmark/pdb_raw/
+astex_benchmark/pdb_prep/
+real_benchmarks/pdb/

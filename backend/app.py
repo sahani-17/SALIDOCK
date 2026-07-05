@@ -24,7 +24,7 @@ import logging
 import json
 from dotenv import load_dotenv
 load_dotenv()  # Load .env before any module reads env vars
-import tools, grid_calc, results, alphafold_integration, docking_viz
+import tools, grid_calc, results, alphafold_integration
 from docking import (
     run_docking,
     CavityMetadata,
@@ -1689,6 +1689,82 @@ async def detect_cavities_endpoint(
         # Limit to top_n
         cavity_results = cavity_results[:top_n]
         
+        # ── Telemetry Logging & Consensus JSON Persistence ─────────────────────
+        try:
+            import datetime
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            top1 = cavity_results[0] if cavity_results else None
+            meta = pipe.last_run_metadata or {}
+            
+            # Construct consensus JSON
+            consensus_data = {
+                "protein_id": session_id,
+                "top1_cavity": {
+                    "center": top1.center if top1 else None,
+                    "wrrf_score": top1.weighted_score if top1 else None,
+                    "cascade_triggered": meta.get("cascade_triggered", False),
+                    "tools_used": meta.get("tools_used", [])
+                },
+                "top5_cavities": [
+                    {
+                        "rank": r.rank,
+                        "center": r.center,
+                        "wrrf_score": r.weighted_score,
+                        "confidence": r.confidence,
+                        "volume": r.volume_estimate
+                    }
+                    for r in cavity_results[:5]
+                ]
+            }
+            
+            # Save consensus JSON to project root consensus/ directory
+            project_root = BASE_DIR.parent
+            consensus_dir = project_root / "consensus"
+            consensus_dir.mkdir(exist_ok=True, parents=True)
+            consensus_file = consensus_dir / f"{session_id}_consensus.json"
+            consensus_file.write_text(json.dumps(consensus_data, indent=2))
+            
+            # Format structured per-run log entry
+            n_fp = meta.get("fpocket_pockets_count", 0)
+            n_p2r = meta.get("p2rank_pockets_count", 0)
+            n_pur = meta.get("puresnet_pockets_count", 0)
+            dist_val = meta.get("p2rank_puresnet_distance")
+            dist_str = f"{dist_val:.2f}" if dist_val is not None else "N/A"
+            cascade_trig = meta.get("cascade_triggered", False)
+            cascade_str = "triggered" if cascade_trig else "NOT triggered"
+            tools_str = ", ".join(meta.get("tools_used", []))
+            
+            top1_coords = top1.center if top1 else "None"
+            top1_score = top1.weighted_score if top1 else 0.0
+            elapsed_sec = meta.get("elapsed_seconds", 0.0)
+            
+            log_entry = (
+                f"[{timestamp}] {session_id} — Consensus complete\n"
+                f"  Preprocessing: applied\n"
+                f"  fpocket: {n_fp} pockets detected (top-5 stored)\n"
+                f"  P2Rank: {n_p2r} pockets detected (top-5 stored)\n"
+                f"  PUResNet: {n_pur} pockets detected (top-5 stored)\n"
+                f"  Cascade check: P2Rank-PUResNet distance = {dist_str} Å → agreement → cascade {cascade_str}\n"
+                f"  Tools used in wRRF: {tools_str}\n"
+                f"  Top-1 cavity: {top1_coords} | wRRF score: {top1_score:.2f}\n"
+                f"  Runtime: {elapsed_sec:.1f} seconds\n"
+            )
+            
+            # Write to log files
+            log_paths = [
+                BASE_DIR / "logs" / "consensus.log",
+                BASE_DIR.parent / "salidock" / "logs" / "consensus.log"
+            ]
+            for lpath in log_paths:
+                try:
+                    lpath.parent.mkdir(exist_ok=True, parents=True)
+                    with open(lpath, "a", encoding="utf-8") as lf:
+                        lf.write(log_entry + "\n")
+                except Exception as le:
+                    logger.error(f"Failed to write log to {lpath}: {le}")
+        except Exception as te:
+            logger.error(f"Failed to record telemetry or save consensus data: {te}")
+        
         # Convert CavityResult objects → legacy dicts for downstream
         # compatibility (grid_calc, docking engine, results.py)
         cavities = cavity_bridge.cavity_results_to_legacy(
@@ -2723,20 +2799,7 @@ def export_results_to_user_folder(session_id: str, docking_results: list, dockin
                 tools.strip_model_records(str(dest_file))   # Fix 3: remove MODEL/ENDMDL tags for Mol* viewer
                 logger.info(f"Exported complex_pose_{i}.pdb to results")
                 
-                # Pre-generate visual assets (PSE, ray-traced PNG, 2D diagram) for the pose
-                # Running this automatically for the best pose (pose 1) so it loads instantly.
-                if i == 1:
-                    try:
-                        logger.info("Pre-rendering premium visualizations for the top pose...")
-                        docking_viz.generate_pose_visualizations(
-                            session_id=session_id,
-                            pose_number=1,
-                            protein_pdbqt=protein_pdbqt,
-                            ligand_pdbqt=ligand_pdbqt,
-                            results_dir=session_results_dir
-                        )
-                    except Exception as viz_err:
-                        logger.error(f"Failed to pre-render premium visualizations: {viz_err}")
+                pass
         except Exception as e:
             logger.error(f"Failed to export complex for pose {i}: {str(e)}")
     
@@ -2768,13 +2831,6 @@ def export_results_to_user_folder(session_id: str, docking_results: list, dockin
         if interactions_dir.exists():
             for f in interactions_dir.glob("*.json"):
                 cloud_save(session_id, f"results/interactions/{f.name}", f.read_bytes())
-        # Upload premium renderings/sessions from results root
-        for f in session_results_dir.glob("*.pse"):
-            cloud_save(session_id, f"results/pymol/{f.name}", f.read_bytes())
-        for f in session_results_dir.glob("*.png"):
-            cloud_save(session_id, f"results/renders/{f.name}", f.read_bytes())
-        for f in session_results_dir.glob("*.svg"):
-            cloud_save(session_id, f"results/diagrams/{f.name}", f.read_bytes())
         # Upload reports
         if reports_dir.exists():
             for f in reports_dir.iterdir():
@@ -3142,42 +3198,9 @@ def resolve_pose_pdbqt(session_dir: Path, rank: int) -> tuple[Path, int]:
 async def get_2d_interaction_svg(session_id: str, pose: int):
     """
     Generate and return a 2D interaction diagram SVG for the given docking pose.
-    Prioritizes the native PLIP-generated SVG, falling back to the custom RDKit/ProLIF diagram.
+    Directly uses the custom RDKit/ProLIF interaction_2d engine.
     """
     from fastapi.responses import Response
-    
-    # 1. Attempt to fetch/load the native PLIP-generated SVG
-    svg_filename = f"pose_{pose}_2d.svg"
-    local_svg_path = RESULTS_DIR / session_id / svg_filename
-
-    # Ensure RESULTS_DIR/session_id exists
-    local_svg_path.parent.mkdir(parents=True, exist_ok=True)
-
-    if not local_svg_path.exists():
-        # Try to restore from Supabase
-        try:
-            data = cloud_read(session_id, f"results/diagrams/{svg_filename}")
-            if data:
-                local_svg_path.write_bytes(data)
-        except Exception as e:
-            logger.warning(f"Could not restore 2D diagram SVG from Supabase: {e}")
-
-    if not local_svg_path.exists():
-        # Try to generate it on the fly (which runs PLIP and saves it)
-        try:
-            await generate_premium_visuals(session_id, pose)
-        except Exception as e:
-            logger.warning(f"Failed to generate premium PLIP visuals on-the-fly: {e}")
-
-    if local_svg_path.exists():
-        try:
-            svg_content = local_svg_path.read_text(encoding="utf-8")
-            return Response(content=svg_content, media_type="image/svg+xml")
-        except Exception as e:
-            logger.warning(f"Failed to read local PLIP SVG: {e}")
-
-    # 2. Fallback to custom 2D SVG generator if PLIP SVG is missing
-    logger.info(f"PLIP SVG missing for pose {pose}. Falling back to custom interaction_2d engine.")
     from interaction_2d import parse_pdb, detect, render_svg, extract_affinity_from_pdb
 
     session_dir = get_session_dir(session_id)
@@ -3208,19 +3231,31 @@ async def get_2d_interaction_svg(session_id: str, pose: int):
     ligand_pdbqt, internal_mode = resolve_pose_pdbqt(session_dir, pose)
     if not ligand_pdbqt or not ligand_pdbqt.exists():
         raise HTTPException(status_code=404, detail=f"Docking results not found for pose {pose}")
-        
+
+    # ── Resolve binding affinity for this exact pose ──────────────────────────
+    # Parse directly from the PDBQT using internal_mode (1-based within that file).
+    # This avoids the bug where extract_affinity_from_pdb reads a stale REMARK
+    # from the protein PDB or finds the wrong pose's affinity.
+    affinity: float = 0.0
+    try:
+        parsed_results = results.parse_vina_output(str(ligand_pdbqt))
+        if parsed_results and len(parsed_results) >= internal_mode:
+            affinity = parsed_results[internal_mode - 1].get("affinity", 0.0)
+    except Exception as e:
+        logger.warning(f"Could not parse affinity for pose {pose} (internal {internal_mode}): {e}")
+
     # Check for ligand reference SDF (template for bond orders)
     sdf_ref = session_dir / "ligand_ref.sdf"
     original_sdf_path = str(sdf_ref) if sdf_ref.exists() else None
-        
+
     # Create the complex using helper function and save it to a temporary location
     complex_pdb_string = create_protein_ligand_complex(
         protein_pdbqt=protein_pdbqt,
         ligand_pdbqt=ligand_pdbqt,
         pose_number=internal_mode,
-        include_remarks=True
+        include_remarks=False  # don't write a Binding Affinity REMARK — we use affinity directly
     )
-    
+
     # Save to a temporary file in the session directory for parsing
     complex_path = session_dir / f"temp_complex_pose_{pose}.pdb"
     try:
@@ -3228,15 +3263,92 @@ async def get_2d_interaction_svg(session_id: str, pose: int):
             f.write(complex_pdb_string)
 
         protein_atoms, ligand_atoms = parse_pdb(str(complex_path))
-        affinity = extract_affinity_from_pdb(str(complex_path))
-        
-        interactions = detect(protein_atoms, ligand_atoms)
+
+        interactions = detect(protein_atoms, ligand_atoms, pdb_path=str(complex_path))
         svg_content = render_svg(
             str(complex_path), interactions, affinity,
             original_sdf_path=original_sdf_path
         )
-        
+
         return Response(content=svg_content, media_type="image/svg+xml")
+    finally:
+        if complex_path.exists():
+            try:
+                complex_path.unlink()
+            except:
+                pass
+
+@app.get("/api/interactions/3d/{session_id}/{pose}")
+async def get_3d_interaction_lines(session_id: str, pose: int):
+    """
+    Return JSON list of interaction records with 3D Cartesian coordinates
+    for ligand atom (origin) and protein residue centroid (endpoint).
+    Used by the frontend to render colored dashed cylinders in Mol*.
+    """
+    from fastapi.responses import JSONResponse
+    from interaction_2d import parse_pdb, detect
+
+    session_dir = get_session_dir(session_id)
+    ensure_session_file(session_id, "protein_prepared.pdb")
+    ensure_session_file(session_id, "protein_prepared.pdbqt")
+
+    protein_pdbqt = session_dir / "protein_prepared.pdbqt"
+    ligand_pdbqt, internal_mode = resolve_pose_pdbqt(session_dir, pose)
+    if not ligand_pdbqt or not ligand_pdbqt.exists():
+        raise HTTPException(404, f"Docking results not found for pose {pose}")
+
+    affinity = 0.0
+    try:
+        parsed = results.parse_vina_output(str(ligand_pdbqt))
+        if parsed and len(parsed) >= internal_mode:
+            affinity = parsed[internal_mode - 1].get("affinity", 0.0)
+    except Exception:
+        pass
+
+    complex_pdb = create_protein_ligand_complex(
+        protein_pdbqt=protein_pdbqt,
+        ligand_pdbqt=ligand_pdbqt,
+        pose_number=internal_mode,
+        include_remarks=False,
+    )
+    complex_path = session_dir / f"temp_3d_lines_pose_{pose}.pdb"
+    try:
+        with open(complex_path, "w") as f:
+            f.write(complex_pdb)
+        protein_atoms, ligand_atoms = parse_pdb(str(complex_path))
+        
+        # Parse PDB for H-atoms if available for C-H bond analysis
+        _, _, h_atoms = parse_pdb(str(complex_path), return_h=True)
+        
+        interactions = detect(protein_atoms, ligand_atoms, pdb_path=str(complex_path), h_atoms=h_atoms)
+
+        records = []
+        for ix in interactions:
+            li = ix.get("lig_atom_idx", 0)
+            la = ligand_atoms[li] if li < len(ligand_atoms) else {}
+            res_atoms = [a for a in protein_atoms
+                         if a["resid"] == ix["resid"]
+                         and a["chain"] == ix["chain"]]
+            if not res_atoms:
+                continue
+            rx = sum(a["x"] for a in res_atoms) / len(res_atoms)
+            ry = sum(a["y"] for a in res_atoms) / len(res_atoms)
+            rz = sum(a["z"] for a in res_atoms) / len(res_atoms)
+            records.append({
+                "type":    ix["type"],
+                "label":   f"{ix['resname']} {ix['chain']}:{ix['resid']}",
+                "resname": ix["resname"],
+                "resid":   ix["resid"],
+                "chain":   ix["chain"],
+                "dist":    round(ix.get("dist", 0.0), 3),
+                "lig_x":  round(la.get("x", 0.0), 3),
+                "lig_y":  round(la.get("y", 0.0), 3),
+                "lig_z":  round(la.get("z", 0.0), 3),
+                "res_x":  round(rx, 3),
+                "res_y":  round(ry, 3),
+                "res_z":  round(rz, 3),
+            })
+        return {"pose": pose, "affinity": affinity, "interactions": records}
     finally:
         if complex_path.exists():
             try:
@@ -3348,159 +3460,7 @@ async def get_uniprot_info(uniprot_id: str):
         return json_error(str(e))
 
 
-@app.post("/api/results/visualize/{session_id}/{pose_number}")
-async def generate_premium_visuals(session_id: str, pose_number: int):
-    """
-    Generate all premium visual assets (PSE session, light/dark renders, 2D diagrams) for a specific pose.
-    """
-    try:
-        session_dir = get_session_dir(session_id)
-        pose_number = validate_pose_number(pose_number, session_dir)
-        
-        # Ensure key files are downloaded locally from Supabase if missing
-        ensure_session_file(session_id, "protein_prepared.pdbqt")
-        ensure_session_file(session_id, "protein_prepared.pdb")
-        ensure_session_file(session_id, "ligand_ref.sdf")
-        
-        # Resolve which docking output file has the pose
-        ligand_pdbqt, internal_mode = resolve_pose_pdbqt(session_dir, pose_number)
-        if not ligand_pdbqt or not ligand_pdbqt.exists():
-            # Trigger restore if missing
-            ensure_session_file(session_id, ligand_pdbqt.name if ligand_pdbqt else "docking_out_out.pdbqt")
-            # re-check resolve
-            ligand_pdbqt, internal_mode = resolve_pose_pdbqt(session_dir, pose_number)
-            
-        if not ligand_pdbqt or not ligand_pdbqt.exists():
-            raise HTTPException(status_code=404, detail="Docking results not found")
-
-        protein_pdbqt = session_dir / "protein_prepared.pdbqt"
-        results_dir = RESULTS_DIR / session_id
-        results_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Call generate_pose_visualizations from docking_viz
-        assets = docking_viz.generate_pose_visualizations(
-            session_id=session_id,
-            pose_number=pose_number,
-            protein_pdbqt=protein_pdbqt,
-            ligand_pdbqt=ligand_pdbqt,
-            results_dir=results_dir
-        )
-        
-        # Persist generated assets to Supabase Storage if generated
-        try:
-            # Upload files
-            for key, val in assets.items():
-                if key == 'complex_pdb':
-                    p = session_dir / val
-                    if p.exists():
-                        cloud_save(session_id, f"results/complexes/{val}", p.read_bytes())
-                elif key == 'pymol_session':
-                    p = results_dir / val
-                    if p.exists():
-                        cloud_save(session_id, f"results/pymol/{val}", p.read_bytes())
-                elif key in ('render_light', 'render_dark', 'render_electrostatic'):
-                    p = results_dir / val
-                    if p.exists():
-                        cloud_save(session_id, f"results/renders/{val}", p.read_bytes())
-                elif key == 'diagram_2d':
-                    p = results_dir / val
-                    if p.exists():
-                        cloud_save(session_id, f"results/diagrams/{val}", p.read_bytes())
-        except Exception as e:
-            logger.error(f"Failed to cloud-save visual assets: {e}")
-            
-        return {"status": "ok", "assets": assets}
-    except Exception as e:
-        logger.error(f"Error in generate_premium_visuals: {e}", exc_info=True)
-        return json_error(str(e))
-
-@app.get("/api/results/download/pse/{session_id}/{pose_number}")
-async def download_pse_session(session_id: str, pose_number: int):
-    """
-    Download pre-annotated PyMOL PSE session for a specific pose.
-    """
-    from fastapi.responses import FileResponse
-    try:
-        validate_session_id(session_id)
-        session_dir = get_session_dir(session_id)
-        pose_number = validate_pose_number(pose_number, session_dir)
-        
-        pse_file = RESULTS_DIR / session_id / f"pose_{pose_number}_session.pse"
-        
-        if not pse_file.exists():
-            # Try to restore from Supabase
-            try:
-                data = cloud_read(session_id, f"results/pymol/pose_{pose_number}_session.pse")
-                if data:
-                    pse_file.parent.mkdir(parents=True, exist_ok=True)
-                    pse_file.write_bytes(data)
-            except Exception as e:
-                logger.warning(f"Could not restore PSE from Supabase: {e}")
-                
-        if not pse_file.exists():
-            # Try to generate it on the fly if not found
-            await generate_premium_visuals(session_id, pose_number)
-            
-        if not pse_file.exists():
-            raise HTTPException(status_code=404, detail="PSE session not found and could not be generated.")
-            
-        return FileResponse(
-            pse_file,
-            filename=f"pose_{pose_number}_session.pse",
-            media_type="application/octet-stream"
-        )
-    except Exception as e:
-        logger.error(f"Error in download_pse_session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/results/download/render/{session_id}/{pose_number}/{theme}")
-async def download_rendered_figure(session_id: str, pose_number: int, theme: str):
-    """
-    Fetch/Render high-quality ray-traced image of a pose.
-    Themes: light, dark, electrostatic.
-    """
-    from fastapi.responses import FileResponse
-    try:
-        validate_session_id(session_id)
-        session_dir = get_session_dir(session_id)
-        pose_number = validate_pose_number(pose_number, session_dir)
-        
-        if theme not in ("light", "dark", "electrostatic"):
-            raise HTTPException(status_code=400, detail="Invalid theme. Allowed: light, dark, electrostatic")
-            
-        img_file = RESULTS_DIR / session_id / f"pose_{pose_number}_{theme}.png"
-        
-        if not img_file.exists():
-            # Try to restore from Supabase
-            try:
-                data = cloud_read(session_id, f"results/renders/pose_{pose_number}_{theme}.png")
-                if data:
-                    img_file.parent.mkdir(parents=True, exist_ok=True)
-                    img_file.write_bytes(data)
-            except Exception as e:
-                logger.warning(f"Could not restore render from Supabase: {e}")
-                
-        if not img_file.exists():
-            # Try to generate it on the fly
-            await generate_premium_visuals(session_id, pose_number)
-            
-        if not img_file.exists():
-            # If theme was electrostatic, it might not be generated if APBS failed.
-            # In that case, fall back to the light render.
-            if theme == "electrostatic":
-                img_file = RESULTS_DIR / session_id / f"pose_{pose_number}_light.png"
-                
-        if not img_file.exists():
-            raise HTTPException(status_code=404, detail="Rendered figure not found.")
-            
-        return FileResponse(
-            img_file,
-            filename=f"pose_{pose_number}_{theme}.png",
-            media_type="image/png"
-        )
-    except Exception as e:
-        logger.error(f"Error in download_rendered_figure: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+# End of File
 
 
 

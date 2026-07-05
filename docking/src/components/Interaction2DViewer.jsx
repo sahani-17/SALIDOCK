@@ -137,8 +137,8 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
   // They appear as text content in the SVG between <text> tags
   const extractResidues = (svgString) => {
     if (!svgString) return new Set();
-    const matches = svgString.match(/>[A-Z]{2,3}\d+</g) || [];
-    return new Set(matches.map(m => m.slice(1, -1)));
+    const matches = svgString.match(/>[A-Z]{2,3}\s?\d+</g) || [];
+    return new Set(matches.map(m => m.slice(1, -1).replace(/\s/g, "")));
   };
 
   // Compute shared and unique residues whenever both SVGs are available
@@ -277,6 +277,14 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
 
   return (
     <div className="flex flex-col h-full w-full bg-white rounded-lg overflow-hidden border border-primary/10" style={{ height: '600px' }}>
+      <style>{`
+        .svg-container-2d svg {
+          width: 100% !important;
+          height: 100% !important;
+          max-width: 100% !important;
+          max-height: 100% !important;
+        }
+      `}</style>
       {/* ── TOOLBAR ─────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 flex-shrink-0">
 
@@ -416,6 +424,7 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
             )}
             {svgContent && !loading && (
               <div
+                className="svg-container-2d"
                 style={{
                   transform: `translate(${panX}px, ${panY}px) scale(${scale})`,
                   transformOrigin: "center center",
@@ -469,6 +478,7 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
               )}
               {compareSvg && !compareLoading && (
                 <div
+                  className="svg-container-2d"
                   style={{
                     transform: `translate(${panXB}px, ${panYB}px) scale(${scaleB})`,
                     transformOrigin: "center center",

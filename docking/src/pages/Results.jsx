@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Download, Loader2, Eye, ChevronDown, Star, MessageSquareText, Sparkles, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
-import { api } from '../services/api';
+import { api, API_BASE_URL } from '../services/api';
 import MolecularViewer from '../components/MolecularViewer';
 import Interaction2DViewer from '../components/Interaction2DViewer';
 import Navbar from '../components/Navbar';
@@ -26,14 +26,14 @@ const LIGAND_REPRESENTATIONS = [
 ];
 
 const COLOR_SCHEMES = [
-  { value: 'default', label: 'Default' },
-  { value: 'element-symbol', label: 'Element' },
-  { value: 'chain-id', label: 'Chain' },
-  { value: 'residue-name', label: 'Residue Name' },
-  { value: 'sequence-id', label: 'Sequence ID' },
+  { value: 'chain-id',            label: 'Chain (Default)' },
+  { value: 'entity-id',           label: 'Entity' },
   { value: 'secondary-structure', label: 'Secondary Structure' },
-  { value: 'hydrophobicity', label: 'Hydrophobicity' },
-  { value: 'uniform', label: 'Uniform' },
+  { value: 'element-symbol',      label: 'Element (CPK)' },
+  { value: 'hydrophobicity',      label: 'Hydrophobicity' },
+  { value: 'residue-name',        label: 'Residue Name' },
+  { value: 'sequence-id',         label: 'Sequence ID' },
+  { value: 'uniform',             label: 'Uniform Blue' },
 ];
 
 // ─── Dropdown Component (lives entirely in Results, outside Mol*) ──
@@ -132,18 +132,8 @@ function Results() {
   const [selectedPose, setSelectedPose] = useState(1);
   const [pdbData, setPdbData] = useState(null);
   const [loadingViewer, setLoadingViewer] = useState(false);
-  const [viewMode, setViewMode] = useState('3d'); // '3d', '2d', or 'premium'
-  const [premiumTheme, setPremiumTheme] = useState('light'); // 'light', 'dark', 'electrostatic'
-  const [premiumImageLoading, setPremiumImageLoading] = useState(false);
-  const [rebuildingPremium, setRebuildingPremium] = useState(false);
+  const [viewMode, setViewMode] = useState('3d'); // '3d' or '2d'
   const [selectedCavityFilter, setSelectedCavityFilter] = useState('all');
-
-  // Set loading state when pose or theme changes
-  useEffect(() => {
-    if (viewMode === 'premium') {
-      setPremiumImageLoading(true);
-    }
-  }, [selectedPose, premiumTheme, viewMode]);
   const [feedbackRating, setFeedbackRating] = useState(0);
   const [feedbackName, setFeedbackName] = useState('');
   const [feedbackDescription, setFeedbackDescription] = useState('');
@@ -154,12 +144,13 @@ function Results() {
   // Viewer control state
   const [proteinRepr, setProteinRepr] = useState('cartoon');
   const [ligandRepr, setLigandRepr] = useState('ball-and-stick');
-  const [colorScheme, setColorScheme] = useState('element-symbol');
+  const [colorScheme, setColorScheme] = useState('chain-id');
   const [showPocketResidues, setShowPocketResidues] = useState(true);
   const [showPocketLabels, setShowPocketLabels] = useState(true);
   const [showPocketSurface, setShowPocketSurface] = useState(false);
   const [showInteractions, setShowInteractions] = useState(true);
   const [spin, setSpin] = useState(false);
+  const [showProtein, setShowProtein] = useState(true);
 
   const viewerRef = useRef(null);
 
@@ -235,6 +226,8 @@ function Results() {
       setLoadingViewer(false);
     }
   }, [sessionId]);
+
+
 
   // Auto-load best pose
   useEffect(() => {
@@ -330,27 +323,6 @@ function Results() {
       setSubmittingFeedback(false);
     }
   };
-
-  const handleRebuildPremium = async () => {
-    setRebuildingPremium(true);
-    setPremiumImageLoading(true);
-    try {
-      await api.generatePremiumVisuals(sessionId, selectedPose);
-      toast.success('Premium figures generated successfully!');
-      // Force reload the image by triggering load
-      setPremiumImageLoading(false);
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to rebuild premium visualizations.');
-      setPremiumImageLoading(false);
-    } finally {
-      setRebuildingPremium(false);
-    }
-  };
-
-
-
-
 
   // ─── Render guards ────────────────────────────────────────────────
   if (loading) {
@@ -448,15 +420,6 @@ function Results() {
               >
                 2D Interactions
               </button>
-              <button
-                onClick={() => setViewMode('premium')}
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-md transition-all ${
-                  viewMode === 'premium' ? 'bg-white shadow-sm text-blue-700 border border-blue-200' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Sparkles className="w-4 h-4" />
-                Premium Figures
-              </button>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               {/* Cavity Filter Dropdown */}
@@ -531,6 +494,17 @@ function Results() {
 
                 {/* Right: Camera Actions */}
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowProtein(p => !p)}
+                    className={`px-3 py-1.5 border rounded-md text-xs font-semibold transition-all flex items-center gap-1 shadow-sm ${
+                      !showProtein
+                        ? 'bg-slate-700 text-white border-slate-600'
+                        : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                    }`}
+                    title={showProtein ? "Hide protein receptor structure" : "Show protein receptor structure"}
+                  >
+                    {showProtein ? '👁 Hide Receptor' : '👁 Show Receptor'}
+                  </button>
                   <button
                     onClick={() => viewerRef.current?.zoomToPocket()}
                     className="px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-md text-xs font-semibold text-slate-700 hover:text-slate-900 transition-all flex items-center gap-1 shadow-sm"
@@ -622,6 +596,7 @@ function Results() {
                     showPocketSurface={showPocketSurface}
                     showInteractions={showInteractions}
                     spin={spin}
+                    showProtein={showProtein}
                   />
                 ) : (
                   <div className="w-full h-[500px] bg-slate-100/70 rounded-xl flex items-center justify-center border-2 border-dashed border-slate-300">
@@ -638,96 +613,7 @@ function Results() {
             </div>
           )}
 
-          {viewMode === 'premium' && (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 flex flex-col md:flex-row gap-6">
-              {/* Left Column: Image Display and Loader */}
-              <div className="flex-1 flex flex-col items-center justify-center bg-white rounded-xl p-4 border border-slate-200 shadow-sm relative min-h-[400px]">
-                {premiumImageLoading && (
-                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/80 rounded-xl">
-                    <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-3" />
-                    <p className="text-slate-600 text-sm font-semibold">Generating publication figures...</p>
-                  </div>
-                )}
-                <img
-                  src={api.getRenderUrl(sessionId, selectedPose, premiumTheme) + `?t=${rebuildingPremium ? Date.now() : ''}`}
-                  alt={`Pose ${selectedPose} ${premiumTheme} view`}
-                  className="max-h-[500px] object-contain rounded-lg max-w-full"
-                  onLoad={() => setPremiumImageLoading(false)}
-                  onError={() => setPremiumImageLoading(false)}
-                />
-              </div>
 
-              {/* Right Column: Interactive Panel controls */}
-              <div className="w-full md:w-80 flex flex-col gap-4">
-                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-                  <h3 className="text-sm font-bold text-slate-800 mb-3 uppercase tracking-wider">Figure Themes</h3>
-                  <div className="flex flex-col gap-2">
-                    <button
-                      onClick={() => setPremiumTheme('light')}
-                      className={`w-full text-left px-4 py-2.5 rounded-lg border text-sm font-semibold transition-all ${
-                        premiumTheme === 'light'
-                          ? 'bg-blue-50 border-blue-200 text-blue-700 font-bold'
-                          : 'border-slate-200 text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      Ray-Traced (Light Background)
-                    </button>
-                    <button
-                      onClick={() => setPremiumTheme('dark')}
-                      className={`w-full text-left px-4 py-2.5 rounded-lg border text-sm font-semibold transition-all ${
-                        premiumTheme === 'dark'
-                          ? 'bg-blue-50 border-blue-200 text-blue-700 font-bold'
-                          : 'border-slate-200 text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      Ray-Traced (Dark Background)
-                    </button>
-                    <button
-                      onClick={() => setPremiumTheme('electrostatic')}
-                      className={`w-full text-left px-4 py-2.5 rounded-lg border text-sm font-semibold transition-all ${
-                        premiumTheme === 'electrostatic'
-                          ? 'bg-blue-50 border-blue-200 text-blue-700 font-bold'
-                          : 'border-slate-200 text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      Electrostatic Surface (APBS)
-                    </button>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex flex-col gap-3">
-                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Downloads</h3>
-                  
-                  <a
-                    href={api.getRenderUrl(sessionId, selectedPose, premiumTheme)}
-                    download={`pose_${selectedPose}_${premiumTheme}.png`}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-lg transition-all shadow-sm"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download PNG (300 DPI)
-                  </a>
-
-                  <a
-                    href={api.getPseUrl(sessionId, selectedPose)}
-                    download={`pose_${selectedPose}_session.pse`}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-slate-300 hover:border-blue-300 text-slate-700 hover:text-slate-900 font-bold text-sm rounded-lg transition-all"
-                  >
-                    <Download className="w-4 h-4" />
-                    PyMOL Session (.pse)
-                  </a>
-
-                  <button
-                    onClick={handleRebuildPremium}
-                    disabled={rebuildingPremium}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 font-bold text-xs rounded-lg transition-all"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${rebuildingPremium ? 'animate-spin' : ''}`} />
-                    Re-render Figure
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Viewer hints */}
           {viewMode === '3d' && (

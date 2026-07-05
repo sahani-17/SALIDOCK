@@ -168,23 +168,6 @@ export const api = {
     return response.blob();
   },
 
-  // Premium Visualizations
-  generatePremiumVisuals: async (sessionId, poseNumber) => {
-    const response = await fetch(`${API_BASE_URL}/api/results/visualize/${sessionId}/${poseNumber}`, {
-      method: 'POST',
-    });
-    if (!response.ok) throw new Error('Failed to generate premium visuals');
-    return response.json();
-  },
-
-  getPseUrl: (sessionId, poseNumber) => {
-    return `${API_BASE_URL}/api/results/download/pse/${sessionId}/${poseNumber}`;
-  },
-
-  getRenderUrl: (sessionId, poseNumber, theme) => {
-    return `${API_BASE_URL}/api/results/download/render/${sessionId}/${poseNumber}/${theme}`;
-  },
-
   // AlphaFold Integration
   predictFromSequence: async (sessionId, fastaSequence) => {
     const params = new URLSearchParams({

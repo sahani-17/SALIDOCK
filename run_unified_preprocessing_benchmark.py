@@ -244,13 +244,56 @@ def parse_ds_file(ds_path: Path) -> List[str]:
     with open(ds_path, encoding='utf-8', errors='replace') as fh:
         for line in fh:
             line = line.strip()
-            if not line or line.startswith('#'):
+            if not line or line.startswith('#') or line.startswith('PARAM'):
                 continue
             for p in line.split():
                 if '.pdb' in p:
                     paths.append(p)
                     break
     return paths
+
+
+def extract_pdb_id(relative_path: str) -> str:
+    """
+    Extract the canonical 4-letter PDB ID from a .ds file entry path.
+
+    Handles all known P2Rank dataset naming conventions:
+
+    Format A — SCOP-style (CHEN11):
+        chen11/a.001.001.001_1s69a.pdb  →  1s69
+        Stem contains '_', PDB ID is the last '_'-delimited segment
+        with the trailing chain letter removed.
+
+    Format B — PDBIDchain (COACH420):
+        coach420/148lE.pdb              →  148l
+        5-char stem: first 4 = PDB ID, last 1 = chain letter.
+
+    Format C — plain PDB ID (HOLO4K, CASF2016, PDBbind2020):
+        holo4k/121p.pdb                 →  121p
+        4-char stem: already the PDB ID.
+
+    Format D — subdirectory + plain PDB ID (JOINED560):
+        joined/astex/1g9v.pdb           →  1g9v
+        Same as C but with extra directory level.
+
+    Returns lowercase 4-letter PDB ID string.
+    """
+    stem = Path(relative_path).stem  # filename without extension
+
+    # Format A: SCOP-style — contains underscore, e.g. 'a.001.001.001_1s69a'
+    if '_' in stem:
+        part = stem.rsplit('_', 1)[-1]   # '1s69a'
+        # part = 4-letter PDB ID + 1-letter chain → strip chain
+        if len(part) >= 5:
+            return part[:4].lower()
+        return part[:4].lower()
+
+    # Format B: PDBIDchain — 5-char stem, e.g. '148lE'
+    if len(stem) == 5:
+        return stem[:4].lower()
+
+    # Format C/D: plain 4-char PDB ID, e.g. '121p', '1g9v'
+    return stem[:4].lower()
 
 
 def _rcsb_download(pdb_id: str, dest: Path) -> Optional[Path]:
@@ -525,14 +568,27 @@ def run_phase_1(datasets_to_run: List[str]):
                 print(f"  [ERROR] Unknown dataset {ds_name} — skipping")
                 continue
 
-            prog      = Progress(len(targets), ds_name)
+            # De-duplicate: build unique ordered list of PDB IDs from targets
+            seen_for_dedup: set = set()
+            unique_targets: List[str] = []
+            for target in targets:
+                pid = extract_pdb_id(target)
+                if pid not in seen_for_dedup:
+                    seen_for_dedup.add(pid)
+                    unique_targets.append(target)
+
+            n_dupes = len(targets) - len(unique_targets)
+            if n_dupes > 0:
+                print(f"  [INFO] {len(targets)} entries → {len(unique_targets)} unique PDB IDs ({n_dupes} duplicate chain entries removed)")
+
+            prog      = Progress(len(unique_targets), ds_name)
             processed = 0
 
-            for target in targets:
-                pdb_id  = Path(target).stem[:4].lower()
+            for target in unique_targets:
+                pdb_id  = extract_pdb_id(target)
                 ck_key  = f"{ds_name}/{pdb_id}"
 
-                # Already done in a previous run
+                # Already done in a previous run (checkpoint resume)
                 if checkpoint.get(ck_key) is True:
                     prog.tick(pdb_id, 'skip')
                     continue
@@ -849,6 +905,60 @@ def run_phase_3():
 # PHASE 4 — OPTUNA WEIGHT OPTIMISATION
 # ══════════════════════════════════════════════════════════════════════════════
 
+def wrrf_predict_top1(pdata: List[dict], w_fp: float, w_p2r: float, w_pur: float, k: int = 60, cluster_radius: float = 6.0) -> Optional[List[float]]:
+    weights = {'fpocket': w_fp, 'p2rank': w_p2r, 'purnet': w_pur}
+    
+    # Filter to active tools and tag rank
+    all_pockets = []
+    for p in pdata:
+        tool = p['tool']
+        w = weights.get(tool, 0.0)
+        if w > 0.0:
+            all_pockets.append({
+                'center': np.array(p['center']),
+                'tool': tool,
+                'rank': p['rank']
+            })
+            
+    if not all_pockets:
+        return None
+        
+    # Greedy single-linkage spatial clustering (radius = 6.0 Å)
+    clusters = []
+    for pocket in all_pockets:
+        center = pocket['center']
+        assigned = False
+        for c in clusters:
+            dist = float(np.linalg.norm(center - c['center']))
+            if dist <= cluster_radius:
+                c['members'].append(pocket)
+                all_centers = np.array([m['center'] for m in c['members']])
+                c['center'] = all_centers.mean(axis=0)
+                c['tools'].add(pocket['tool'])
+                assigned = True
+                break
+        if not assigned:
+            clusters.append({
+                'center': center.copy(),
+                'members': [pocket],
+                'tools': {pocket['tool']}
+            })
+            
+    # wRRF Scoring
+    for c in clusters:
+        wrrf = 0.0
+        for tool, w in weights.items():
+            tool_members = [m for m in c['members'] if m['tool'] == tool]
+            if not tool_members:
+                continue
+            best_rank = min(m['rank'] for m in tool_members)
+            wrrf += w * (1.0 / (k + best_rank))
+        c['wrrf_score'] = wrrf
+        
+    clusters.sort(key=lambda c: c['wrrf_score'], reverse=True)
+    return clusters[0]['center'].tolist() if clusters else None
+
+
 def run_phase_4():
     print('\n' + '=' * 80)
     print('  PHASE 4 — OPTUNA WEIGHT OPTIMISATION')
@@ -863,11 +973,23 @@ def run_phase_4():
 
     labels_path = BENCH_DIR / 'dca_labels' / 'threshold_4A.tsv'
     master_path = BENCH_DIR / 'master_distance_matrix.tsv'
+    cent_path = BENCH_DIR / 'true_centroids.json'
     results_dir = BENCH_DIR / 'optuna_results'
     results_dir.mkdir(exist_ok=True)
 
     if not labels_path.exists() or not master_path.exists():
         print('  [ERROR] Run Phase 3 first.')
+        return
+
+    if not cent_path.exists():
+        print('  [ERROR] true_centroids.json not found. Run Phase 1 first.')
+        return
+
+    # Load true centroids cache
+    try:
+        true_centroids = json.loads(cent_path.read_text(encoding='utf-8'))
+    except Exception as exc:
+        print(f"  [ERROR] Failed to load true centroids: {exc}")
         return
 
     # Load data
@@ -888,14 +1010,6 @@ def run_phase_4():
             except (ValueError, IndexError):
                 continue
 
-    labels = {}
-    with open(labels_path, encoding='utf-8') as fh:
-        next(fh)
-        for line in fh:
-            parts = line.strip().split('\t')
-            if len(parts) >= 5:
-                labels[f"{parts[0]}/{parts[2]}/1"] = int(parts[4])
-
     pid_dict: Dict[str, List[dict]] = defaultdict(list)
     for r in rows:
         pid_dict[r['protein_id']].append(r)
@@ -904,22 +1018,18 @@ def run_phase_4():
         successes = 0
         total     = 0
         for pid, preds in pid_dict.items():
-            tc = []
-            for p in preds:
-                if p['dist'] > 0:
-                    tc.append(p['center'])
-                    break
+            tc = true_centroids.get(pid)
             if not tc:
                 continue
 
-            best_d = float('inf')
-            for tool, w in [('fpocket', wf), ('p2rank', wp), ('purnet', wu)]:
-                tp = [p for p in preds if p['tool'] == tool and p['rank'] == 1]
-                if tp:
-                    d = euclidean(tp[0]['center'], tc[0]) * (1 / (w + 1e-9))
-                    best_d = min(best_d, d)
+            # Predict consensus top-1 center using wRRF fusion algorithm
+            pred_center = wrrf_predict_top1(preds, wf, wp, wu)
+            if pred_center is None:
+                continue
 
-            if best_d <= 4.0:
+            # Calculate distance to nearest true ligand centroid
+            min_d = min(euclidean(pred_center, c) for c in tc)
+            if min_d <= 4.0:
                 successes += 1
             total += 1
         return successes / total if total else 0.0

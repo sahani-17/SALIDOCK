@@ -94,7 +94,8 @@ const MolecularViewer = forwardRef(function MolecularViewer({
   showPocketLabels = true,
   showPocketSurface = false,
   showInteractions = true,
-  spin = false
+  spin = false,
+  showProtein = true,
 }, ref) {
   const viewerRef = useRef(null);
   const pluginRef = useRef(null);
@@ -159,14 +160,15 @@ const MolecularViewer = forwardRef(function MolecularViewer({
 
   // Helper function to delete component by tag
   const deleteCompByTag = useCallback(async (plugin, structureRef, tag) => {
-    const parentRef = structureRef.transform.ref;
+    const parentRef = structureRef?.cell?.transform?.ref;
+    if (!parentRef) return;
     const children = plugin.state.data.tree.children.get(parentRef);
     if (children) {
       const update = plugin.build();
       let deleted = false;
       children.forEach(childRef => {
         const cell = plugin.state.data.cells.get(childRef);
-        if (cell && cell.transform.tags && cell.transform.tags.includes(tag)) {
+        if (cell && (childRef === tag || (cell.transform.tags && cell.transform.tags.includes(tag)))) {
           update.delete(childRef);
           deleted = true;
         }
@@ -194,7 +196,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
     const plugin = pluginRef.current;
     if (!plugin) return;
     const structureRef = plugin.managers.structure.hierarchy.current.structures[0];
-    if (!structureRef) return;
+    if (!structureRef || !structureRef.cell) return;
 
     try {
       const ligandExpression = MS.struct.modifier.union([
@@ -216,7 +218,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
       ]);
 
       // --- Receptor (Protein) ---
-      if (proteinRepr === 'hide') {
+      if (proteinRepr === 'hide' || !showProtein) {
         await deleteCompByTag(plugin, structureRef, 'protein-component');
       } else {
         const proteinComp = await plugin.builders.structure.tryCreateComponentFromExpression(
@@ -228,13 +230,20 @@ const MolecularViewer = forwardRef(function MolecularViewer({
         if (proteinComp) {
           await clearNodeChildren(plugin, proteinComp.ref);
           
-          let colorTheme = 'element-symbol';
-          if (colorScheme === 'secondary-structure') {
+          // Default: color by chain so multi-chain proteins are immediately
+          // distinguishable. Mol*'s built-in 'chain-id' theme already uses a
+          // curated palette that works on dark backgrounds.
+          let colorTheme = 'chain-id';  // <-- curated default
+          if (colorScheme === 'element-symbol') {
+            colorTheme = 'element-symbol';
+          } else if (colorScheme === 'secondary-structure') {
             colorTheme = 'secondary-structure';
           } else if (colorScheme === 'hydrophobicity') {
             colorTheme = 'hydrophobicity';
           } else if (colorScheme === 'chain-id') {
             colorTheme = 'chain-id';
+          } else if (colorScheme === 'entity-id') {
+            colorTheme = 'entity-id';
           } else if (colorScheme === 'residue-name') {
             colorTheme = 'residue-name';
           } else if (colorScheme === 'sequence-id') {
@@ -242,7 +251,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
           } else if (colorScheme === 'uniform') {
             colorTheme = 'uniform';
           } else if (colorScheme === 'default') {
-            colorTheme = 'secondary-structure';
+            colorTheme = 'chain-id';   // 'default' → chain-id on dark bg
           }
 
           let type = 'cartoon';
@@ -257,7 +266,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
             {
               type: type,
               color: colorTheme,
-              params: colorTheme === 'uniform' ? { colorValue: Color(0x3b82f6) } : {}
+              colorParams: colorTheme === 'uniform' ? { value: Color(0x3b82f6) } : {}
             }
           );
         }
@@ -281,8 +290,20 @@ const MolecularViewer = forwardRef(function MolecularViewer({
           ligandComp,
           {
             type: type,
+            // Standard CPK element colors: C=grey, O=red, N=blue, S=yellow—
+            // identical to the reference image where the ligand has
+            // colored heteroatoms and grey carbon ball-and-sticks.
             color: 'element-symbol',
-            params: type === 'spacefill' ? { sizeFactor: 1.0 } : { sizeFactor: 0.25 }
+            colorParams: {
+              // Color carbons with uniform dark grey (#404040)
+              carbonColor: { name: 'uniform', params: { value: Color(0x404040) } },
+            },
+            typeParams: {
+              // Compact balls so atoms are clearly visible as spheres (matches CBDock2)
+              sizeFactor: type === 'spacefill' ? 1.0 : 0.22,
+              // Thinner sticks between heavy atoms
+              sizeAspectRatio: 0.36,
+            }
           }
         );
       }
@@ -304,12 +325,23 @@ const MolecularViewer = forwardRef(function MolecularViewer({
         if (pocketResComp) {
           await clearNodeChildren(plugin, pocketResComp.ref);
 
+          // Thin sticks: match the reference image where residue carbons are
+          // near-white and only heteroatoms (O, N, S) have CPK color.
+          // We use uniform color with a very thin sizeFactor
+          // so they look like faint thin background wires.
           await plugin.builders.structure.representation.addRepresentation(
             pocketResComp,
             {
-              type: 'sticks',
-              color: 'element-symbol',
-              params: { sizeFactor: 0.15 }
+              type: 'ball-and-stick',
+              color: 'uniform',
+              colorParams: {
+                // Color entire pocket residue sticks with uniform light grey (#D8D8D8) for a thin wireframe look
+                value: Color(0xD8D8D8),
+              },
+              typeParams: {
+                sizeFactor: 0.07,        // very thin sticks, tiny balls matching wireframe
+                sizeAspectRatio: 0.7,    // maintain thin stick ratio
+              }
             }
           );
 
@@ -318,11 +350,15 @@ const MolecularViewer = forwardRef(function MolecularViewer({
               pocketResComp,
               {
                 type: 'label',
-                params: {
-                  labelType: 'residue',
-                  sizeFactor: 0.8,
-                  borderWidth: 0.1,
-                  borderColor: Color(0xffffff)
+                color: 'uniform',
+                colorParams: {
+                  value: Color(0x111111), // large bold near-black labels
+                },
+                typeParams: {
+                  level: 'residue',
+                  sizeFactor: 1.5,       // larger labels for readability
+                  background: false,     // no background boxes
+                  borderWidth: 0,        // no outlines/borders around text
                 }
               }
             );
@@ -388,9 +424,6 @@ const MolecularViewer = forwardRef(function MolecularViewer({
         }
       }
 
-      // --- Spin trackball ---
-      plugin.canvas3d?.setProps({ trackball: { spin } });
-
     } catch (err) {
       console.error("Error applying molecular visualization settings:", err);
     }
@@ -403,6 +436,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
     showPocketSurface,
     showInteractions,
     spin,
+    showProtein,
     deleteCompByTag,
     clearNodeChildren
   ]);
@@ -534,10 +568,43 @@ const MolecularViewer = forwardRef(function MolecularViewer({
           return;
         }
 
-        // White background
+        // ── Canvas3D settings ─────────────────────────────────────────────
+        // White background matching the reference image (PyMOL/PLIP style).
+        // Fog is disabled so nothing dissolves during rotation — instead we
+        // rely on SSAO and silhouette outlines for depth perception.
         PluginCommands.Canvas3D.SetSettings(plugin, {
           settings: (props) => {
+            // Clean white background — matches reference pocket-view style
             props.renderer.backgroundColor = Color(0xffffff);
+
+            // Disable fog / depth cueing entirely (prevents dissolving)
+            if ('fog' in props.renderer) {
+              props.renderer.fog = false;
+            }
+
+            // Ensure transparent atoms still render correctly
+            if (props.renderer.transparentBackground !== undefined) {
+              props.renderer.transparentBackground = false;
+            }
+
+            // Screen-Space Ambient Occlusion: crevice shadows
+            // Slightly less intense on white background
+            if (props.postprocessing?.occlusion) {
+              props.postprocessing.occlusion.name = 'on';
+              props.postprocessing.occlusion.params.intensity = 1.2;
+              props.postprocessing.occlusion.params.radius = 5.0;
+              props.postprocessing.occlusion.params.samples = 32;
+            }
+
+            // Turn off silhouette outlines on white background
+            if (props.postprocessing?.outline) {
+              props.postprocessing.outline.name = 'off';
+            }
+
+            // Turn off shadows
+            if (props.postprocessing?.shadow) {
+              props.postprocessing.shadow.name = 'off';
+            }
           },
         });
 
@@ -616,23 +683,24 @@ const MolecularViewer = forwardRef(function MolecularViewer({
         className="relative w-full bg-background rounded-lg border border-primary/10"
         style={{ minHeight: '600px' }}
       >
-        {/* Mol* Viewer Canvas */}
+        {/* Mol* Viewer Canvas — background matches canvas3D backgroundColor (#ffffff) */}
         <div
           ref={viewerRef}
-          className="w-full bg-white"
           style={{
             position: 'relative',
             overflow: 'hidden',
             borderRadius: '8px',
             height: '600px',
+            backgroundColor: '#ffffff',
           }}
         />
 
         {/* Loading Overlay */}
         {loading && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-card/60 backdrop-blur-sm z-20 rounded-lg">
+          <div className="absolute inset-0 flex flex-col items-center justify-center backdrop-blur-sm z-20 rounded-lg"
+               style={{ backgroundColor: 'rgba(255, 255, 255, 0.82)' }}>
             <Loader2 className="w-10 h-10 text-primary animate-spin mb-2" />
-            <p className="text-sm font-medium text-foreground">Processing Structure...</p>
+            <p className="text-sm font-medium text-slate-700">Processing Structure...</p>
           </div>
         )}
       </div>

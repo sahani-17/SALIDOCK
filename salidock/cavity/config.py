@@ -78,6 +78,11 @@ class CavityConfig:
     # Build: docker build -f backend/puresnet_cpu.Dockerfile -t salidock-puresnet-cpu:latest .
     use_puresnet: bool = True
 
+    # ── Cascade parameters ───────────────────────────────────────────────────────
+    cascade_mode: bool = True
+    cascade_agreement_threshold_angstrom: float = 6.0
+    weights_json_path: Optional[str] = None
+
     def __post_init__(self):
         if self.output_dir is not None:
             self.output_dir = Path(self.output_dir)
@@ -88,6 +93,57 @@ class CavityConfig:
 
         if self.fpocket_timeout_sec is None:
             self.fpocket_timeout_sec = self.timeout_sec
+
+        # Load weights and cascade settings dynamically if weights.json is found
+        resolved_weights_path = None
+        if self.weights_json_path:
+            resolved_weights_path = Path(self.weights_json_path)
+        else:
+            # Try to auto-detect relative to project root
+            try:
+                project_root = Path(__file__).resolve().parent.parent.parent
+                candidate = project_root / "backend" / "config" / "weights.json"
+                if candidate.exists():
+                    resolved_weights_path = candidate
+            except Exception:
+                pass
+            
+            if not resolved_weights_path:
+                # Also check current working directory / backend / config / weights.json
+                candidate = Path.cwd() / "backend" / "config" / "weights.json"
+                if candidate.exists():
+                    resolved_weights_path = candidate
+
+        if resolved_weights_path and resolved_weights_path.exists():
+            try:
+                import json
+                with open(resolved_weights_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                
+                # Update weights
+                w_data = data.get("weights", {})
+                if "fpocket" in w_data:
+                    self.w_fpocket = float(w_data["fpocket"])
+                if "p2rank" in w_data:
+                    self.w_p2rank = float(w_data["p2rank"])
+                if "puresnet" in w_data:
+                    self.w_puresnet = float(w_data["puresnet"])
+                
+                # Update other cascade / clustering settings
+                if "cascade_mode" in data:
+                    self.cascade_mode = bool(data["cascade_mode"])
+                if "cascade_agreement_threshold_angstrom" in data:
+                    self.cascade_agreement_threshold_angstrom = float(data["cascade_agreement_threshold_angstrom"])
+                if "rrf_k" in data:
+                    self.rrf_k = int(data["rrf_k"])
+                if "clustering_radius_angstrom" in data:
+                    self.clustering_radius_angstrom = float(data["clustering_radius_angstrom"])
+                
+                import logging
+                logging.getLogger(__name__).info(f"Loaded config from {resolved_weights_path}")
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Failed to load config from {resolved_weights_path}: {e}")
 
     @property
     def effective_weights(self) -> dict:
