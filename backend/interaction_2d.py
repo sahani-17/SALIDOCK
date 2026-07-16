@@ -218,9 +218,9 @@ ELLIPSE_RY = 275.0
 MIN_ANGLE_SEP = 0.30             # radians, minimum angular gap between nodes
 CLUSTER_OFFSET_RADIUS = 6.0      # px, fan-out radius for shared-atom origins
 CLUSTER_THRESHOLD = 3            # min interactions at one atom before fanning
-NODE_RADIUS = 32.0
+NODE_RADIUS = 24.0
 LINE_SHORTEN_START = 3.0         # px pulled back from ligand-side anchor
-LINE_SHORTEN_END = 38.0          # px pulled back from node center
+LINE_SHORTEN_END = 28.0          # px pulled back from node center
 
 LEGEND_X = 740
 LEGEND_Y0 = 76
@@ -265,6 +265,47 @@ class ResidueGroup:
 # FIX 5 — TEMPLATE-GUIDED BOND ORDER ASSIGNMENT
 # --------------------------------------------------------------------------
 
+def load_template_molecule(path: str) -> Optional[Chem.Mol]:
+    import os
+    if not path or not os.path.exists(path):
+        return None
+    
+    # Try SDF first
+    try:
+        mol = Chem.MolFromMolFile(path, sanitize=False, removeHs=False)
+        if mol is not None:
+            return mol
+    except:
+        pass
+        
+    # Try PDB
+    try:
+        mol = Chem.MolFromPDBFile(path, removeHs=False, sanitize=False)
+        if mol is not None:
+            return mol
+    except:
+        pass
+        
+    # Try Mol2
+    try:
+        mol = Chem.MolFromMol2File(path, sanitize=False, removeHs=False)
+        if mol is not None:
+            return mol
+    except:
+        pass
+        
+    # Try parsing as SMILES (if it is a small text file containing SMILES)
+    try:
+        with open(path, 'r') as f:
+            content = f.read().strip().split()[0]
+        mol = Chem.MolFromSmiles(content)
+        if mol is not None:
+            return mol
+    except:
+        pass
+        
+    return None
+
 def load_ligand_with_correct_bonds(complex_pdb_path: str, original_sdf_path: str):
     import tempfile, os
     ligand_lines = []
@@ -287,7 +328,7 @@ def load_ligand_with_correct_bonds(complex_pdb_path: str, original_sdf_path: str
     try:
         # ── Strategy 1: Kekulized template ──
         try:
-            template = Chem.MolFromMolFile(original_sdf_path, sanitize=False, removeHs=False)
+            template = load_template_molecule(original_sdf_path)
             if template is not None:
                 Chem.SanitizeMol(
                     template,
@@ -306,7 +347,7 @@ def load_ligand_with_correct_bonds(complex_pdb_path: str, original_sdf_path: str
 
         # ── Strategy 2: SMILES round-trip ──
         try:
-            tmpl_raw = Chem.MolFromMolFile(original_sdf_path, sanitize=False, removeHs=True)
+            tmpl_raw = load_template_molecule(original_sdf_path)
             if tmpl_raw is not None:
                 Chem.SanitizeMol(
                     tmpl_raw,
@@ -330,6 +371,35 @@ def load_ligand_with_correct_bonds(complex_pdb_path: str, original_sdf_path: str
                             return smiles_mol
         except Exception as e2:
             _log.debug(f'Strategy 2 failed ({e2}), falling back to raw PDB parse')
+            
+        # ── Strategy 3: Raw PDB parse fallback ──
+        try:
+            raw_mol = Chem.MolFromPDBFile(tmp.name, removeHs=True, sanitize=False)
+            if raw_mol is not None:
+                _log.info('Template match failed; parsed raw ligand PDB directly.')
+                return raw_mol
+        except Exception as e_raw:
+            _log.warning(f'Raw PDB parse of ligand failed: {e_raw}')
+
+        # ── Strategy 4: Load SDF directly (no docked 3D coords, but correct bond orders) ──
+        # When RDKit cannot parse the ligand from the PDB file at all (e.g. connectivity
+        # issues, unusual atom types), fall back to loading the template SDF/MOL directly.
+        # The 2D interaction diagram depiction will still be chemically correct.
+        try:
+            sdf_mol = load_template_molecule(original_sdf_path)
+            if sdf_mol is not None:
+                try:
+                    Chem.SanitizeMol(sdf_mol)
+                except Exception:
+                    pass
+                sdf_mol = Chem.RemoveHs(sdf_mol)
+                # Generate a 2D layout so the ligand can be depicted
+                rdDepictor.Compute2DCoords(sdf_mol)
+                _log.info('Strategy 4: loaded ligand from SDF directly (no docked 3D coords).')
+                return sdf_mol
+        except Exception as e4:
+            _log.warning(f'Strategy 4 (SDF direct load) failed: {e4}')
+
         return None
     finally:
         try:
@@ -967,8 +1037,8 @@ def _get_residue_score(g: ResidueGroup) -> tuple:
 
 
 def _get_node_radius(n_res: int) -> float:
-    val = 30.0 - 0.4 * (n_res - 12)
-    return max(20.0, min(30.0, val))
+    val = 23.0 - 0.4 * (n_res - 12)
+    return max(15.0, min(23.0, val))
 
 
 def _esc(text: str) -> str:
@@ -1254,10 +1324,10 @@ def _draw_node(g: ResidueGroup, node_radius: float) -> str:
     label_top = f"{g.resname}"
     label_bot = f"{g.chain}:{g.resid}"
     
-    font_size_top = 12.5 if node_radius >= 26 else (10.0 if node_radius >= 22 else 8.5)
-    font_size_bot = 10.5 if node_radius >= 26 else (8.5 if node_radius >= 22 else 7.5)
-    y_offset_top = 3 if node_radius >= 26 else 2
-    y_offset_bot = 12 if node_radius >= 26 else 9
+    font_size_top = 10.0 if node_radius >= 20 else (8.5 if node_radius >= 17 else 7.5)
+    font_size_bot = 8.5  if node_radius >= 20 else (7.5 if node_radius >= 17 else 6.5)
+    y_offset_top = 2 if node_radius >= 20 else 1
+    y_offset_bot = 9 if node_radius >= 20 else 7
     
     return f'''
     <g>
@@ -1643,29 +1713,87 @@ def render_svg(
     Adapter wrapper that maps the old render_svg signature onto the new
     RDKit-molblock-based rendering engine.
     """
+    import tempfile, os as _os
+
     mol = None
+    is_ligand_only = False
     if original_sdf_path:
         mol = load_ligand_with_correct_bonds(str(pdb_path), original_sdf_path)
+        if mol is not None:
+            is_ligand_only = True
 
     if mol is None:
-        mol = Chem.MolFromPDBFile(str(pdb_path), removeHs=True, sanitize=False)
+        # Fallback: extract only ligand (HETATM) atoms into a temp file so RDKit
+        # never has to parse the huge protein structure — it reliably fails on those.
+        _lig_lines = []
+        try:
+            with open(str(pdb_path)) as _f:
+                for _line in _f:
+                    _rec = _line[:6].strip()
+                    if _rec == 'HETATM':
+                        _resname = _line[17:20].strip()
+                        if _resname not in ('HOH', 'WAT', 'H2O'):
+                            _lig_lines.append(_line)
+        except Exception as _e:
+            _log.warning(f'Could not extract ligand lines from complex PDB: {_e}')
 
-    if mol is None:
-        return _error_svg("RDKit could not parse the PDB file.")
+        if _lig_lines:
+            _tmp = tempfile.NamedTemporaryFile(suffix='.pdb', delete=False, mode='w')
+            _tmp.writelines(_lig_lines)
+            _tmp.write('END\n')
+            _tmp.close()
+            try:
+                mol = Chem.MolFromPDBFile(_tmp.name, removeHs=True, sanitize=False)
+                if mol is not None:
+                    is_ligand_only = True
+                    _log.info('Parsed ligand-only PDB as fallback for render_svg')
+            except Exception as _e2:
+                _log.warning(f'Ligand-only PDB parse failed: {_e2}')
+            finally:
+                try:
+                    _os.unlink(_tmp.name)
+                except Exception:
+                    pass
+
+        # Last-resort fallback: load the original SDF directly so we always
+        # produce a diagram even if the docked-pose PDB cannot be parsed by RDKit.
+        if mol is None and original_sdf_path:
+            try:
+                _sdf_mol = load_template_molecule(original_sdf_path)
+                if _sdf_mol is not None:
+                    try:
+                        Chem.SanitizeMol(_sdf_mol)
+                    except Exception:
+                        pass
+                    _sdf_mol = Chem.RemoveHs(_sdf_mol)
+                    rdDepictor.Compute2DCoords(_sdf_mol)
+                    mol = _sdf_mol
+                    is_ligand_only = True
+                    _log.warning(
+                        'render_svg: PDB parse failed — using SDF template directly for 2D layout.'
+                    )
+            except Exception as _esdf:
+                _log.warning(f'render_svg SDF fallback failed: {_esdf}')
+
+        if mol is None:
+            return _error_svg("RDKit could not parse the PDB file.")
 
     try:
         Chem.SanitizeMol(mol)
     except Exception:
         pass
 
-    auto_resnames = {ligand_resname} if ligand_resname else LIGAND_RESNAMES
-    lig_indices = [
-        a.GetIdx() for a in mol.GetAtoms()
-        if a.GetPDBResidueInfo() and
-           a.GetPDBResidueInfo().GetResidueName().strip() in auto_resnames
-    ]
-    if not lig_indices:
-        return _error_svg(f"No ligand atoms found for resnames: {auto_resnames}")
+    if is_ligand_only:
+        lig_indices = list(range(mol.GetNumAtoms()))
+    else:
+        auto_resnames = {ligand_resname} if ligand_resname else LIGAND_RESNAMES
+        lig_indices = [
+            a.GetIdx() for a in mol.GetAtoms()
+            if a.GetPDBResidueInfo() and
+               a.GetPDBResidueInfo().GetResidueName().strip() in auto_resnames
+        ]
+        if not lig_indices:
+            return _error_svg(f"No ligand atoms found for resnames: {auto_resnames}")
 
     em = Chem.RWMol(mol)
     for idx in sorted(
