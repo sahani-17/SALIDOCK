@@ -1,0 +1,12 @@
+{
+  "version": "global_v1_optimized",
+  "weights": {
+    "fpocket": 0.0758,
+    "p2rank": 0.4922,
+    "puresnet": 0.5671
+  },
+  "cascade_mode": true,
+  "cascade_agreement_threshold_angstrom": 6.0,
+  "rrf_k": 60,
+  "clustering_radius_angstrom": 6.0
+}

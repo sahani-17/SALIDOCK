@@ -640,8 +640,16 @@ def create_protein_ligand_complex(
     protein_content = protein_source.read_text()
     protein_atom_count = 0
     for line in protein_content.splitlines():
-        if line.startswith(('ATOM', 'HETATM')):
+        if line.startswith('ATOM'):
             # Convert to PDB: keep only first 66 characters (removes PDBQT-specific columns)
+            pdb_line = line[:66].rstrip()
+            pdb_lines.append(pdb_line)
+            protein_atom_count += 1
+        elif line.startswith('HETATM'):
+            # Skip water molecules from protein source — they should not be in the complex
+            resname = line[17:20].strip() if len(line) > 20 else ''
+            if resname in ('HOH', 'WAT', 'H2O'):
+                continue
             pdb_line = line[:66].rstrip()
             pdb_lines.append(pdb_line)
             protein_atom_count += 1
@@ -662,8 +670,28 @@ def create_protein_ligand_complex(
     ligand_atom_count = 0
     for line in ligand_pose.splitlines():
         if line.startswith('ATOM') or line.startswith('HETATM'):
-            # Convert PDBQT to PDB: keep only first 66 characters
-            pdb_line = line[:66].rstrip()
+            # Convert PDBQT to PDB.
+            # IMPORTANT: The element symbol lives at columns 77-78 (0-indexed 76-78) in both
+            # standard PDB and PDBQT formats. Truncating at column 66 loses the element,
+            # causing RDKit to fail with "Cannot determine element for PDB atom #1".
+            # We preserve 66 chars of coordinate data AND the element from cols 76-78.
+            pdb_body = line[:66].rstrip()
+            
+            # Try to extract element from PDBQT column 77-78 (0-indexed 76-78)
+            element = ''
+            if len(line) >= 78:
+                element = line[76:78].strip()
+            # If no element at 76-78, try PDBQT column 79-80 (charge field sometimes shifted)
+            if not element and len(line) >= 80:
+                element = line[77:79].strip()
+            # Last resort: derive element from atom name at cols 12-16
+            if not element or not element.replace('+','').replace('-','').isalpha():
+                aname = line[12:16].strip() if len(line) >= 16 else ''
+                clean = aname.lstrip('0123456789')
+                element = clean[0].upper() if clean else 'C'
+            
+            # Build proper 80-column PDB line with element at columns 77-78
+            pdb_line = pdb_body.ljust(76) + element.rjust(2)
             
             # ALL atoms from the ligand docking output must be HETATM.
             # Vina/OpenBabel may assign various residue names (UNL, LIG, MOL, etc.)
@@ -2045,10 +2073,11 @@ async def run_docking_endpoint(
             
             print(f"\n[INFO] Running cavity-based docking for {len(cavities)} cavities using new engines")
             
-            # Run multi-cavity docking using new docking.pipeline
-            cavity_results = []
-            cavity_results_map = {}
-            for cav in cavities:
+            # Run multi-cavity docking concurrently using ThreadPoolExecutor
+            # Limit to max 5 simultaneous runs as requested by the user
+            import concurrent.futures
+
+            def dock_single_cavity(cav):
                 cav_id = cav['cavity_id']
                 center = cav['center']
                 volume = cav.get('volume', 0.0)
@@ -2066,24 +2095,38 @@ async def run_docking_endpoint(
                     center_z=center[2]
                 )
                 
-                # Retrieve custom size if calculated in cavities.json
                 size = tuple(cav['size']) if 'size' in cav else None
-                
                 result = run_docking(str(receptor), str(ligand), cavity_meta, size=size)
-                if isinstance(result, DockingError):
-                    logger.error(f"Docking failed for cavity {cav_id}: {result.message}")
-                    continue
+                return cav_id, cav, result
+
+            cavity_results = []
+            cavity_results_map = {}
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                # Submit all cavity docking jobs concurrently (5 jobs × 1 CPU thread each)
+                futures = [executor.submit(dock_single_cavity, cav) for cav in cavities]
                 
-                # Convert the resulting top_pose_sdf to PDBQT format
-                out_pdbqt = session_dir / f"docking_out_cavity_{cav_id}_out.pdbqt"
-                convert_sdf_to_pdbqt(result.top_pose_sdf, result.vina_affinity, out_pdbqt)
-                
-                # Prep log file
-                log_file = session_dir / f"docking_out_cavity_{cav_id}.log"
-                log_file.write_text(f"Engine: {result.engine_used.value}\nRouting Reason: {result.routing_reason}\nStatus: Success\n", encoding="utf-8")
-                
-                cavity_results.append((str(log_file), out_pdbqt, cav_id, cav))
-                cavity_results_map[cav_id] = result
+                # Retrieve results as they complete
+                for future in concurrent.futures.as_completed(futures):
+                    try:
+                        cav_id, cav, result = future.result()
+                        
+                        if isinstance(result, DockingError):
+                            logger.error(f"Docking failed for cavity {cav_id}: {result.message}")
+                            continue
+                        
+                        # Convert the resulting top_pose_sdf to PDBQT format
+                        out_pdbqt = session_dir / f"docking_out_cavity_{cav_id}_out.pdbqt"
+                        convert_sdf_to_pdbqt(result.top_pose_sdf, result.vina_affinity, out_pdbqt)
+                        
+                        # Prep log file
+                        log_file = session_dir / f"docking_out_cavity_{cav_id}.log"
+                        log_file.write_text(f"Engine: {result.engine_used.value}\nRouting Reason: {result.routing_reason}\nStatus: Success\n", encoding="utf-8")
+                        
+                        cavity_results.append((str(log_file), out_pdbqt, cav_id, cav))
+                        cavity_results_map[cav_id] = result
+                    except Exception as e:
+                        logger.error(f"Error in docking thread execution: {e}")
             
             if not cavity_results:
                 raise HTTPException(status_code=500, detail="Docking failed for all requested cavities")
@@ -2544,6 +2587,7 @@ async def get_complex_pdb(session_id: str, mode: int = 1):
         ensure_session_file(session_id, "protein_prepared.pdb")
         ensure_session_file(session_id, "docking_out_out.pdbqt")
         ensure_session_file(session_id, "cavities.json")
+        ensure_session_file(session_id, "grid_params.json")
         
         # Pre-fetch cavity-specific files if relevant
         cavities_json = session_dir / "cavities.json"
@@ -3162,6 +3206,19 @@ def resolve_pose_pdbqt(session_dir: Path, rank: int) -> tuple[Path, int]:
         )
         return 1 if has_atoms else 0
 
+    # 1. Check grid_params.json to determine the actual docking mode
+    grid_params_json = session_dir / "grid_params.json"
+    if grid_params_json.exists():
+        try:
+            with open(grid_params_json) as f:
+                gp = json.load(f)
+            if gp.get("mode") == "manual":
+                pdbqt = session_dir / "docking_out_out.pdbqt"
+                return pdbqt, rank
+        except Exception as e:
+            logger.warning(f"Could not parse grid_params.json: {e}")
+
+    # 2. Fallback to cavities.json check
     cavities_json = session_dir / "cavities.json"
 
     if not cavities_json.exists():
@@ -3209,6 +3266,7 @@ async def get_2d_interaction_svg(session_id: str, pose: int):
     ensure_session_file(session_id, "protein_prepared.pdbqt")
     ensure_session_file(session_id, "protein_prepared.pdb")
     ensure_session_file(session_id, "cavities.json")
+    ensure_session_file(session_id, "grid_params.json")
     ensure_session_file(session_id, "ligand_ref.sdf")
     ensure_session_file(session_id, "docking_out_out.pdbqt")
     
@@ -3262,14 +3320,25 @@ async def get_2d_interaction_svg(session_id: str, pose: int):
         with open(complex_path, "w") as f:
             f.write(complex_pdb_string)
 
+        logger.info(f"[2D] Complex PDB written: {complex_path} ({len(complex_pdb_string)} bytes). SDF ref: {original_sdf_path}")
+
+        # Count ligand HETATM lines to surface issues early
+        hetatm_lines = [l for l in complex_pdb_string.splitlines() if l.startswith('HETATM')]
+        logger.info(f"[2D] HETATM lines in complex PDB: {len(hetatm_lines)}")
+        if hetatm_lines:
+            logger.info(f"[2D] First HETATM: {hetatm_lines[0]}")
+
         protein_atoms, ligand_atoms = parse_pdb(str(complex_path))
+        logger.info(f"[2D] parse_pdb result: {len(protein_atoms)} protein atoms, {len(ligand_atoms)} ligand atoms")
 
         interactions = detect(protein_atoms, ligand_atoms, pdb_path=str(complex_path))
+        logger.info(f"[2D] Detected {len(interactions)} interactions. Calling render_svg...")
         svg_content = render_svg(
             str(complex_path), interactions, affinity,
             original_sdf_path=original_sdf_path
         )
 
+        logger.info(f"[2D] render_svg returned {len(svg_content)} bytes. SVG starts with: {svg_content[:60]}")
         return Response(content=svg_content, media_type="image/svg+xml")
     finally:
         if complex_path.exists():
@@ -3291,6 +3360,7 @@ async def get_3d_interaction_lines(session_id: str, pose: int):
     session_dir = get_session_dir(session_id)
     ensure_session_file(session_id, "protein_prepared.pdb")
     ensure_session_file(session_id, "protein_prepared.pdbqt")
+    ensure_session_file(session_id, "grid_params.json")
 
     protein_pdbqt = session_dir / "protein_prepared.pdbqt"
     ligand_pdbqt, internal_mode = resolve_pose_pdbqt(session_dir, pose)

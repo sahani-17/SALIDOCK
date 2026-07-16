@@ -52,13 +52,12 @@ from typing import Optional
 GNINA_BIN:   str   = os.environ.get("GNINA_BIN", "gnina")
 
 # Wall-clock timeout for GNINA focused docking.
-# Justification: AutoDock-GPU benchmarks (Solis-Vasquez et al., 2020) show
-# exhaustiveness=8 on a ~500-residue protein requires ~60-180 s on a single
-# CPU core.  300 s gives 2× headroom for large receptors (>800 residues)
-# without indefinite hangs on pathological inputs.
-TIMEOUT_SEC: int   = 300
+# With exhaustiveness=4, num_modes=5, and --cpu 4, a ~500-residue protein
+# typically finishes in 30-120 s.  600 s gives ample headroom for large
+# receptors (>1000 residues) without indefinite hangs.
+TIMEOUT_SEC: int   = 600
 
-BOX_PADDING: float = 4.0          # Å added to each face of the search box
+BOX_PADDING: float = 2.0          # Å added to each face of the search box (reduced from 4)
 BOX_MIN:     float = 12.0         # Å minimum side length (before padding)
 BOX_MAX:     float = 28.0         # Å maximum base side length (before padding)
 
@@ -223,8 +222,8 @@ def run_gnina(
             "--cnn_scoring",    "rescore",
             "--exhaustiveness", "8",
             "--num_modes",      "9",
-            "--no_gpu",                          # CPU-only: mandatory on web server
-            "--cpu",            "1",
+            "--no_gpu",                # CPU-only: mandatory on web server
+            "--cpu",            "1",   # single-core per job; 5 jobs run concurrently
             "--out",            str(out_sdf),
         ]
 

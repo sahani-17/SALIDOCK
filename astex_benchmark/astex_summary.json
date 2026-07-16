@@ -1,0 +1,164 @@
+{
+  "dataset": "Astex Diverse Set",
+  "reference": "Hartshorn et al., J. Med. Chem. 2007, 50(4):726-741",
+  "doi": "10.1021/jm061277y",
+  "n_in_set": 88,
+  "n_evaluated": 87,
+  "n_skipped": 1,
+  "thresholds_A": [
+    2.0,
+    4.0,
+    6.0
+  ],
+  "primary_threshold_A": 4.0,
+  "puresnet_enabled": true,
+  "weights": {
+    "fpocket": 0.0758,
+    "p2rank": 0.4922,
+    "puresnet": 0.5671
+  },
+  "rrf_k": 60,
+  "cluster_radius_A": 6.0,
+  "results": {
+    "fpocket": {
+      "2.0A": {
+        "dca_top1_pct": 20.69,
+        "dca_top3_pct": 33.33,
+        "dca_top5_pct": 36.78,
+        "n": 87,
+        "n_top1_success": 18,
+        "wilson_ci_95": [
+          13.5,
+          30.4
+        ]
+      },
+      "4.0A": {
+        "dca_top1_pct": 40.23,
+        "dca_top3_pct": 62.07,
+        "dca_top5_pct": 65.52,
+        "n": 87,
+        "n_top1_success": 35,
+        "wilson_ci_95": [
+          30.6,
+          50.7
+        ]
+      },
+      "6.0A": {
+        "dca_top1_pct": 49.43,
+        "dca_top3_pct": 72.41,
+        "dca_top5_pct": 80.46,
+        "n": 87,
+        "n_top1_success": 43,
+        "wilson_ci_95": [
+          39.2,
+          59.7
+        ]
+      }
+    },
+    "p2rank": {
+      "2.0A": {
+        "dca_top1_pct": 37.93,
+        "dca_top3_pct": 44.83,
+        "dca_top5_pct": 45.98,
+        "n": 87,
+        "n_top1_success": 33,
+        "wilson_ci_95": [
+          28.5,
+          48.4
+        ]
+      },
+      "4.0A": {
+        "dca_top1_pct": 68.97,
+        "dca_top3_pct": 78.16,
+        "dca_top5_pct": 79.31,
+        "n": 87,
+        "n_top1_success": 60,
+        "wilson_ci_95": [
+          58.6,
+          77.7
+        ]
+      },
+      "6.0A": {
+        "dca_top1_pct": 81.61,
+        "dca_top3_pct": 90.8,
+        "dca_top5_pct": 91.95,
+        "n": 87,
+        "n_top1_success": 71,
+        "wilson_ci_95": [
+          72.2,
+          88.4
+        ]
+      }
+    },
+    "puresnet": {
+      "2.0A": {
+        "dca_top1_pct": 47.13,
+        "dca_top3_pct": 48.28,
+        "dca_top5_pct": 48.28,
+        "n": 87,
+        "n_top1_success": 41,
+        "wilson_ci_95": [
+          37.0,
+          57.5
+        ]
+      },
+      "4.0A": {
+        "dca_top1_pct": 82.76,
+        "dca_top3_pct": 83.91,
+        "dca_top5_pct": 83.91,
+        "n": 87,
+        "n_top1_success": 72,
+        "wilson_ci_95": [
+          73.5,
+          89.3
+        ]
+      },
+      "6.0A": {
+        "dca_top1_pct": 93.1,
+        "dca_top3_pct": 96.55,
+        "dca_top5_pct": 96.55,
+        "n": 87,
+        "n_top1_success": 81,
+        "wilson_ci_95": [
+          85.8,
+          96.8
+        ]
+      }
+    },
+    "consensus": {
+      "2.0A": {
+        "dca_top1_pct": 40.23,
+        "dca_top3_pct": 45.98,
+        "dca_top5_pct": 47.13,
+        "n": 87,
+        "n_top1_success": 35,
+        "wilson_ci_95": [
+          30.6,
+          50.7
+        ]
+      },
+      "4.0A": {
+        "dca_top1_pct": 80.46,
+        "dca_top3_pct": 86.21,
+        "dca_top5_pct": 88.51,
+        "n": 87,
+        "n_top1_success": 70,
+        "wilson_ci_95": [
+          70.9,
+          87.4
+        ]
+      },
+      "6.0A": {
+        "dca_top1_pct": 94.25,
+        "dca_top3_pct": 97.7,
+        "dca_top5_pct": 97.7,
+        "n": 87,
+        "n_top1_success": 82,
+        "wilson_ci_95": [
+          87.2,
+          97.5
+        ]
+      }
+    }
+  }
+}

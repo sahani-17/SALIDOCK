@@ -1,0 +1,74 @@
+{
+  "protein_id": "b2bd7d2a-8172-47aa-bffd-f9f75a81c14c",
+  "top1_cavity": {
+    "center": [
+      14.346,
+      97.971,
+      56.022
+    ],
+    "wrrf_score": 0.016279,
+    "cascade_triggered": true,
+    "tools_used": [
+      "p2rank",
+      "puresnet",
+      "fpocket"
+    ]
+  },
+  "top5_cavities": [
+    {
+      "rank": 1,
+      "center": [
+        14.346,
+        97.971,
+        56.022
+      ],
+      "wrrf_score": 0.016279,
+      "confidence": "HIGH",
+      "volume": 1669.875
+    },
+    {
+      "rank": 2,
+      "center": [
+        13.984,
+        55.979,
+        15.044
+      ],
+      "wrrf_score": 0.016244,
+      "confidence": "HIGH",
+      "volume": 1364.914
+    },
+    {
+      "rank": 3,
+      "center": [
+        26.91,
+        56.038,
+        16.353
+      ],
+      "wrrf_score": 0.007716,
+      "confidence": "HIGH",
+      "volume": 496.056
+    },
+    {
+      "rank": 4,
+      "center": [
+        -2.915,
+        60.036,
+        30.455
+      ],
+      "wrrf_score": 0.007613,
+      "confidence": "HIGH",
+      "volume": 423.719
+    },
+    {
+      "rank": 5,
+      "center": [
+        19.555,
+        52.955,
+        28.168
+      ],
+      "wrrf_score": 0.007599,
+      "confidence": "HIGH",
+      "volume": 328.332
+    }
+  ]
+}
