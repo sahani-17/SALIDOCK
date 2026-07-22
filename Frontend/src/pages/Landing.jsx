@@ -62,14 +62,14 @@ const Landing = () => (
                                     className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:brightness-110 active:scale-95 transition-all shadow-glow"
                                 >
                                     <Wand2 size={16} aria-hidden="true" />
-                                    Auto-Blind Docking
+                                    Single Dock
                                 </Link>
                                 <Link
-                                    to="/dock?mode=active"
+                                    to="/batch-dock"
                                     className="inline-flex items-center gap-2 px-6 py-3 rounded-full border border-border text-foreground font-semibold text-sm hover:border-primary/40 hover:text-primary transition-all"
                                 >
                                     <Target size={16} aria-hidden="true" />
-                                    Active-Site Docking
+                                    Batch Dock
                                 </Link>
                             </div>
                             <Link
@@ -142,8 +142,8 @@ const Landing = () => (
                         <h2 className="font-display text-4xl text-foreground">Everything a docking run needs.</h2>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <Feature icon={Wand2} title="Auto-Blind Docking" desc="wRRF consensus finds the top 5 cavities automatically — no guessing where the pocket is." />
-                        <Feature icon={Target} title="Active-Site Docking" desc="Place a grid box by coordinate or auto-center on the protein for targeted runs." />
+                        <Feature icon={Wand2} title="Single Dock" desc="Prepare a single protein-ligand pair, choose your pocket, and run docking simulation." />
+                        <Feature icon={Target} title="Batch Dock" desc="Screen a library of multiple ligands against a target protein in a single automated run." />
                         <Feature icon={Rocket} title="AutoDock Vina" desc="Battle-tested scoring engine with pose ranking, RMSD, and binding affinity." />
                         <Feature icon={Play} title="Mol* 3D Viewer" desc="Rotate, section, and colour by chain, secondary structure, hydrophobicity, or element." />
                         <Feature icon={ArrowRight} title="2D Interactions" desc="Ligplot-style diagrams of every contact between ligand and pocket residues." />
@@ -164,14 +164,14 @@ const Landing = () => (
                             className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:brightness-110 active:scale-95 transition-all shadow-glow"
                         >
                             <Wand2 size={16} aria-hidden="true" />
-                            Auto-Blind Docking
+                            Single Dock
                         </Link>
                         <Link
-                            to="/dock?mode=active"
+                            to="/batch-dock"
                             className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full border border-border text-foreground font-semibold text-sm hover:border-primary/40 hover:text-primary transition-all"
                         >
                             <Target size={16} aria-hidden="true" />
-                            Active-Site Docking
+                            Batch Dock
                         </Link>
                     </div>
                 </div>

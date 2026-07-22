@@ -26,3 +26,5 @@ salidock_benchmark/preprocessing_results/
 astex_benchmark/pdb_raw/
 astex_benchmark/pdb_prep/
 real_benchmarks/pdb/
+consensus/
+

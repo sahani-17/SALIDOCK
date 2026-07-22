@@ -141,18 +141,18 @@ class TestGninaBoxSize:
 
     def test_tiny_volume_hits_minimum(self):
         side = _box_side_from_volume(1.0)
-        # BOX_MIN (12) + 2*BOX_PADDING (8) = 20
-        assert side == pytest.approx(20.0, abs=0.01)
+        # BOX_MIN (12) + 2*BOX_PADDING (4) = 16
+        assert side == pytest.approx(16.0, abs=0.01)
 
     def test_huge_volume_hits_maximum(self):
         side = _box_side_from_volume(999_999.0)
-        # BOX_MAX (28) + 2*BOX_PADDING (8) = 36
-        assert side == pytest.approx(36.0, abs=0.01)
+        # BOX_MAX (28) + 2*BOX_PADDING (4) = 32
+        assert side == pytest.approx(32.0, abs=0.01)
 
     def test_boundary_volume(self):
-        # Exactly 1000 Å³ → cube root ≈ 10 → clamp(10, 12, 28) = 12 → 20
+        # Exactly 1000 Å³ → cube root ≈ 10 → clamp(10, 12, 28) = 12 → 16
         side = _box_side_from_volume(1000.0)
-        assert side == pytest.approx(20.0, abs=0.01)
+        assert side == pytest.approx(16.0, abs=0.01)
 
 
 class TestSdfPropertyParser:

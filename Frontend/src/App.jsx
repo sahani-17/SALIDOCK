@@ -7,6 +7,8 @@ import Results from "./pages/Results";
 import Cavity from "./pages/Cavity";
 import Active from "./pages/Active";
 import Dock from "./pages/Dock";
+import BatchDock from "./pages/BatchDock";
+import BatchResults from "./pages/BatchResults";
 import About from "./pages/About";
 import Documentation from "./pages/Documentation";
 import NotFound from "./pages/NotFound";
@@ -32,8 +34,17 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/batch-dock"
+            element={
+              <ProtectedRoute>
+                <BatchDock />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/docking" element={<Docking />} />
           <Route path="/results" element={<Results />} />
+          <Route path="/batch-results" element={<BatchResults />} />
           <Route
             path="/feedback"
             element={

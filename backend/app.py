@@ -184,21 +184,26 @@ def validate_session_id(session_id: str) -> str:
 
 def validate_filename(filename: str) -> str:
     """
-    Validate filename to prevent path traversal attacks.
+    Validate and sanitize filename to prevent path traversal attacks and remove illegal characters.
     
     Raises:
-        HTTPException: If filename contains suspicious patterns
+        HTTPException: If filename contains path traversal patterns
     """
     # Check for path traversal BEFORE normalization
     if '..' in filename or '/' in filename or '\\' in filename:
         raise HTTPException(status_code=400, detail="Invalid filename: path traversal detected")
     
     # Get just the filename (removes any path components as safety net)
-    safe_name = os.path.basename(filename)
+    base_name = os.path.basename(filename)
     
-    # Validate characters (alphanumeric, underscore, hyphen, dot only)
-    if not re.match(r'^[a-zA-Z0-9_.-]+$', safe_name):
-        raise HTTPException(status_code=400, detail="Invalid filename: illegal characters")
+    # Extract extension and stem
+    stem, ext = os.path.splitext(base_name)
+    
+    # Replace any characters that are not alphanumeric, underscore, or hyphen with underscore
+    clean_stem = re.sub(r'[^a-zA-Z0-9_-]', '_', stem)
+    clean_ext = re.sub(r'[^a-zA-Z0-9.]', '_', ext)
+    
+    safe_name = clean_stem + clean_ext
     
     # Prevent empty filename
     if not safe_name or safe_name == '.':
@@ -641,14 +646,18 @@ def create_protein_ligand_complex(
     protein_atom_count = 0
     for line in protein_content.splitlines():
         if line.startswith('ATOM'):
+            # Skip any leftover UNK/UNL ligand residues from the protein
+            resname = line[17:20].strip() if len(line) > 20 else ''
+            if resname in ('UNK', 'UNL'):
+                continue
             # Convert to PDB: keep only first 66 characters (removes PDBQT-specific columns)
             pdb_line = line[:66].rstrip()
             pdb_lines.append(pdb_line)
             protein_atom_count += 1
         elif line.startswith('HETATM'):
-            # Skip water molecules from protein source — they should not be in the complex
+            # Skip water molecules and any leftover UNK/UNL residues from the protein source
             resname = line[17:20].strip() if len(line) > 20 else ''
-            if resname in ('HOH', 'WAT', 'H2O'):
+            if resname in ('HOH', 'WAT', 'H2O', 'UNK', 'UNL'):
                 continue
             pdb_line = line[:66].rstrip()
             pdb_lines.append(pdb_line)
@@ -2328,6 +2337,695 @@ async def run_docking_endpoint(
         return json_error(str(e))
 
 
+from typing import List
+
+class SmilesItem(BaseModel):
+    smiles: str
+    name: str | None = None
+
+class BatchSmilesRequest(BaseModel):
+    ligands: List[SmilesItem]
+
+@app.post("/api/batch/upload/ligands/{session_id}")
+async def upload_batch_ligands(session_id: str, files: List[UploadFile] = File(...)):
+    """
+    Upload batch of ligands to session.
+    Accepts individual SDF/MOL2 files, a multi-molecule SDF file, or a ZIP of molecules.
+    """
+    import zipfile
+    try:
+        session_dir = get_session_dir(session_id)
+        
+        # Check disk space
+        check_disk_space(required_mb=100)
+        
+        temp_dir = session_dir / "temp_batch"
+        temp_dir.mkdir(exist_ok=True)
+        
+        raw_files = []
+        for file in files:
+            safe_filename = validate_filename(file.filename)
+            dest = temp_dir / safe_filename
+            
+            # Save file
+            with dest.open("wb") as fh:
+                while chunk := await file.read(8192):
+                    fh.write(chunk)
+            raw_files.append(dest)
+            
+        # Process files
+        all_ligands_meta = []
+        
+        for fpath in raw_files:
+            ext = fpath.suffix.lower()
+            if ext == '.zip':
+                # Extract zip and process contents
+                zip_extract_dir = temp_dir / fpath.stem
+                zip_extract_dir.mkdir(exist_ok=True)
+                with zipfile.ZipFile(str(fpath), 'r') as zip_ref:
+                    zip_ref.extractall(str(zip_extract_dir))
+                
+                # Find all ligand files in extracted dir
+                extracted_files = list(zip_extract_dir.glob("**/*.sdf")) + \
+                                  list(zip_extract_dir.glob("**/*.mol")) + \
+                                  list(zip_extract_dir.glob("**/*.mol2"))
+                                  
+                for ext_file in extracted_files:
+                    dest_name = f"uploaded_{ext_file.name}"
+                    shutil.copy(ext_file, session_dir / dest_name)
+                    if ext_file.suffix.lower() in ['.sdf', '.sd']:
+                        sub_ligs = tools.parse_and_prepare_batch_sdf(str(ext_file), session_dir)
+                        all_ligands_meta.extend(sub_ligs)
+                    else:
+                        import re
+                        stem_name = ext_file.stem
+                        if stem_name.startswith("uploaded_"):
+                            stem_name = stem_name[len("uploaded_"):]
+                        safe_n = re.sub(r'[^a-zA-Z0-9_-]', '_', stem_name)[:50]
+                        all_ligands_meta.append({
+                            "index": len(all_ligands_meta),
+                            "name": stem_name,
+                            "safe_name": safe_n,
+                            "raw_sdf": dest_name,
+                            "properties": {}
+                        })
+            elif ext in ['.sdf', '.sd']:
+                # Parse as potentially multi-mol SDF
+                sub_ligs = tools.parse_and_prepare_batch_sdf(str(fpath), session_dir)
+                all_ligands_meta.extend(sub_ligs)
+            elif ext in ['.mol', '.mol2']:
+                # Save to session dir
+                dest_name = f"uploaded_{fpath.name}"
+                shutil.copy(fpath, session_dir / dest_name)
+                import re
+                stem_name = fpath.stem
+                if stem_name.startswith("uploaded_"):
+                    stem_name = stem_name[len("uploaded_"):]
+                safe_n = re.sub(r'[^a-zA-Z0-9_-]', '_', stem_name)[:50]
+                all_ligands_meta.append({
+                    "index": len(all_ligands_meta),
+                    "name": stem_name,
+                    "safe_name": safe_n,
+                    "raw_sdf": dest_name,
+                    "properties": {}
+                })
+                
+        # Clean up temp_batch dir
+        shutil.rmtree(temp_dir)
+        
+        # Save batch metadata to session_dir
+        batch_meta_file = session_dir / "batch_ligands.json"
+        
+        # Update indices to be sequential
+        for idx, lig in enumerate(all_ligands_meta):
+            lig["index"] = idx
+            
+        meta_data = {"ligands": all_ligands_meta}
+        batch_meta_file.write_text(json.dumps(meta_data, indent=2))
+        cloud_save_text(session_id, "batch_ligands.json", json.dumps(meta_data, indent=2))
+        
+        return {
+            "status": "ok",
+            "total_ligands": len(all_ligands_meta),
+            "ligands": all_ligands_meta
+        }
+    except Exception as e:
+        logger.error(f"Batch upload failed: {e}", exc_info=True)
+        return json_error(f"Failed to upload batch ligands: {str(e)}")
+
+@app.post("/api/batch/smiles/ligands/{session_id}")
+async def upload_batch_smiles(session_id: str, request: BatchSmilesRequest):
+    """
+    Generate 3D ligands from a list of SMILES strings.
+    """
+    try:
+        session_dir = get_session_dir(session_id)
+        check_disk_space(required_mb=100)
+        
+        smiles_list = [{"smiles": item.smiles, "name": item.name or f"smiles_{i+1}"} 
+                       for i, item in enumerate(request.ligands)]
+        
+        # Generate 3D coordinates and SDF files
+        all_ligands_meta = tools.generate_batch_ligands_from_smiles(smiles_list, session_dir)
+        
+        if not all_ligands_meta:
+            raise HTTPException(status_code=400, detail="Failed to parse/generate any molecules from the SMILES list")
+            
+        # Save batch metadata to session_dir
+        batch_meta_file = session_dir / "batch_ligands.json"
+        
+        # Update indices to be sequential
+        for idx, lig in enumerate(all_ligands_meta):
+            lig["index"] = idx
+            
+        meta_data = {"ligands": all_ligands_meta}
+        batch_meta_file.write_text(json.dumps(meta_data, indent=2))
+        cloud_save_text(session_id, "batch_ligands.json", json.dumps(meta_data, indent=2))
+        
+        return {
+            "status": "ok",
+            "total_ligands": len(all_ligands_meta),
+            "ligands": all_ligands_meta
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Batch SMILES generation failed: {e}", exc_info=True)
+        return json_error(f"Failed to generate ligands from SMILES: {str(e)}")
+
+@app.post("/api/batch/prepare/ligands/{session_id}")
+async def prepare_batch_ligands_endpoint(session_id: str):
+    """
+    Prepare all uploaded batch ligands.
+    Runs asynchronously in the background.
+    """
+    import threading
+    try:
+        session_dir = get_session_dir(session_id)
+        batch_meta_file = session_dir / "batch_ligands.json"
+        
+        if not batch_meta_file.exists():
+            raise HTTPException(status_code=404, detail="No batch ligands uploaded yet")
+            
+        with open(batch_meta_file, 'r') as f:
+            meta_data = json.load(f)
+            
+        ligands = meta_data.get("ligands", [])
+        if not ligands:
+            raise HTTPException(status_code=400, detail="Batch ligand list is empty")
+            
+        # Initialise status
+        status_file = session_dir / "batch_prep_status.json"
+        status_data = {
+            "status": "running",
+            "total": len(ligands),
+            "completed": 0,
+            "failed": 0,
+            "current_ligand": "",
+            "details": []
+        }
+        status_file.write_text(json.dumps(status_data, indent=2))
+        
+        def run_prep_background():
+            completed_count = 0
+            failed_count = 0
+            
+            for idx, lig in enumerate(ligands):
+                # Update status
+                status_data["current_ligand"] = lig["name"]
+                status_file.write_text(json.dumps(status_data, indent=2))
+                
+                raw_sdf_path = session_dir / lig["raw_sdf"]
+                out_pdbqt_name = f"ligand_{lig['index']}_prepared.pdbqt"
+                out_pdbqt_path = session_dir / out_pdbqt_name
+                
+                try:
+                    # Run standard preparation
+                    tools.prepare_ligand(str(raw_sdf_path), str(out_pdbqt_path), optimize=True)
+                    
+                    # Compute descriptors using RDKit
+                    from rdkit import Chem
+                    from rdkit.Chem import Descriptors, rdMolDescriptors
+                    mol = Chem.MolFromMolFile(str(raw_sdf_path), sanitize=True, removeHs=False)
+                    if mol is not None:
+                        lig["properties"] = {
+                            "mw": float(Descriptors.MolWt(mol)),
+                            "formula": rdMolDescriptors.CalcMolFormula(mol),
+                            "hbd": int(rdMolDescriptors.CalcNumHBD(mol)),
+                            "hba": int(rdMolDescriptors.CalcNumHBA(mol)),
+                            "logp": float(Descriptors.MolLogP(mol)),
+                            "rotatable_bonds": int(rdMolDescriptors.CalcNumRotatableBonds(mol)),
+                            "heavy_atoms": int(mol.GetNumHeavyAtoms())
+                        }
+                    
+                    lig["prepared_pdbqt"] = out_pdbqt_name
+                    sdf_ref_name = f"ligand_{lig['index']}_ref.sdf"
+                    sdf_ref_path = session_dir / sdf_ref_name
+                    shutil.copy(raw_sdf_path, sdf_ref_path)
+                    lig["ref_sdf"] = sdf_ref_name
+                    
+                    # Persist prepared files to Supabase
+                    cloud_save(session_id, out_pdbqt_name, out_pdbqt_path.read_bytes())
+                    cloud_save(session_id, sdf_ref_name, sdf_ref_path.read_bytes())
+                    
+                    completed_count += 1
+                    status_data["details"].append({"name": lig["name"], "status": "success"})
+                except Exception as ex:
+                    logger.error(f"Failed to prepare batch ligand {lig['name']}: {ex}")
+                    failed_count += 1
+                    status_data["details"].append({"name": lig["name"], "status": "failed", "error": str(ex)})
+                    
+                status_data["completed"] = completed_count
+                status_data["failed"] = failed_count
+                status_file.write_text(json.dumps(status_data, indent=2))
+                
+            status_data["status"] = "completed" if failed_count == 0 else "completed_with_errors"
+            status_data["current_ligand"] = ""
+            status_file.write_text(json.dumps(status_data, indent=2))
+            
+            # Save updated metadata
+            batch_meta_file.write_text(json.dumps(meta_data, indent=2))
+            cloud_save_text(session_id, "batch_ligands.json", json.dumps(meta_data, indent=2))
+            cloud_save_text(session_id, "batch_prep_status.json", json.dumps(status_data, indent=2))
+            
+        thread = threading.Thread(target=run_prep_background)
+        thread.start()
+        
+        return {"status": "ok", "message": "Batch ligand preparation started in background"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Batch ligand preparation trigger failed: {e}", exc_info=True)
+        return json_error(f"Failed to start batch ligand preparation: {str(e)}")
+
+@app.get("/api/batch/prepare/status/{session_id}")
+async def get_batch_prepare_status(session_id: str):
+    """
+    Get current progress of batch ligand preparation.
+    """
+    try:
+        session_dir = get_session_dir(session_id)
+        status_file = session_dir / "batch_prep_status.json"
+        
+        if not status_file.exists():
+            batch_meta_file = session_dir / "batch_ligands.json"
+            if batch_meta_file.exists():
+                with open(batch_meta_file, 'r') as f:
+                    meta = json.load(f)
+                return {
+                    "status": "idle",
+                    "total": len(meta.get("ligands", [])),
+                    "completed": 0,
+                    "failed": 0
+                }
+            return {"status": "not_started"}
+            
+        with open(status_file, 'r') as f:
+            status_data = json.load(f)
+        return status_data
+    except Exception as e:
+        return json_error(str(e))
+
+@app.post("/api/batch/dock/run/{session_id}")
+async def run_batch_docking(
+    session_id: str,
+    docking_mode: str = "cavity",
+    cavity_id: int = 1,
+    center_x: float = None,
+    center_y: float = None,
+    center_z: float = None,
+    size_x: float = None,
+    size_y: float = None,
+    size_z: float = None
+):
+    """
+    Run molecular docking for all ligands in the batch.
+    Runs asynchronously in the background.
+    """
+    import threading
+    import concurrent.futures
+    try:
+        session_dir = get_session_dir(session_id)
+        receptor = session_dir / "protein_prepared.pdbqt"
+        batch_meta_file = session_dir / "batch_ligands.json"
+        
+        if not receptor.exists():
+            raise HTTPException(status_code=404, detail="Prepared protein not found")
+        if not batch_meta_file.exists():
+            raise HTTPException(status_code=404, detail="Batch ligands not found")
+            
+        with open(batch_meta_file, 'r') as f:
+            meta_data = json.load(f)
+            
+        ligands = meta_data.get("ligands", [])
+        if not ligands:
+            raise HTTPException(status_code=400, detail="No ligands to dock")
+            
+        if docking_mode == "cavity":
+            cavity_file = session_dir / "cavities.json"
+            if not cavity_file.exists():
+                raise HTTPException(status_code=404, detail="No cavities detected. Run cavity detection first.")
+            with open(cavity_file, 'r') as f:
+                cavities = json.load(f)
+            cavity = next((c for c in cavities if c['cavity_id'] == cavity_id), None)
+            if not cavity:
+                raise HTTPException(status_code=404, detail=f"Cavity ID {cavity_id} not found")
+                
+            center, size = grid_calc.calculate_grid_from_cavity(cavity)
+            volume = cavity.get('volume', 0.0)
+            conf_str = cavity.get('confidence', 'LOW').upper()
+            try:
+                tier = ConfidenceTier(conf_str)
+            except ValueError:
+                tier = ConfidenceTier.LOW
+                
+            cavity_meta = CavityMetadata(
+                tier=tier,
+                volume_angstrom3=volume,
+                center_x=center[0],
+                center_y=center[1],
+                center_z=center[2]
+            )
+        elif docking_mode == "manual":
+            if any(v is None for v in [center_x, center_y, center_z, size_x, size_y, size_z]):
+                raise HTTPException(status_code=400, detail="All manual grid parameters are required")
+            center = (center_x, center_y, center_z)
+            size = (size_x, size_y, size_z)
+            center, size = grid_calc.calculate_manual_grid(center, size)
+            volume = size[0] * size[1] * size[2]
+            cavity_meta = CavityMetadata(
+                tier=ConfidenceTier.HIGH,
+                volume_angstrom3=volume,
+                center_x=center[0],
+                center_y=center[1],
+                center_z=center[2]
+            )
+        else:
+            raise HTTPException(status_code=400, detail=f"Invalid docking mode: {docking_mode}")
+            
+        status_file = session_dir / "batch_dock_status.json"
+        status_data = {
+            "status": "running",
+            "total": len(ligands),
+            "completed": 0,
+            "failed": 0,
+            "results": [],
+            "docking_parameters": {
+                "docking_mode": docking_mode,
+                "target_cavity_id": cavity_id if docking_mode == "cavity" else None,
+                "center": list(center),
+                "size": list(size)
+            }
+        }
+        status_file.write_text(json.dumps(status_data, indent=2))
+        
+        def run_docking_background():
+            results_list = []
+            
+            def dock_single(lig):
+                idx = lig["index"]
+                name = lig["name"]
+                safe_name = lig["safe_name"]
+                prepared_name = lig.get("prepared_pdbqt")
+                
+                if not prepared_name:
+                    return idx, {"index": idx, "name": name, "safe_name": safe_name, "status": "failed", "error": "Ligand was not prepared"}
+                    
+                ligand_path = session_dir / prepared_name
+                if not ligand_path.exists():
+                    return idx, {"index": idx, "name": name, "safe_name": safe_name, "status": "failed", "error": f"Prepared file {prepared_name} missing"}
+                    
+                try:
+                    result = run_docking(str(receptor), str(ligand_path), cavity_meta, size=size)
+                    
+                    if isinstance(result, DockingError):
+                        return idx, {"index": idx, "name": name, "safe_name": safe_name, "status": "failed", "error": result.message}
+                        
+                    out_pdbqt = session_dir / f"docking_out_ligand_{idx}_out.pdbqt"
+                    convert_sdf_to_pdbqt(result.top_pose_sdf, result.vina_affinity, out_pdbqt)
+                    
+                    log_file = session_dir / f"docking_out_ligand_{idx}.log"
+                    log_file.write_text(f"Engine: {result.engine_used.value}\nRouting Reason: {result.routing_reason}\nStatus: Success\n", encoding="utf-8")
+                    
+                    props = lig.get("properties", {})
+                    heavy_atoms = props.get("heavy_atoms", 0)
+                    ligand_efficiency = 0.0
+                    if heavy_atoms > 0:
+                        ligand_efficiency = round(result.vina_affinity / heavy_atoms, 3)
+                        
+                    cloud_save(session_id, out_pdbqt.name, out_pdbqt.read_bytes())
+                    cloud_save(session_id, log_file.name, log_file.read_bytes())
+                    
+                    return idx, {
+                        "index": idx,
+                        "name": name,
+                        "safe_name": safe_name,
+                        "status": "completed",
+                        "affinity": result.vina_affinity,
+                        "cnn_score": result.cnn_score,
+                        "cnn_affinity": result.cnn_affinity,
+                        "engine": result.engine_used.value,
+                        "routing_reason": result.routing_reason,
+                        "ligand_efficiency": ligand_efficiency,
+                        "properties": props
+                    }
+                except Exception as ex:
+                    logger.error(f"Docking failed for ligand {name}: {ex}")
+                    return idx, {"index": idx, "name": name, "safe_name": safe_name, "status": "failed", "error": str(ex)}
+            
+            completed_count = 0
+            failed_count = 0
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                futures = [executor.submit(dock_single, lig) for lig in ligands]
+                
+                for future in concurrent.futures.as_completed(futures):
+                    try:
+                        idx, res = future.result()
+                        results_list.append(res)
+                        
+                        if res["status"] == "completed":
+                            completed_count += 1
+                        else:
+                            failed_count += 1
+                            
+                        status_data["completed"] = completed_count
+                        status_data["failed"] = failed_count
+                        status_data["results"] = results_list
+                        status_file.write_text(json.dumps(status_data, indent=2))
+                    except Exception as e:
+                        logger.error(f"Failed to retrieve docking thread result: {e}")
+                        
+            status_data["status"] = "completed" if failed_count == 0 else "completed_with_errors"
+            status_file.write_text(json.dumps(status_data, indent=2))
+            
+            completed_results = [r for r in results_list if r["status"] == "completed"]
+            completed_results.sort(key=lambda x: x["affinity"])
+            
+            report_data = {
+                "session_id": session_id,
+                "docking_parameters": status_data["docking_parameters"],
+                "summary": {
+                    "total_ligands": len(ligands),
+                    "docked_successfully": completed_count,
+                    "failed": failed_count,
+                    "best_affinity": completed_results[0]["affinity"] if completed_results else None,
+                    "best_binder": completed_results[0]["name"] if completed_results else None
+                },
+                "results": results_list
+            }
+            report_file = session_dir / "batch_docking_report.json"
+            report_file.write_text(json.dumps(report_data, indent=2))
+            
+            cloud_save_text(session_id, "batch_docking_report.json", json.dumps(report_data, indent=2))
+            cloud_save_text(session_id, "batch_dock_status.json", json.dumps(status_data, indent=2))
+            
+            if supabase_mgr:
+                try:
+                    supabase_mgr.save_docking_result(session_id, {
+                        "best_affinity": completed_results[0]["affinity"] if completed_results else None,
+                        "num_poses": len(completed_results),
+                        "cavity_count": 1 if docking_mode == "cavity" else 0,
+                        "docking_mode": f"batch_{docking_mode}"
+                    })
+                    supabase_mgr.update_session_status(session_id, "completed")
+                except Exception as db_err:
+                    logger.error(f"Supabase DB save failed: {db_err}")
+                    
+        thread = threading.Thread(target=run_docking_background)
+        thread.start()
+        
+        return {"status": "ok", "message": "Batch docking started in background"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Batch docking run failed to start: {e}", exc_info=True)
+        return json_error(f"Failed to run batch docking: {str(e)}")
+
+@app.get("/api/batch/status/{session_id}")
+async def get_batch_dock_status(session_id: str):
+    """
+    Get current progress of batch docking.
+    """
+    try:
+        session_dir = get_session_dir(session_id)
+        status_file = session_dir / "batch_dock_status.json"
+        
+        if not status_file.exists():
+            return {"status": "not_started"}
+            
+        with open(status_file, 'r') as f:
+            status_data = json.load(f)
+        return status_data
+    except Exception as e:
+        return json_error(str(e))
+
+@app.get("/api/batch/results/list/{session_id}")
+async def get_batch_results_list(session_id: str):
+    """
+    Get the list of docking results for a batch session.
+    """
+    try:
+        session_dir = get_session_dir(session_id)
+        ensure_session_file(session_id, "batch_docking_report.json")
+        
+        report_file = session_dir / "batch_docking_report.json"
+        if not report_file.exists():
+            raise HTTPException(status_code=404, detail="Batch docking results not found. Run docking first.")
+            
+        with open(report_file, 'r') as f:
+            report_data = json.load(f)
+            
+        return report_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        return json_error(str(e))
+
+@app.get("/api/batch/results/download/complex/{session_id}/{ligand_idx}/{pose_num}")
+async def download_batch_complex(session_id: str, ligand_idx: int, pose_num: int):
+    """
+    Generate and serve the PDB complex of the receptor and a specific pose of a specific ligand.
+    """
+    try:
+        session_dir = get_session_dir(session_id)
+        ensure_session_file(session_id, "protein_prepared.pdbqt")
+        ensure_session_file(session_id, "protein_prepared.pdb")
+        
+        ligand_name = f"docking_out_ligand_{ligand_idx}_out.pdbqt"
+        ensure_session_file(session_id, ligand_name)
+        
+        protein_pdbqt = session_dir / "protein_prepared.pdbqt"
+        ligand_pdbqt = session_dir / ligand_name
+        
+        if not protein_pdbqt.exists():
+            raise HTTPException(status_code=404, detail="Prepared protein not found")
+        if not ligand_pdbqt.exists():
+            raise HTTPException(status_code=404, detail=f"Docking output for ligand index {ligand_idx} not found")
+            
+        pose_num = max(1, pose_num)
+        
+        complex_pdb = create_protein_ligand_complex(
+            protein_pdbqt=protein_pdbqt,
+            ligand_pdbqt=ligand_pdbqt,
+            pose_number=pose_num,
+            include_remarks=True
+        )
+        
+        cleaned_lines = [l for l in complex_pdb.splitlines() 
+                         if not l.startswith('MODEL') and not l.startswith('ENDMDL')]
+        complex_pdb_cleaned = '\n'.join(cleaned_lines)
+        
+        return PlainTextResponse(
+            complex_pdb_cleaned,
+            media_type="chemical/x-pdb",
+            headers={"Content-Disposition": f"attachment; filename=complex_ligand_{ligand_idx}_pose_{pose_num}.pdb"}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to generate batch complex: {e}", exc_info=True)
+        return json_error(f"Failed to generate complex structure: {str(e)}")
+
+@app.get("/api/batch/results/download/zip/{session_id}")
+async def download_batch_results_zip(session_id: str):
+    """
+    Generate a ZIP archive containing all batch docking outputs and reports.
+    """
+    import zipfile
+    import io
+    import re
+    from fastapi.responses import StreamingResponse
+    try:
+        session_dir = get_session_dir(session_id)
+        ensure_session_file(session_id, "batch_docking_report.json")
+        report_file = session_dir / "batch_docking_report.json"
+        
+        if not report_file.exists():
+            raise HTTPException(status_code=404, detail="Batch results report not found. Run docking first.")
+            
+        with open(report_file, 'r') as f:
+            report_data = json.load(f)
+            
+        results = report_data.get("results", [])
+        
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr("batch_docking_report.json", json.dumps(report_data, indent=2))
+            
+            csv_lines = ["Rank,Ligand Name,Best Affinity (kcal/mol),CNN Score,CNN Affinity,Ligand Efficiency,Formula,Molecular Weight"]
+            sorted_completed = [r for r in results if r["status"] == "completed"]
+            sorted_completed.sort(key=lambda x: x["affinity"])
+            
+            for rank, res in enumerate(sorted_completed):
+                props = res.get("properties", {})
+                csv_lines.append(
+                    f"{rank+1},{res['name']},{res['affinity']},{res.get('cnn_score') or 'N/A'},"
+                    f"{res.get('cnn_affinity') or 'N/A'},{res.get('ligand_efficiency') or 'N/A'},"
+                    f"{props.get('formula') or 'N/A'},{props.get('mw') or 'N/A'}"
+                )
+            zip_file.writestr("summary_report.csv", "\n".join(csv_lines))
+            
+            readme = (
+                f"SALIDOCK BATCH DOCKING RESULTS\n"
+                f"==============================\n"
+                f"Session ID: {session_id}\n"
+                f"Total Ligands: {report_data['summary']['total_ligands']}\n"
+                f"Docked Successfully: {report_data['summary']['docked_successfully']}\n"
+                f"Failed: {report_data['summary']['failed']}\n"
+                f"Best Binder: {report_data['summary']['best_binder']} ({report_data['summary']['best_affinity']} kcal/mol)\n\n"
+                f"Files Structure:\n"
+                f"  - prepared_receptor.pdb / prepared_receptor.pdbqt: Prepared protein structure\n"
+                f"  - ligands/: Docking output PDBQT poses and combined complex PDBs (pose 1) for each ligand\n"
+            )
+            zip_file.writestr("README.txt", readme)
+            
+            protein_pdbqt = session_dir / "protein_prepared.pdbqt"
+            protein_pdb = session_dir / "protein_prepared.pdb"
+            if protein_pdbqt.exists():
+                zip_file.write(str(protein_pdbqt), "prepared_receptor.pdbqt")
+            if protein_pdb.exists():
+                zip_file.write(str(protein_pdb), "prepared_receptor.pdb")
+                
+            for idx, lig in enumerate(results):
+                if lig["status"] != "completed":
+                    continue
+                    
+                lig_idx = lig.get("index", idx)
+                lig_safe_name = lig.get("safe_name", re.sub(r'[^a-zA-Z0-9_-]', '_', lig["name"])[:50])
+                
+                ensure_session_file(session_id, f"docking_out_ligand_{lig_idx}_out.pdbqt")
+                out_pdbqt_path = session_dir / f"docking_out_ligand_{lig_idx}_out.pdbqt"
+                if out_pdbqt_path.exists():
+                    zip_file.write(str(out_pdbqt_path), f"ligands/{lig_safe_name}_poses.pdbqt")
+                    
+                ensure_session_file(session_id, "protein_prepared.pdbqt")
+                ensure_session_file(session_id, "protein_prepared.pdb")
+                if protein_pdbqt.exists() and out_pdbqt_path.exists():
+                    try:
+                        complex_pdb = create_protein_ligand_complex(
+                            protein_pdbqt=protein_pdbqt,
+                            ligand_pdbqt=out_pdbqt_path,
+                            pose_number=1,
+                            include_remarks=True
+                        )
+                        cleaned_lines = [l for l in complex_pdb.splitlines() 
+                                         if not l.startswith('MODEL') and not l.startswith('ENDMDL')]
+                        zip_file.writestr(f"ligands/{lig_safe_name}_complex_pose_1.pdb", '\n'.join(cleaned_lines))
+                    except Exception as complex_ex:
+                        logger.error(f"Failed to generate complex for ZIP: {complex_ex}")
+                        
+        zip_buffer.seek(0)
+        return StreamingResponse(
+            zip_buffer,
+            media_type="application/x-zip-compressed",
+            headers={"Content-Disposition": f"attachment; filename=salidock_batch_results_{session_id}.zip"}
+        )
+    except Exception as e:
+        logger.error(f"Failed to build results ZIP: {e}", exc_info=True)
+        return json_error(f"Failed to generate results ZIP: {str(e)}")
+
+
 @app.get("/api/file/{session_id}/{filename}")
 async def get_file(session_id: str, filename: str):
     """Download a file from session directory."""
@@ -3191,6 +3889,29 @@ def resolve_pose_pdbqt(session_dir: Path, rank: int) -> tuple[Path, int]:
     import re
     import json
 
+    session_id = session_dir.name
+
+    # Try to resolve pose via docking report first
+    try:
+        ensure_results_file(session_id, "reports/docking_report.json")
+        docking_report = RESULTS_DIR / session_id / "reports" / "docking_report.json"
+        if docking_report.exists():
+            with open(docking_report, 'r') as f:
+                report_data = json.load(f)
+            poses = report_data.get("poses", [])
+            if rank <= len(poses):
+                pose_info = poses[rank - 1]
+                if 'pdbqt_file' in pose_info:
+                    pdbqt_path = Path(pose_info['pdbqt_file'])
+                    if not pdbqt_path.exists():
+                        pdbqt_path = session_dir / pdbqt_path.name
+                    if pdbqt_path.exists():
+                        mode_in_file = pose_info.get('mode', 1)
+                        logger.info(f"[resolve_pose_pdbqt] Resolved rank {rank} via report to {pdbqt_path} mode {mode_in_file}")
+                        return pdbqt_path, mode_in_file
+    except Exception as e:
+        logger.warning(f"[resolve_pose_pdbqt] Could not read docking report: {e}")
+
     def count_poses_in_pdbqt(pdbqt_path: Path) -> int:
         """Count MODEL blocks in a PDBQT file."""
         if not pdbqt_path.exists():
@@ -3346,6 +4067,72 @@ async def get_2d_interaction_svg(session_id: str, pose: int):
                 complex_path.unlink()
             except:
                 pass
+
+@app.get("/api/batch/interactions/2d/{session_id}/{ligand_idx}/{pose}")
+async def get_batch_2d_interaction_svg(session_id: str, ligand_idx: int, pose: int):
+    """
+    Generate and return a 2D interaction diagram SVG for the given batch ligand pose.
+    """
+    from fastapi.responses import Response
+    from interaction_2d import parse_pdb, detect, render_svg
+    try:
+        session_dir = get_session_dir(session_id)
+        
+        ensure_session_file(session_id, "protein_prepared.pdbqt")
+        ensure_session_file(session_id, "protein_prepared.pdb")
+        
+        ligand_name = f"docking_out_ligand_{ligand_idx}_out.pdbqt"
+        ensure_session_file(session_id, ligand_name)
+        
+        sdf_ref_name = f"ligand_{ligand_idx}_ref.sdf"
+        ensure_session_file(session_id, sdf_ref_name)
+        
+        protein_pdbqt = session_dir / "protein_prepared.pdbqt"
+        ligand_pdbqt = session_dir / ligand_name
+        
+        if not protein_pdbqt.exists():
+            raise HTTPException(status_code=404, detail="Prepared protein not found")
+        if not ligand_pdbqt.exists():
+            raise HTTPException(status_code=404, detail=f"Docking output for ligand index {ligand_idx} not found")
+            
+        pose = max(1, pose)
+        affinity = 0.0
+        try:
+            parsed_results = results.parse_vina_output(str(ligand_pdbqt))
+            if parsed_results and len(parsed_results) >= pose:
+                affinity = parsed_results[pose - 1].get("affinity", 0.0)
+        except Exception as e:
+            logger.warning(f"Could not parse affinity for batch ligand {ligand_idx} pose {pose}: {e}")
+            
+        sdf_ref_path = session_dir / sdf_ref_name
+        original_sdf_path = str(sdf_ref_path) if sdf_ref_path.exists() else None
+        
+        complex_pdb_string = create_protein_ligand_complex(
+            protein_pdbqt=protein_pdbqt,
+            ligand_pdbqt=ligand_pdbqt,
+            pose_number=pose,
+            include_remarks=False
+        )
+        
+        complex_path = session_dir / f"temp_batch_complex_{ligand_idx}_{pose}.pdb"
+        try:
+            complex_path.write_text(complex_pdb_string, encoding="utf-8")
+            protein_atoms, ligand_atoms = parse_pdb(str(complex_path))
+            interactions = detect(protein_atoms, ligand_atoms, pdb_path=str(complex_path))
+            svg_content = render_svg(
+                str(complex_path), interactions, affinity,
+                original_sdf_path=original_sdf_path
+            )
+            return Response(content=svg_content, media_type="image/svg+xml")
+        finally:
+            if complex_path.exists():
+                try:
+                    complex_path.unlink()
+                except:
+                    pass
+    except Exception as e:
+        logger.error(f"Failed to generate 2D interactions for batch ligand {ligand_idx}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/interactions/3d/{session_id}/{pose}")
 async def get_3d_interaction_lines(session_id: str, pose: int):

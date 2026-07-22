@@ -16,7 +16,6 @@ const STEPS = [
     { key: 'input', label: 'Input' },
     { key: 'prepare', label: 'Prepare' },
     { key: 'configure', label: 'Configure' },
-    { key: 'run', label: 'Run' },
 ];
 
 function Dock() {
@@ -276,75 +275,29 @@ function Dock() {
                         </section>
 
                         <div className="flex justify-between">
-                            <button onClick={() => setStepIndex(1)} className="px-5 py-2.5 rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-primary/40 font-semibold text-sm transition-all">Back</button>
-                            <button
-                                onClick={() => setStepIndex(3)}
-                                disabled={!configureDone}
-                                className="px-6 py-2.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 inline-flex items-center gap-1.5"
-                            >
-                                Continue <ArrowRight size={16} aria-hidden="true" />
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {/* Step 4: Run */}
-                {stepIndex === 3 && (
-                    <div className="animate-fade-in-up">
-                        <section className="rounded-2xl bg-card border border-border p-6 mb-6 shadow-elevated">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                                    <Play size={18} className="text-primary" aria-hidden="true" />
-                                </div>
-                                <div>
-                                    <h2 className="text-lg font-semibold text-foreground">Run Docking</h2>
-                                    <p className="text-sm text-muted-foreground">Review the configuration and launch the simulation</p>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3 mb-6 text-sm">
-                                <div className="rounded-xl border border-border bg-background p-3">
-                                    <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">Mode</p>
-                                    <p className="font-semibold text-foreground">{dockingMode === 'auto' ? 'Auto-Blind (wRRF top 5)' : 'Active-Site (manual grid)'}</p>
-                                </div>
-                                <div className="rounded-xl border border-border bg-background p-3">
-                                    <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">Protein</p>
-                                    <p className="font-mono-code text-xs text-foreground truncate">{workflow.savedProteinFilename || '—'}</p>
-                                </div>
-                                <div className="rounded-xl border border-border bg-background p-3">
-                                    <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">Ligand</p>
-                                    <p className="font-mono-code text-xs text-foreground truncate">{workflow.savedLigandFilename || '—'}</p>
-                                </div>
-                                <div className="rounded-xl border border-border bg-background p-3">
-                                    <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">Session</p>
-                                    <p className="font-mono-code text-xs text-foreground truncate">{workflow.sessionId || '—'}</p>
-                                </div>
-                            </div>
-
+                            <button onClick={() => setStepIndex(1)} className="px-5 py-2.5 rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-primary/40 font-semibold text-sm transition-all" disabled={workflow.loading}>Back</button>
                             <button
                                 onClick={handleRunDocking}
-                                disabled={workflow.loading || !inputDone || !workflow.proteinPrepared || !configureDone}
-                                className="w-full sm:w-auto flex items-center justify-center gap-2 px-7 py-3.5 rounded-full bg-primary text-primary-foreground font-semibold text-base hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 shadow-glow"
+                                disabled={!configureDone || workflow.loading}
+                                className="px-6 py-2.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 inline-flex items-center gap-1.5"
                             >
-                                {isRunning ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : <Play size={18} aria-hidden="true" />}
-                                {isRunning ? 'Running…' : dockingMode === 'auto' ? 'Run Blind Docking' : 'Run Active-Site Docking'}
+                                {isRunning ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}
+                                {isRunning ? 'Running…' : 'Run Docking Simulation'}
                             </button>
-
-                            {isRunning && (
-                                <div className="mt-4">
-                                    <div className="w-full bg-border rounded-full h-1.5 overflow-hidden">
-                                        <div className="bg-primary h-1.5 rounded-full animate-pulse" style={{ width: '100%' }} />
-                                    </div>
-                                    <p className="text-xs text-muted-foreground mt-2">{workflow.loadingMessage || 'Running molecular docking simulation…'}</p>
-                                </div>
-                            )}
-                        </section>
-
-                        <div className="flex justify-start">
-                            <button onClick={() => setStepIndex(2)} className="px-5 py-2.5 rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-primary/40 font-semibold text-sm transition-all">Back</button>
                         </div>
+
+                        {isRunning && (
+                            <div className="mt-4 border border-border bg-background p-4 rounded-xl">
+                                <div className="w-full bg-border rounded-full h-1.5 overflow-hidden">
+                                    <div className="bg-primary h-1.5 rounded-full animate-pulse" style={{ width: '100%' }} />
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-2">{workflow.loadingMessage || 'Running molecular docking simulation…'}</p>
+                            </div>
+                        )}
                     </div>
                 )}
+
+
             </div>
 
             <Footer />

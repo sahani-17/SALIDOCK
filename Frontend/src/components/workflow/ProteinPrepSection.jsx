@@ -18,9 +18,17 @@ export default function ProteinPrepSection({
                 : 'border-border hover:border-primary/30 bg-card'
         }`;
 
+    const toggleChain = (chainId) => {
+        if (selectedChains.includes(chainId)) {
+            setSelectedChains(selectedChains.filter(c => c !== chainId));
+        } else {
+            setSelectedChains([...selectedChains, chainId]);
+        }
+    };
+
     return (
         <section className="rounded-2xl bg-card border border-border p-6 mb-6 shadow-elevated">
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
                     <FileText className="w-5 h-5 text-primary" aria-hidden="true" />
                 </div>
@@ -30,46 +38,61 @@ export default function ProteinPrepSection({
                 </div>
             </div>
 
-            {!isBlind && chains.length > 0 && (
+            {/* Chain Selector */}
+            {chains && chains.length > 0 && (
                 <div className="mb-6">
-                    <label className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground mb-3 block">Select Chains to Keep</label>
+                    <div className="flex items-center justify-between mb-3">
+                        <label className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+                            Select Chains to Preserve
+                        </label>
+                        <span className="text-[11px] text-muted-foreground">
+                            {selectedChains.length === 0
+                                ? 'All chains kept (none selected)'
+                                : `${selectedChains.length} of ${chains.length} selected`}
+                        </span>
+                    </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                        {chains.filter((chain) => {
-                            const chainId = typeof chain === 'string' ? chain : chain.id;
-                            return chainId && chainId.trim() !== '';
-                        }).map((chain) => {
-                            const chainId = typeof chain === 'string' ? chain : chain.id;
-                            const chainAtoms = typeof chain === 'object' && chain.atoms ? ` · ${chain.atoms} atoms` : '';
+                        {chains.map((chain) => {
+                            const id = chain.id ?? chain;
+                            const atoms = chain.atoms;
+                            const active = selectedChains.includes(id);
                             return (
-                                <label key={chainId} className={chipClass(selectedChains.includes(chainId))}>
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedChains.includes(chainId)}
-                                        onChange={(e) => {
-                                            if (e.target.checked) setSelectedChains([...selectedChains, chainId]);
-                                            else setSelectedChains(selectedChains.filter(c => c !== chainId));
-                                        }}
-                                        className="accent-primary"
-                                    />
-                                    <span className="text-sm font-medium text-foreground">
-                                        Chain {chainId}<span className="text-muted-foreground">{chainAtoms}</span>
-                                    </span>
-                                </label>
+                                <button
+                                    key={id}
+                                    type="button"
+                                    onClick={() => toggleChain(id)}
+                                    disabled={proteinPrepared}
+                                    className={`flex flex-col items-start gap-0.5 px-3 py-2.5 rounded-xl border font-semibold text-sm transition-all disabled:cursor-not-allowed ${
+                                        active
+                                            ? 'border-primary/50 bg-primary/8 text-primary ring-1 ring-primary/20'
+                                            : 'border-border hover:border-primary/30 bg-card text-foreground'
+                                    }`}
+                                >
+                                    <span className="font-mono-code font-bold">Chain {id}</span>
+                                    {atoms !== undefined && (
+                                        <span className="text-[11px] font-normal text-muted-foreground">{atoms} atoms</span>
+                                    )}
+                                </button>
                             );
                         })}
                     </div>
+                    <p className="text-[11px] text-muted-foreground mt-2 italic">
+                        Leave all unselected to preserve all chains. Only checked chains will be written to the prepared PDBQT.
+                    </p>
                 </div>
             )}
 
+            {/* Heteroatom Selector */}
             {heteroatoms.length > 0 && (
                 <div className="mb-6">
-                    <label className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground mb-3 block">Select Heteroatoms to Keep</label>
+                    <label className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground mb-3 block">Select Heteroatoms / Cofactors to Keep</label>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-1">
                         {heteroatoms.map((het) => (
                             <label key={het} className={chipClass(selectedHeteroatoms.includes(het))}>
                                 <input
                                     type="checkbox"
                                     checked={selectedHeteroatoms.includes(het)}
+                                    disabled={proteinPrepared}
                                     onChange={(e) => {
                                         if (e.target.checked) setSelectedHeteroatoms([...selectedHeteroatoms, het]);
                                         else setSelectedHeteroatoms(selectedHeteroatoms.filter(h => h !== het));

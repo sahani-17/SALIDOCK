@@ -74,13 +74,14 @@ export function useDockingWorkflow({ isBlind = false } = {}) {
             const savedFilename = uploadResponse.saved_as;
             setSavedProteinFilename(savedFilename);
 
-            // Get chains using the saved filename from backend if not blind
+            // Get chains using the saved filename from backend
             let chainsCount = 0;
-            if (!isBlind) {
+            try {
                 const chainsData = await api.getChains(sessionId, savedFilename);
                 setChains(chainsData.chains || []);
                 chainsCount = chainsData.chains?.length || 0;
-            } else {
+            } catch (chainErr) {
+                console.warn('Failed to fetch chains:', chainErr);
                 setChains([]);
             }
 
@@ -89,11 +90,7 @@ export function useDockingWorkflow({ isBlind = false } = {}) {
             setHeteroatoms(heteroData.all_heteroatoms || []);
 
             setShowProteinPrep(true);
-            if (isBlind) {
-                toast.success('Protein uploaded successfully');
-            } else {
-                toast.success(`Protein uploaded — ${chainsCount} chains found`);
-            }
+            toast.success(chainsCount > 0 ? `Protein uploaded — ${chainsCount} chain(s) found` : 'Protein uploaded successfully');
         } catch (err) {
             setError('Failed to upload protein: ' + (err.message || err));
             toast.error('Protein upload failed');
@@ -171,11 +168,11 @@ export function useDockingWorkflow({ isBlind = false } = {}) {
             setSavedProteinFilename(response.filename);
             setUploadProgress(prev => ({ ...prev, protein: true }));
 
-            // Get chains if not blind
-            if (!isBlind) {
+            // Get chains
+            try {
                 const chainsData = await api.getChains(sessionId, response.filename);
                 setChains(chainsData.chains || []);
-            } else {
+            } catch (err) {
                 setChains([]);
             }
 
@@ -211,11 +208,11 @@ export function useDockingWorkflow({ isBlind = false } = {}) {
             setSavedProteinFilename(response.filename);
             setUploadProgress(prev => ({ ...prev, protein: true }));
 
-            // Get chains if not blind
-            if (!isBlind) {
+            // Get chains
+            try {
                 const chainsData = await api.getChains(sessionId, response.filename);
                 setChains(chainsData.chains || []);
-            } else {
+            } catch (err) {
                 setChains([]);
             }
 

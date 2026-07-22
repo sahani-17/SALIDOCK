@@ -189,4 +189,74 @@ export const api = {
       fallback: 'Failed to fetch structure from UniProt',
     });
   },
+
+  // Batch Docking API calls
+  uploadBatchLigands: (sessionId, files) => {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('files', file);
+    });
+    return json(`/api/batch/upload/ligands/${sessionId}`, {
+      method: 'POST',
+      body: formData,
+      fallback: 'Failed to upload batch ligands',
+    });
+  },
+
+  uploadBatchSmiles: (sessionId, ligands) => {
+    return json(`/api/batch/smiles/ligands/${sessionId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ligands }),
+      fallback: 'Failed to generate ligands from SMILES list',
+    });
+  },
+
+  prepareBatchLigands: (sessionId) =>
+    json(`/api/batch/prepare/ligands/${sessionId}`, {
+      method: 'POST',
+      fallback: 'Failed to start batch ligand preparation',
+    }),
+
+  getBatchPrepareStatus: (sessionId) =>
+    json(`/api/batch/prepare/status/${sessionId}`, {
+      fallback: 'Failed to get batch preparation status',
+    }),
+
+  runBatchDocking: (sessionId, data) => {
+    const params = new URLSearchParams({ docking_mode: data.dockingMode || 'cavity' });
+    if (data.dockingMode === 'cavity') {
+      params.append('cavity_id', data.cavityId || 1);
+    } else if (data.dockingMode === 'manual') {
+      params.append('center_x', data.center_x);
+      params.append('center_y', data.center_y);
+      params.append('center_z', data.center_z);
+      params.append('size_x', data.size_x);
+      params.append('size_y', data.size_y);
+      params.append('size_z', data.size_z);
+    }
+    return json(`/api/batch/dock/run/${sessionId}?${params}`, {
+      method: 'POST',
+      fallback: 'Failed to run batch docking',
+    });
+  },
+
+  getBatchDockStatus: (sessionId) =>
+    json(`/api/batch/status/${sessionId}`, {
+      fallback: 'Failed to get batch docking status',
+    }),
+
+  getBatchResults: (sessionId) =>
+    json(`/api/batch/results/list/${sessionId}`, {
+      fallback: 'Failed to get batch results',
+    }),
+
+  downloadBatchComplex: async (sessionId, ligandIdx, poseNumber) => {
+    const r = await request(`/api/batch/results/download/complex/${sessionId}/${ligandIdx}/${poseNumber}`, {
+      fallback: 'Failed to download batch complex structure',
+    });
+    return r.blob();
+  },
+
+  downloadBatchZipUrl: (sessionId) => `${API_BASE_URL}/api/batch/results/download/zip/${sessionId}`,
 };

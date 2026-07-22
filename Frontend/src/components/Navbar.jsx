@@ -50,7 +50,8 @@ const Navbar = () => {
                             </>
                         ) : (
                             <>
-                                
+                                <Link to="/dock" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Single Dock</Link>
+                                <Link to="/batch-dock" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Batch Dock</Link>
                                 <span className="text-xs max-w-40 truncate text-muted-foreground">{displayName}</span>
                                 <button
                                     type="button"
@@ -79,7 +80,8 @@ const Navbar = () => {
                             </>
                         ) : (
                             <>
-                                
+                                <Link to="/dock" className="text-sm text-muted-foreground hover:text-foreground" onClick={() => setMobileOpen(false)}>Single Dock</Link>
+                                <Link to="/batch-dock" className="text-sm text-muted-foreground hover:text-foreground" onClick={() => setMobileOpen(false)}>Batch Dock</Link>
                                 <button type="button" className="text-left text-sm text-muted-foreground hover:text-foreground" onClick={handleLogout}>Logout</button>
                             </>
                         )}

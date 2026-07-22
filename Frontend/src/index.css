@@ -116,3 +116,20 @@
 ::-webkit-scrollbar-track { background: hsl(var(--background)); }
 ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.5); }
+
+/* Force SVGs inside 2D and 3D viewer containers to scale properly */
+#molecular-viewer-container svg, 
+.svg-container-2d svg, 
+.interaction-2d-container svg {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+}
+
+/* Hide default Molstar viewport overlay controls completely */
+.msp-viewport-controls,
+.msp-viewport-controls-buttons,
+.msp-viewport-controls-panel {
+  display: none !important;
+}

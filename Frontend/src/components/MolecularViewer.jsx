@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Camera, RefreshCw } from 'lucide-react';
 
 import { createPluginUI } from 'molstar/lib/mol-plugin-ui';
 import { renderReact18 } from 'molstar/lib/mol-plugin-ui/react18';
@@ -136,6 +136,9 @@ const MolecularViewer = forwardRef(function MolecularViewer({
         const ligandExpression = MS.struct.modifier.union([
           MS.struct.generator.atomGroups({
             'entity-test': MS.core.rel.eq([MS.ammp('entityType'), 'non-polymer'])
+          }),
+          MS.struct.generator.atomGroups({
+            'residue-test': MS.core.rel.eq([MS.ammp('label_comp_id'), 'UNK'])
           })
         ]);
         const query = compile(ligandExpression);
@@ -144,7 +147,6 @@ const MolecularViewer = forwardRef(function MolecularViewer({
 
         if (loci && loci.elements && loci.elements.length > 0) {
           plugin.managers.camera.focusLoci(loci);
-          plugin.managers.structure.focus.addFromLoci(loci);
         } else {
           plugin.managers.camera.reset();
         }
@@ -159,29 +161,78 @@ const MolecularViewer = forwardRef(function MolecularViewer({
     }
   }, []);
 
-  // Helper function to delete component by tag
-  const deleteCompByTag = useCallback(async (plugin, structureRef, tag) => {
-    const parentRef = structureRef?.cell?.transform?.ref;
-    if (!parentRef) return;
-    const children = plugin.state.data.tree.children.get(parentRef);
-    if (children) {
-      const update = plugin.build();
-      let deleted = false;
-      children.forEach(childRef => {
-        const cell = plugin.state.data.cells.get(childRef);
-        if (cell && (childRef === tag || (cell.transform.tags && cell.transform.tags.includes(tag)))) {
-          update.delete(childRef);
-          deleted = true;
-        }
+  const handleResetCamera = useCallback(() => {
+    pluginRef.current?.managers.camera.reset();
+  }, []);
+
+  const handleDownloadUltraHD = useCallback(async () => {
+    const plugin = pluginRef.current;
+    if (!plugin) return;
+    try {
+      plugin.helpers.viewportScreenshot.behaviors.values.next({
+        ...plugin.helpers.viewportScreenshot.behaviors.values.value,
+        resolution: {
+          name: 'ultra-hd',
+          params: {}
+        },
+        transparent: false
       });
-      if (deleted) {
-        await update.commit();
+      await plugin.helpers.viewportScreenshot.download('salidock_pose_ultrahd.png');
+    } catch (err) {
+      console.error('Failed to export UltraHD image:', err);
+    }
+  }, []);
+
+  // Helper function to delete component by tag or label across state data tree
+  const deleteCompByTag = useCallback(async (plugin, structureRef, tag) => {
+    if (!plugin || !plugin.state?.data) return;
+    const state = plugin.state.data;
+    const update = plugin.build();
+    let deleted = false;
+
+    const labelMap = {
+      'pocket-residues-component': 'Cavity Residues',
+      'pocket-labels-component': 'Cavity Labels',
+      'pocket-surface-component': 'Cavity Surface',
+      'interactions-component': 'Interactions',
+      'protein-component': 'Receptor',
+      'ligand-component': 'Ligand'
+    };
+    const targetLabel = labelMap[tag];
+
+    state.cells.forEach((cell, ref) => {
+      if (!cell || !cell.transform) return;
+      const tags = cell.transform.tags;
+      const paramsTags = cell.transform.params?.tags;
+      const label = cell.transform.params?.label;
+
+      const hasTag = (tList) => {
+        if (!tList) return false;
+        if (Array.isArray(tList)) return tList.includes(tag);
+        if (tList instanceof Set) return tList.has(tag);
+        if (typeof tList === 'string') return tList === tag;
+        return false;
+      };
+
+      if (
+        ref === tag ||
+        hasTag(tags) ||
+        hasTag(paramsTags) ||
+        (targetLabel && label === targetLabel)
+      ) {
+        update.delete(ref);
+        deleted = true;
       }
+    });
+
+    if (deleted) {
+      await update.commit();
     }
   }, []);
 
   // Helper function to clear representations under a component node
   const clearNodeChildren = useCallback(async (plugin, nodeRef) => {
+    if (!plugin || !plugin.state?.data) return;
     const children = plugin.state.data.tree.children.get(nodeRef);
     if (children && children.size > 0) {
       const update = plugin.build();
@@ -203,6 +254,9 @@ const MolecularViewer = forwardRef(function MolecularViewer({
       const ligandExpression = MS.struct.modifier.union([
         MS.struct.generator.atomGroups({
           'entity-test': MS.core.rel.eq([MS.ammp('entityType'), 'non-polymer'])
+        }),
+        MS.struct.generator.atomGroups({
+          'residue-test': MS.core.rel.eq([MS.ammp('label_comp_id'), 'UNK'])
         })
       ]);
 
@@ -218,6 +272,11 @@ const MolecularViewer = forwardRef(function MolecularViewer({
         })
       ]);
 
+      const pocketResExpression = MS.struct.modifier.exceptBy({
+        0: surroundingExpression,
+        by: ligandExpression
+      });
+
       // --- Receptor (Protein) ---
       if (proteinRepr === 'hide' || !showProtein) {
         await deleteCompByTag(plugin, structureRef, 'protein-component');
@@ -226,11 +285,11 @@ const MolecularViewer = forwardRef(function MolecularViewer({
           structureRef.cell,
           proteinExpression,
           'protein-component',
-          { label: 'Receptor' }
+          { label: 'Receptor', tags: ['protein-component'] }
         );
         if (proteinComp) {
           await clearNodeChildren(plugin, proteinComp.ref);
-          
+
           // Default: color by chain so multi-chain proteins are immediately
           // distinguishable. Mol*'s built-in 'chain-id' theme already uses a
           // curated palette that works on dark backgrounds.
@@ -278,7 +337,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
         structureRef.cell,
         ligandExpression,
         'ligand-component',
-        { label: 'Ligand' }
+        { label: 'Ligand', tags: ['ligand-component'] }
       );
       if (ligandComp) {
         await clearNodeChildren(plugin, ligandComp.ref);
@@ -312,54 +371,59 @@ const MolecularViewer = forwardRef(function MolecularViewer({
       // --- Pocket Residues ---
       if (!showPocketResidues) {
         await deleteCompByTag(plugin, structureRef, 'pocket-residues-component');
+        await deleteCompByTag(plugin, structureRef, 'pocket-labels-component');
       } else {
-        const pocketResExpression = MS.struct.modifier.exceptBy({
-          0: surroundingExpression,
-          by: ligandExpression
-        });
         const pocketResComp = await plugin.builders.structure.tryCreateComponentFromExpression(
           structureRef.cell,
           pocketResExpression,
           'pocket-residues-component',
-          { label: 'Cavity Residues' }
+          { label: 'Cavity Residues', tags: ['pocket-residues-component'] }
         );
         if (pocketResComp) {
           await clearNodeChildren(plugin, pocketResComp.ref);
-
-          // Thin sticks: match the reference image where residue carbons are
-          // near-white and only heteroatoms (O, N, S) have CPK color.
-          // We use uniform color with a very thin sizeFactor
-          // so they look like faint thin background wires.
           await plugin.builders.structure.representation.addRepresentation(
             pocketResComp,
             {
               type: 'ball-and-stick',
-              color: 'uniform',
+              color: 'element-symbol',
               colorParams: {
-                // Color entire pocket residue sticks with uniform light grey (#D8D8D8) for a thin wireframe look
-                value: Color(0xD8D8D8),
+                carbonColor: { name: 'uniform', params: { value: Color(0x90a4ae) } },
               },
               typeParams: {
-                sizeFactor: 0.07,        // very thin sticks, tiny balls matching wireframe
-                sizeAspectRatio: 0.7,    // maintain thin stick ratio
+                sizeFactor: 0.18,
+                sizeAspectRatio: 0.5,
               }
             }
           );
+        }
 
-          if (showPocketLabels) {
+        // --- Pocket Labels ---
+        if (!showPocketLabels) {
+          await deleteCompByTag(plugin, structureRef, 'pocket-labels-component');
+        } else {
+          const pocketLabelsComp = await plugin.builders.structure.tryCreateComponentFromExpression(
+            structureRef.cell,
+            pocketResExpression,
+            'pocket-labels-component',
+            { label: 'Cavity Labels', tags: ['pocket-labels-component'] }
+          );
+          if (pocketLabelsComp) {
+            await clearNodeChildren(plugin, pocketLabelsComp.ref);
             await plugin.builders.structure.representation.addRepresentation(
-              pocketResComp,
+              pocketLabelsComp,
               {
                 type: 'label',
                 color: 'uniform',
                 colorParams: {
-                  value: Color(0x111111), // large bold near-black labels
+                  value: Color(0xffffff),
                 },
                 typeParams: {
                   level: 'residue',
-                  sizeFactor: 1.5,       // larger labels for readability
-                  background: false,     // no background boxes
-                  borderWidth: 0,        // no outlines/borders around text
+                  sizeFactor: 1.3,
+                  background: true,
+                  backgroundColor: Color(0x0f172a),
+                  backgroundOpacity: 0.75,
+                  borderWidth: 0,
                 }
               }
             );
@@ -371,15 +435,11 @@ const MolecularViewer = forwardRef(function MolecularViewer({
       if (!showPocketSurface) {
         await deleteCompByTag(plugin, structureRef, 'pocket-surface-component');
       } else {
-        const pocketResExpression = MS.struct.modifier.exceptBy({
-          0: surroundingExpression,
-          by: ligandExpression
-        });
         const pocketSurfComp = await plugin.builders.structure.tryCreateComponentFromExpression(
           structureRef.cell,
           pocketResExpression,
           'pocket-surface-component',
-          { label: 'Cavity Surface' }
+          { label: 'Cavity Surface', tags: ['pocket-surface-component'] }
         );
         if (pocketSurfComp) {
           await clearNodeChildren(plugin, pocketSurfComp.ref);
@@ -394,10 +454,10 @@ const MolecularViewer = forwardRef(function MolecularViewer({
             {
               type: 'gaussian-surface',
               color: colorTheme,
-              params: {
-                alpha: 0.4,
-                transparency: 0.6,
-                useColorSmoothing: true
+              typeParams: {
+                alpha: 0.35,
+                quality: 'high',
+                smoothness: 1.5,
               }
             }
           );
@@ -408,18 +468,29 @@ const MolecularViewer = forwardRef(function MolecularViewer({
       if (!showInteractions) {
         await deleteCompByTag(plugin, structureRef, 'interactions-component');
       } else {
+        try {
+          if (structureRef.cell.obj?.data) {
+            await plugin.managers.customStructureProperties.compute(structureRef.cell.obj.data, { owner: plugin });
+          }
+        } catch (propErr) {
+          console.warn("Could not compute custom interaction properties:", propErr);
+        }
+
         const interactionsComp = await plugin.builders.structure.tryCreateComponentFromExpression(
           structureRef.cell,
           surroundingExpression,
           'interactions-component',
-          { label: 'Interactions' }
+          { label: 'Interactions', tags: ['interactions-component'] }
         );
         if (interactionsComp) {
           await clearNodeChildren(plugin, interactionsComp.ref);
           await plugin.builders.structure.representation.addRepresentation(
             interactionsComp,
             {
-              type: 'interactions'
+              type: 'interactions',
+              typeParams: {
+                includeParent: true,
+              }
             }
           );
         }
@@ -678,6 +749,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
         #molecular-viewer-container .msp-viewport-controls-buttons [title="Reset Camera"] { display: none !important; }
         #molecular-viewer-container .msp-viewport-controls-buttons [title="Focus Camera On Selection"] { display: none !important; }
         #molecular-viewer-container .msp-selection-viewport-controls { display: none !important; }
+        #molecular-viewer-container .msp-viewport-controls { display: none !important; }
         #molecular-viewer-container[data-minimal="true"] .msp-viewport-controls,
         #molecular-viewer-container[data-minimal="true"] .msp-viewport-controls-buttons { display: none !important; }
       `}</style>
@@ -698,10 +770,32 @@ const MolecularViewer = forwardRef(function MolecularViewer({
           }}
         />
 
+        {/* Floating Reset Zoom Button */}
+        {!minimal && (
+          <button
+            onClick={handleResetCamera}
+            className="absolute top-4 right-16 z-10 p-2.5 rounded-full bg-white/90 hover:bg-white text-slate-700 hover:text-primary shadow-elevated border border-border/80 backdrop-blur-sm transition-all hover:scale-105 active:scale-95 flex items-center justify-center"
+            title="Reset Zoom"
+          >
+            <RefreshCw size={18} />
+          </button>
+        )}
+
+        {/* Floating Download UltraHD Button */}
+        {!minimal && (
+          <button
+            onClick={handleDownloadUltraHD}
+            className="absolute top-4 right-4 z-10 p-2.5 rounded-full bg-white/90 hover:bg-white text-slate-700 hover:text-primary shadow-elevated border border-border/80 backdrop-blur-sm transition-all hover:scale-105 active:scale-95 flex items-center justify-center"
+            title="Download UltraHD Image"
+          >
+            <Camera size={18} />
+          </button>
+        )}
+
         {/* Loading Overlay */}
         {loading && (
           <div className="absolute inset-0 flex flex-col items-center justify-center backdrop-blur-sm z-20 rounded-lg"
-               style={{ backgroundColor: 'rgba(255, 255, 255, 0.82)' }}>
+            style={{ backgroundColor: 'rgba(255, 255, 255, 0.82)' }}>
             <Loader2 className="w-10 h-10 text-primary animate-spin mb-2" />
             <p className="text-sm font-medium text-slate-700">Processing Structure...</p>
           </div>

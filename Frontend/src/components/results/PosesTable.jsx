@@ -30,7 +30,7 @@ export default function PosesTable({
             </tr>
           </thead>
           <tbody>
-            {filteredPoses.map((pose) => {
+            {allPoses.map((pose) => {
               const globalIndex = allPoses.indexOf(pose) + 1;
               const isSelected = selectedPose === globalIndex;
               return (

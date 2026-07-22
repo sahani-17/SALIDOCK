@@ -95,6 +95,13 @@ function Results() {
   const handleViewPose = useCallback(async (poseNumber) => {
     setLoadingViewer(true);
     setSelectedPose(poseNumber);
+    
+    // Automatically synchronize the cavity filter with the selected pose's cavity
+    const targetPose = results?.poses?.[poseNumber - 1];
+    if (targetPose && targetPose.cavity_id !== undefined) {
+      setSelectedCavityFilter(targetPose.cavity_id.toString());
+    }
+
     try {
       let text;
       if (isDemo) {
@@ -108,13 +115,9 @@ function Results() {
       setProteinRepr('cartoon');
       setLigandRepr('ball-and-stick');
       setColorScheme('element-symbol');
-      setShowCavityResidues(true);
-      setShowCavityLabels(true);
-      setShowCavitySurface(false);
-      setShowInteractions(true);
     } catch (err) {
-      console.error('View pose error:', err);
-      setError('Failed to load structure for visualization');
+      console.error('Pose view error:', err);
+      setError('Failed to view pose');
     } finally {
       setLoadingViewer(false);
     }
@@ -214,15 +217,14 @@ function Results() {
                   className="px-3 py-1.5 bg-card border border-border rounded-md text-sm font-medium text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                   disabled={loadingViewer}
                 >
-                  {filteredPoses.map((pose) => {
-                    const globalIndex = allPoses.indexOf(pose) + 1;
+                  {allPoses.map((pose, idx) => {
+                    const globalIndex = idx + 1;
                     return (
                       <option key={globalIndex} value={globalIndex}>
                         Pose {globalIndex} - {pose.affinity?.toFixed(2) || 'N/A'} kcal/mol {pose.cavity_id !== undefined ? `(Cavity ${pose.cavity_id})` : ''}
                       </option>
                     );
                   })}
-
                 </select>
               </div>
             </div>
@@ -243,7 +245,7 @@ function Results() {
                 showInteractions={showInteractions} setShowInteractions={setShowInteractions}
               />
 
-              <div className="relative rounded-b-xl overflow-hidden border border-border">
+              <div className="relative rounded-xl overflow-hidden border border-border bg-background/30">
                 {loadingViewer && (
                   <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/75 backdrop-blur-sm rounded-xl">
                     <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
@@ -265,13 +267,13 @@ function Results() {
                     showInteractions={showInteractions}
                   />
                 ) : (
-                  <div className="w-full h-[500px] bg-muted/40 rounded-xl flex items-center justify-center border-2 border-dashed border-border">
+                  <div className="w-full h-[600px] bg-muted/40 rounded-xl flex items-center justify-center border-2 border-dashed border-border">
                     {!loadingViewer && <p className="text-muted-foreground font-medium">No structure available</p>}
                   </div>
                 )}
               </div>
 
-              <div className="mt-6 p-4 bg-primary/5 rounded-xl border border-primary/20 backdrop-blur-sm">
+              <div className="p-4 bg-primary/5 rounded-xl border border-primary/20 backdrop-blur-sm mt-4">
                 <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
                   Viewer Controls
@@ -286,7 +288,7 @@ function Results() {
           )}
 
           {viewMode === '2d' && (
-            <div className="rounded-xl overflow-hidden border border-border">
+            <div className="rounded-xl overflow-hidden border border-border bg-white" style={{ minHeight: '600px' }}>
               <Interaction2DViewer sessionId={sessionId} poseNumber={selectedPose} totalPoses={allPoses.length || 9} />
             </div>
           )}

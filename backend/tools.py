@@ -1049,9 +1049,10 @@ def _filter_pdb_residues(input_pdb, keep_hetero_residues=None, keep_chains=None)
         else:
             logger.info(f"  Selective HETATM: keeping {', '.join(keep_hetero_residues)}")
         
-        # Step 4: Remove UNK (unknown) residues using pdb_delresname
+        # Step 4: Remove UNK (unknown) and UNL (unknown ligand) residues using pdb_delresname
         pipeline = pdb_delresname.run(pipeline, ['UNK'])
-        logger.info(f"  pdb_delresname: removed UNK residues")
+        pipeline = pdb_delresname.run(pipeline, ['UNL'])
+        logger.info(f"  pdb_delresname: removed UNK and UNL residues")
         
         # Step 5: Tidy the output for PDB format compliance
         pipeline = pdb_tidy.run(pipeline)
@@ -1093,18 +1094,26 @@ def _filter_pdb_residues(input_pdb, keep_hetero_residues=None, keep_chains=None)
     return output_pdb
 
 
+def _clean_pdb_file(pdb_file):
+    """
+    Remove water molecules, UNK, and UNL residues from PDB file.
+    """
+    with open(pdb_file, 'r') as fh:
+        pipeline = fh
+        for res in ['HOH', 'WAT', 'H2O', 'UNK', 'UNL']:
+            pipeline = pdb_delresname.run(pipeline, [res])
+        lines = list(pipeline)
+    with open(pdb_file, 'w') as f:
+        f.writelines(lines)
+
+
 def _remove_waters_from_pdbqt(pdbqt_file):
     """
-    Remove water molecules and UNK residues from PDBQT file using pdb-tools.
+    Remove water molecules and UNK/UNL residues from PDBQT file using pdb-tools.
     
-    Uses pdb_delresname to remove HOH, WAT, H2O, and UNK residues.
+    Uses pdb_delresname to remove HOH, WAT, H2O, UNK, and UNL residues.
     Note: pdb_delresname works on standard PDB columns (17:20) which are 
     identical in PDBQT format, so this is safe for PDBQT files.
-    
-    This is needed because:
-    1. OpenBabel might add waters during conversion
-    2. OpenBabel creates UNK (unknown) residues for non-standard atoms
-    3. Chain ID preservation might assign chain IDs to waters/UNK
     
     Args:
         pdbqt_file: PDBQT file to clean
@@ -1115,14 +1124,15 @@ def _remove_waters_from_pdbqt(pdbqt_file):
         pipeline = pdb_delresname.run(pipeline, ['HOH'])
         pipeline = pdb_delresname.run(pipeline, ['WAT'])
         pipeline = pdb_delresname.run(pipeline, ['H2O'])
-        # Remove UNK (unknown) residues created by OpenBabel
+        # Remove UNK and UNL residues
         pipeline = pdb_delresname.run(pipeline, ['UNK'])
+        pipeline = pdb_delresname.run(pipeline, ['UNL'])
         cleaned_lines = list(pipeline)
     
     with open(pdbqt_file, 'w') as f:
         f.writelines(cleaned_lines)
     
-    logger.info(f"  Cleaned waters/UNK from PDBQT using pdb-tools")
+    logger.info(f"  Cleaned waters/UNK/UNL from PDBQT using pdb-tools")
 
 
 def _preserve_chain_ids_in_pdbqt(source_pdb, target_pdbqt):
@@ -1268,36 +1278,55 @@ def prepare_protein(input_pdb, output_pdbqt, remove_waters=True, keep_hetero_res
         except Exception as e:
             logger.warning(f"  WARNING: Structure analysis failed: {e}")
     
-    # ── Stage 1: PDBFixer — Comprehensive Structure Repair ──
-    logger.info("\nStage 1: PDBFixer — Comprehensive Structure Repair")
+    # Track all intermediate temporary files created for clean-up later
+    temp_files = []
+
+    # ── Stage 1: Non-Protein Elements Elimination ──
+    logger.info("\nStage 1: Non-Protein Elements Elimination")
+    if remove_waters or keep_hetero_residues is not None or keep_chains is not None:
+        if not remove_waters:
+            logger.warning("  WARNING: Keeping water molecules (unusual for docking)")
+        else:
+            try:
+                filtered_pdb = _filter_pdb_residues(input_pdb, keep_hetero_residues, keep_chains)
+                if filtered_pdb != input_pdb and os.path.exists(filtered_pdb):
+                    temp_files.append(filtered_pdb)
+                    input_pdb = filtered_pdb
+                logger.info("  ✓ Non-protein elements filtered successfully")
+            except Exception as e:
+                logger.warning(f"  Filtering failed: {e}")
+
+    # ── Stage 2: PDBFixer — Comprehensive Structure Repair ──
+    logger.info("\nStage 2: PDBFixer — Comprehensive Structure Repair")
     fixed_pdb = str(input_pdb).replace('.pdb', '_fixed.pdb')
-    pdbfixer_report = None
+    pdbfixer_report = {"missing_residues_remaining": -1}  # Default
     
     try:
         pdbfixer_report = complete_structure_pdbfixer(input_pdb, fixed_pdb)
-        input_pdb = fixed_pdb  # Use fixed version going forward
-        logger.info("  Using PDBFixer-repaired structure for preparation")
-        
-        # ── Fix 4: Remove disconnected fragments after PDBFixer ──
-        fixed_clean_pdb = fixed_pdb.replace('.pdb', '_clean.pdb')
-        try:
-            remove_disconnected_fragments(fixed_pdb, fixed_clean_pdb)
-            if os.path.exists(fixed_clean_pdb) and os.path.getsize(fixed_clean_pdb) > 0:
-                input_pdb = fixed_clean_pdb
-                logger.info("  ✓ Disconnected fragment cleanup applied")
-        except Exception as frag_err:
-            logger.warning(f"  Fragment cleanup skipped: {frag_err}")
+        if os.path.exists(fixed_pdb):
+            temp_files.append(fixed_pdb)
+            input_pdb = fixed_pdb  # Use fixed version going forward
+            logger.info("  Using PDBFixer-repaired structure for preparation")
+            
+            # ── Fix 4: Remove disconnected fragments after PDBFixer ──
+            fixed_clean_pdb = fixed_pdb.replace('.pdb', '_clean.pdb')
+            try:
+                remove_disconnected_fragments(fixed_pdb, fixed_clean_pdb)
+                if os.path.exists(fixed_clean_pdb) and os.path.getsize(fixed_clean_pdb) > 0:
+                    temp_files.append(fixed_clean_pdb)
+                    input_pdb = fixed_clean_pdb
+                    logger.info("  ✓ Disconnected fragment cleanup applied")
+            except Exception as frag_err:
+                logger.warning(f"  Fragment cleanup skipped: {frag_err}")
     except ImportError:
         logger.warning("  PDBFixer not available — skipping structure repair")
         logger.info("  → Continuing with original structure")
-        pdbfixer_report = {"missing_residues_remaining": -1}  # Unknown
     except RuntimeError as e:
         logger.error(f"  ERROR: PDBFixer failed: {e}")
         logger.info("  → Continuing with original structure")
-        pdbfixer_report = {"missing_residues_remaining": -1}  # Unknown
     
-    # ── Stage 1.1: PDB Format Validation & Tidying (pdb-tools) ──
-    logger.info("\nStage 1.1: PDB Format Validation (pdb-tools)")
+    # ── Stage 2.1: PDB Format Validation & Tidying (pdb-tools) ──
+    logger.info("\nStage 2.1: PDB Format Validation (pdb-tools)")
     try:
         is_valid, issues = validate_pdb_format(input_pdb)
         if not is_valid:
@@ -1305,16 +1334,19 @@ def prepare_protein(input_pdb, output_pdbqt, remove_waters=True, keep_hetero_res
             for issue in issues[:5]:  # Show first 5 issues
                 logger.warning(f"    → {issue}")
             # Tidy the file to fix format issues
-            input_pdb = tidy_pdb_file(input_pdb)
+            tidied_pdb = tidy_pdb_file(input_pdb)
+            if tidied_pdb != input_pdb and os.path.exists(tidied_pdb):
+                temp_files.append(tidied_pdb)
+                input_pdb = tidied_pdb
             logger.info("  ✓ PDB file tidied for format compliance")
         else:
             logger.info("  ✓ PDB format is valid")
     except Exception as e:
         logger.warning(f"  PDB validation skipped: {e}")
     
-    # ── Stage 1.5: AlphaFold Fallback (ONLY if PDBFixer couldn't resolve gaps) ──
+    # ── Stage 2.5: AlphaFold Fallback (ONLY if PDBFixer couldn't resolve gaps) ──
     if use_alphafold_if_incomplete and pdbfixer_report.get("missing_residues_remaining", 0) > 0:
-        logger.info("\nStage 1.5: AlphaFold Fallback")
+        logger.info("\nStage 2.5: AlphaFold Fallback")
         logger.info("  PDBFixer could not resolve all gaps — attempting AlphaFold prediction")
         
         try:
@@ -1338,30 +1370,17 @@ def prepare_protein(input_pdb, output_pdbqt, remove_waters=True, keep_hetero_res
                     timeout=300
                 )
                 
-                # Use AlphaFold structure for preparation
-                input_pdb = alphafold_pdb
-                logger.info(f"  Using AlphaFold structure (confidence: {metadata['confidence']})")
-                logger.info("  → This structure should have no missing residues")
-                
+                if os.path.exists(alphafold_pdb):
+                    temp_files.append(alphafold_pdb)
+                    input_pdb = alphafold_pdb
+                    logger.info(f"  Using AlphaFold structure (confidence: {metadata['confidence']})")
+                    logger.info("  → This structure should have no missing residues")
             else:
                 logger.warning("  Could not extract sequence from PDB")
                 logger.info("  → Continuing with PDBFixer output")
-                
         except Exception as e:
             logger.warning(f"  AlphaFold fallback failed: {e}")
             logger.info("  → Continuing with PDBFixer output")
-    
-    # ── Stage 2: Non-Protein Elements Elimination ──
-    logger.info("\nStage 2: Non-Protein Elements Elimination")
-    if remove_waters or keep_hetero_residues is not None or keep_chains is not None:
-        if not remove_waters:
-            logger.warning("  WARNING: Keeping water molecules (unusual for docking)")
-            filtered_pdb = input_pdb
-        else:
-            filtered_pdb = _filter_pdb_residues(input_pdb, keep_hetero_residues, keep_chains)
-    else:
-        logger.info("  Keeping all residues (no filtering)")
-        filtered_pdb = input_pdb
     
     # ── Stage 3: Protein Refinement → PDBQT ──
     logger.info("\nStage 3: Protein Refinement → PDBQT")
@@ -1371,39 +1390,36 @@ def prepare_protein(input_pdb, output_pdbqt, remove_waters=True, keep_hetero_res
     logger.info("    - Map docking atom types")
     logger.info("    - Convert to PDBQT format")
     
-    _convert_to_pdbqt_openbabel(filtered_pdb, output_pdbqt, is_receptor=True)
+    _convert_to_pdbqt_openbabel(input_pdb, output_pdbqt, is_receptor=True)
     
     # Preserve chain IDs from filtered PDB
     if keep_chains is not None and len(keep_chains) > 0:
         logger.info("  Preserving chain IDs in PDBQT file...")
-        _preserve_chain_ids_in_pdbqt(filtered_pdb, output_pdbqt)
+        _preserve_chain_ids_in_pdbqt(input_pdb, output_pdbqt)
     
     # Remove waters and UNK residues from PDBQT
     if remove_waters:
         logger.info("  Final cleanup...")
         _remove_waters_from_pdbqt(output_pdbqt)
-    # Save a copy of the filtered PDB as protein_prepared.pdb for visualization and centering
+        
+    # Save a copy of the final prepared PDB as protein_prepared.pdb for visualization and centering
     prepared_pdb_path = str(Path(output_pdbqt).with_suffix('.pdb'))
-    if os.path.exists(filtered_pdb):
+    if os.path.exists(input_pdb):
         import shutil
         try:
-            shutil.copy(filtered_pdb, prepared_pdb_path)
-            logger.info(f"  Saved prepared PDB for visualization: {Path(prepared_pdb_path).name}")
+            shutil.copy(input_pdb, prepared_pdb_path)
+            _clean_pdb_file(prepared_pdb_path)
+            logger.info(f"  Saved and cleaned prepared PDB for visualization: {Path(prepared_pdb_path).name}")
         except Exception as e:
-            logger.warning(f"  WARNING: Could not save prepared PDB: {e}")
+            logger.warning(f"  WARNING: Could not save/clean prepared PDB: {e}")
 
     # Cleanup temp files
-    if filtered_pdb != input_pdb and os.path.exists(filtered_pdb) and filtered_pdb != prepared_pdb_path:
-        try:
-            os.remove(filtered_pdb)
-        except (OSError, PermissionError) as e:
-            logger.warning(f"  WARNING: Could not remove temp file {filtered_pdb}: {e}")
-    
-    if input_pdb.endswith('_fixed.pdb') and os.path.exists(input_pdb):
-        try:
-            os.remove(input_pdb)
-        except (OSError, PermissionError) as e:
-            logger.warning(f"  WARNING: Could not remove temp file {input_pdb}: {e}")
+    for temp_f in temp_files:
+        if os.path.exists(temp_f) and temp_f != prepared_pdb_path:
+            try:
+                os.remove(temp_f)
+            except (OSError, PermissionError) as e:
+                logger.warning(f"  WARNING: Could not remove temp file {temp_f}: {e}")
     
     # ── Fix 2: Validate residue numbering before returning ──
     original_pdb_for_validation = str(Path(output_pdbqt).parent / Path(output_pdbqt).stem.replace('_prepared', '') ) 
@@ -1760,3 +1776,186 @@ def convert_sdf_to_pdb(input_file: Path, output_file: Path) -> None:
 prepare_receptor_adfr = prepare_protein
 prepare_ligand_adfr = prepare_ligand
 prepare_ligand_meeko = prepare_ligand
+
+
+# =============================================================================
+# BATCH DOCKING HELPERS
+# =============================================================================
+
+def validate_multi_mol_sdf(file_path: str) -> dict:
+    """
+    Check if the SDF file contains multiple valid molecules.
+    """
+    try:
+        supplier = Chem.SDMolSupplier(str(file_path), sanitize=False)
+        count = len(supplier)
+        return {"valid": True, "count": count}
+    except Exception as e:
+        return {"valid": False, "count": 0, "error": str(e)}
+
+
+def parse_and_prepare_batch_sdf(sdf_path: str, session_dir: Path) -> list:
+    """
+    Split a multi-molecule SDF file into individual ligand SDF files
+    and compute RDKit molecular properties.
+    """
+    from rdkit.Chem import Descriptors, rdMolDescriptors
+    
+    # Try to load with sanitization
+    supplier = Chem.SDMolSupplier(str(sdf_path), sanitize=True, removeHs=False)
+    ligands = []
+    
+    for idx, mol in enumerate(supplier):
+        if mol is None:
+            logger.warning(f"Failed to read molecule at index {idx} from SDF")
+            continue
+            
+        # Determine number of molecules in supplier
+        try:
+            num_mols = len(supplier)
+        except Exception:
+            num_mols = 1
+
+        name = ""
+        # Prefer internal _Name only for multi-molecule SDF files
+        if num_mols > 1 and mol.HasProp("_Name"):
+            name = mol.GetProp("_Name").strip()
+            
+        # Fallback to file name if name is empty or generic
+        if not name or name.lower() in ["", "unnamed", "molecule", "untitled", "3d", "tmp"]:
+            from pathlib import Path
+            file_stem = Path(sdf_path).name
+            # Strip standard prefixes/extensions
+            for ext in ['.sdf', '.sd', '.mol2', '.mol']:
+                if file_stem.lower().endswith(ext):
+                    file_stem = file_stem[:-len(ext)]
+            file_stem = Path(file_stem).stem
+            if file_stem.startswith("uploaded_"):
+                file_stem = file_stem[len("uploaded_"):]
+            if num_mols > 1:
+                name = f"{file_stem}_{idx+1}"
+            else:
+                name = file_stem
+            
+        # Sanitize name to make it safe for filesystems
+        import re
+        safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', name)[:50]
+        if not safe_name:
+            safe_name = f"ligand_{idx+1}"
+            
+        # Save this single molecule to its own SDF file in the session
+        single_sdf_name = f"batch_ligand_{idx}_{safe_name}.sdf"
+        single_sdf_path = session_dir / single_sdf_name
+        writer = Chem.SDWriter(str(single_sdf_path))
+        writer.write(mol)
+        writer.close()
+        
+        # Calculate chemical properties
+        try:
+            mw = float(Descriptors.MolWt(mol))
+            formula = rdMolDescriptors.CalcMolFormula(mol)
+            hbd = int(rdMolDescriptors.CalcNumHBD(mol))
+            hba = int(rdMolDescriptors.CalcNumHBA(mol))
+            logp = float(Descriptors.MolLogP(mol))
+            rot_bonds = int(rdMolDescriptors.CalcNumRotatableBonds(mol))
+            heavy_atoms = int(mol.GetNumHeavyAtoms())
+        except Exception as e:
+            logger.warning(f"Failed to calculate properties for {name}: {e}")
+            mw, formula, hbd, hba, logp, rot_bonds, heavy_atoms = 0.0, "N/A", 0, 0, 0.0, 0, 0
+            
+        ligands.append({
+            "index": idx,
+            "name": name,
+            "safe_name": safe_name,
+            "raw_sdf": single_sdf_name,
+            "properties": {
+                "mw": mw,
+                "formula": formula,
+                "hbd": hbd,
+                "hba": hba,
+                "logp": logp,
+                "rotatable_bonds": rot_bonds,
+                "heavy_atoms": heavy_atoms
+            }
+        })
+        
+    return ligands
+
+
+def generate_batch_ligands_from_smiles(smiles_list: list, session_dir: Path) -> list:
+    """
+    Generate 3D coordinates and SDF files from a list of SMILES strings.
+    Each smiles_list item is a dict: {"smiles": "...", "name": "..."}
+    """
+    from rdkit.Chem import Descriptors, rdMolDescriptors, AllChem
+    import re
+    
+    ligands = []
+    
+    for idx, item in enumerate(smiles_list):
+        smiles = item.get("smiles", "").strip()
+        name = item.get("name", "").strip()
+        if not smiles:
+            continue
+            
+        if not name:
+            name = f"smiles_{idx+1}"
+            
+        safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', name)[:50]
+        if not safe_name:
+            safe_name = f"smiles_{idx+1}"
+            
+        try:
+            mol = Chem.MolFromSmiles(smiles)
+            if mol is None:
+                logger.warning(f"Invalid SMILES string at index {idx}: {smiles}")
+                continue
+                
+            # Add hydrogens
+            mol = Chem.AddHs(mol)
+            
+            # Embed molecule to generate 3D coordinates
+            embed_status = AllChem.EmbedMolecule(mol, AllChem.ETKDG())
+            if embed_status == -1:
+                embed_status = AllChem.EmbedMolecule(mol)
+                if embed_status == -1:
+                    logger.warning(f"Failed to generate 3D coordinates for {name}")
+                    continue
+                    
+            # Save single mol to SDF file in the session
+            single_sdf_name = f"batch_ligand_{idx}_{safe_name}.sdf"
+            single_sdf_path = session_dir / single_sdf_name
+            writer = Chem.SDWriter(str(single_sdf_path))
+            writer.write(mol)
+            writer.close()
+            
+            # Calculate chemical properties
+            mw = float(Descriptors.MolWt(mol))
+            formula = rdMolDescriptors.CalcMolFormula(mol)
+            hbd = int(rdMolDescriptors.CalcNumHBD(mol))
+            hba = int(rdMolDescriptors.CalcNumHBA(mol))
+            logp = float(Descriptors.MolLogP(mol))
+            rot_bonds = int(rdMolDescriptors.CalcNumRotatableBonds(mol))
+            heavy_atoms = int(mol.GetNumHeavyAtoms())
+            
+            ligands.append({
+                "index": idx,
+                "name": name,
+                "safe_name": safe_name,
+                "raw_sdf": single_sdf_name,
+                "smiles": smiles,
+                "properties": {
+                    "mw": mw,
+                    "formula": formula,
+                    "hbd": hbd,
+                    "hba": hba,
+                    "logp": logp,
+                    "rotatable_bonds": rot_bonds,
+                    "heavy_atoms": heavy_atoms
+                }
+            })
+        except Exception as e:
+            logger.error(f"Error converting SMILES {smiles}: {e}")
+            continue
+            
+    return ligands
