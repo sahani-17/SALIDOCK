@@ -1,0 +1,23 @@
+{
+    # Admin API off for security
+    admin off
+}
+
+# Replace :80 / DOMAIN with your actual domain name once DNS is configured
+# e.g., salidock.yourdomain.com
+:80 {
+    # Reverse proxy backend API calls
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+
+    # Reverse proxy health check
+    handle /health {
+        reverse_proxy backend:8000
+    }
+
+    # Serve all other traffic with frontend
+    handle {
+        reverse_proxy frontend:80
+    }
+}

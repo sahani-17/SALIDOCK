@@ -30,7 +30,15 @@ function Dock() {
     const [gridCenter, setGridCenter] = useState({ x: 0, y: 0, z: 0 });
     const [gridSize, setGridSize] = useState({ x: 20, y: 20, z: 20 });
     const [autoDetectDone, setAutoDetectDone] = useState(false);
+    const [notifyEmail, setNotifyEmail] = useState('');
+    const [queueCount, setQueueCount] = useState(0);
     const [stepIndex, setStepIndex] = useState(0);
+
+    React.useEffect(() => {
+        api.getQueueCount()
+            .then(res => setQueueCount(res.queue_count || 0))
+            .catch(() => {});
+    }, []);
 
     const inputDone = workflow.uploadProgress?.protein && workflow.uploadProgress?.ligand;
     const configureDone = dockingMode === 'auto' ? true : autoDetectDone;
@@ -134,6 +142,10 @@ function Dock() {
             // Phase 2: Docking Simulation slowly goes 20% -> 95% over 35s (proportional to cavity volume & CNN scoring)
             setTargetProgress(95);
             setProgressDuration(35000);
+
+            if (notifyEmail.trim()) {
+                dockingData.notify_email = notifyEmail.trim();
+            }
 
             await api.runDocking(workflow.sessionId, dockingData);
 
@@ -328,6 +340,24 @@ function Dock() {
                                 </div>
                             )}
                         </section>
+
+                        {queueCount > 9 && (
+                            <div className="border border-border bg-card/60 p-4 rounded-xl space-y-2">
+                                <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                    <span>📩 High Server Queue Detected ({queueCount} Jobs) — Get Email Notification On Completion</span>
+                                    <span className="text-[10px] text-muted-foreground font-normal">(Optional)</span>
+                                </label>
+                                <input
+                                    type="email"
+                                    placeholder="name@example.com"
+                                    value={notifyEmail}
+                                    onChange={(e) => setNotifyEmail(e.target.value)}
+                                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-muted-foreground/60"
+                                    disabled={workflow.loading}
+                                />
+                                <p className="text-[11px] text-muted-foreground">Server queue is high. You can close this page; we'll email you a direct results link & summary once your run finishes.</p>
+                            </div>
+                        )}
 
                         <div className="flex justify-between">
                             <button onClick={() => setStepIndex(1)} className="px-5 py-2.5 rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-primary/40 font-semibold text-sm transition-all" disabled={workflow.loading}>Back</button>

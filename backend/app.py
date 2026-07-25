@@ -34,6 +34,7 @@ from docking import (
     DockingError,
 )
 from supabase_manager import supabase_mgr
+from notifications import send_docking_completion_email
 
 # Configure logging
 logging.basicConfig(
@@ -458,6 +459,11 @@ async def startup_cleanup():
     else:
         logger.warning("⚠️  Supabase manager not initialised — cloud storage unavailable")
 
+@app.get("/health")
+async def health_check():
+    """Lightweight health check endpoint for monitoring and reverse proxies."""
+    return {"status": "ok", "environment": os.getenv("ENVIRONMENT", "development")}
+
 @app.get("/api/tools/check")
 async def check_tools():
     """Check availability of required external tools."""
@@ -742,6 +748,14 @@ async def create_session():
     logger.info(f"Created new session: {session_id}")
     return {"status": "ok", "session_id": session_id}
 
+# Track active/queued docking jobs for conditional UI notification prompts
+active_docking_count = 0
+
+@app.get("/api/queue/count")
+async def get_queue_count():
+    """Returns current number of active/queued docking jobs."""
+    return {"queue_count": active_docking_count}
+
 @app.get("/api/status/{session_id}")
 async def get_session_status(session_id: str):
     """Get current workflow status of a session."""
@@ -760,6 +774,7 @@ async def get_session_status(session_id: str):
             "ligand_prepared": (session_dir / "ligand_prepared.pdbqt").exists(),
             "grid_calculated": (session_dir / "grid_params.json").exists(),
             "docking_complete": (session_dir / "docking_out_out.pdbqt").exists(),
+            "queue_count": active_docking_count,
         }
         
         return {"status": "ok", "workflow": status}
@@ -2023,7 +2038,8 @@ async def calc_grid(
 async def run_docking_endpoint(
     session_id: str,
     docking_mode: str = "cavity",  # "cavity" or "manual"
-    cavity_ids: str = None  # Comma-separated cavity IDs, or None for all
+    cavity_ids: str = None,  # Comma-separated cavity IDs, or None for all
+    notify_email: str = None,  # Optional email for completion notification
 ):
     """
     Run molecular docking using new engines (GNINA / QuickVina-W).
@@ -2041,6 +2057,8 @@ async def run_docking_endpoint(
         Cavity mode: All poses from all cavities, ranked by affinity
         Manual mode: Poses from single docking run
     """
+    global active_docking_count
+    active_docking_count += 1
     try:
         session_dir = get_session_dir(session_id)
         receptor = session_dir / "protein_prepared.pdbqt"
@@ -2111,7 +2129,8 @@ async def run_docking_endpoint(
             cavity_results = []
             cavity_results_map = {}
             
-            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            max_workers = int(os.getenv("MAX_DOCKING_WORKERS", 2))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Submit all cavity docking jobs concurrently (5 jobs × 1 CPU thread each)
                 futures = [executor.submit(dock_single_cavity, cav) for cav in cavities]
                 
@@ -2198,6 +2217,13 @@ async def run_docking_endpoint(
                 except Exception as db_err:
                     logger.error(f"Supabase DB save failed: {db_err}")
             
+            if notify_email:
+                try:
+                    top_aff = f"{all_poses[0].get('cnn_affinity', all_poses[0].get('affinity'))} kcal/mol" if all_poses else None
+                    send_docking_completion_email(notify_email, session_id, top_score=top_aff)
+                except Exception as email_err:
+                    logger.error(f"Notification email dispatch failed: {email_err}")
+
             return {
                 "status": "ok",
                 "docking_mode": "cavity",
@@ -2312,6 +2338,13 @@ async def run_docking_endpoint(
                 except Exception as db_err:
                     logger.error(f"Supabase DB save failed: {db_err}")
             
+            if notify_email:
+                try:
+                    top_aff = f"{parsed[0].get('affinity')} kcal/mol" if parsed else None
+                    send_docking_completion_email(notify_email, session_id, top_score=top_aff)
+                except Exception as email_err:
+                    logger.error(f"Notification email dispatch failed: {email_err}")
+
             return {
                 "status": "ok",
                 "docking_mode": "manual",
@@ -2335,6 +2368,8 @@ async def run_docking_endpoint(
         error_details = traceback.format_exc()
         print(f"Error in docking: {error_details}")
         return json_error(str(e))
+    finally:
+        active_docking_count = max(0, active_docking_count - 1)
 
 
 from typing import List, Any
@@ -2655,7 +2690,8 @@ async def run_batch_docking(
     center_z: float = None,
     size_x: float = None,
     size_y: float = None,
-    size_z: float = None
+    size_z: float = None,
+    notify_email: str = None,
 ):
     """
     Run molecular docking for all ligands in the batch.
@@ -2738,7 +2774,7 @@ async def run_batch_docking(
         }
         status_file.write_text(json.dumps(status_data, indent=2))
         
-        def run_docking_background():
+        def run_docking_background_inner():
             results_list = []
             
             def dock_single(lig):
@@ -2795,7 +2831,8 @@ async def run_batch_docking(
             completed_count = 0
             failed_count = 0
             
-            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            max_workers = int(os.getenv("MAX_DOCKING_WORKERS", 2))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = [executor.submit(dock_single, lig) for lig in ligands]
                 
                 for future in concurrent.futures.as_completed(futures):
@@ -2850,7 +2887,15 @@ async def run_batch_docking(
                     supabase_mgr.update_session_status(session_id, "completed")
                 except Exception as db_err:
                     logger.error(f"Supabase DB save failed: {db_err}")
-                    
+            
+        def run_docking_background():
+            global active_docking_count
+            active_docking_count += 1
+            try:
+                run_docking_background_inner()
+            finally:
+                active_docking_count = max(0, active_docking_count - 1)
+
         thread = threading.Thread(target=run_docking_background)
         thread.start()
         

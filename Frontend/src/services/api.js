@@ -58,6 +58,8 @@ export const api = {
 
   getStatus: (sessionId) => json(`/api/status/${sessionId}`, { fallback: 'Failed to get status' }),
 
+  getQueueCount: () => json('/api/queue/count', { fallback: 'Failed to fetch queue count' }),
+
   // File Upload
   uploadFile: (sessionId, file, filetype) => {
     const formData = new FormData();
@@ -158,6 +160,9 @@ export const api = {
     } else {
       params.append('docking_mode', 'cavity');
     }
+    if (data.notify_email) {
+      params.append('notify_email', data.notify_email);
+    }
     return json(`/api/dock/run/${sessionId}?${params}`, {
       method: 'POST',
       fallback: 'Failed to run docking',
@@ -239,6 +244,9 @@ export const api = {
       params.append('size_x', data.size_x);
       params.append('size_y', data.size_y);
       params.append('size_z', data.size_z);
+    }
+    if (data.notify_email) {
+      params.append('notify_email', data.notify_email);
     }
     return json(`/api/batch/dock/run/${sessionId}?${params}`, {
       method: 'POST',

@@ -4,10 +4,16 @@ __pycache__/
 .pytest_cache/
 
 # Local Environment & Settings
+.env
+*.env
 backend/.env
+Frontend/.env
 .vscode/
 
-# Build & Metadata
+# Node & Build
+node_modules/
+Frontend/node_modules/
+Frontend/dist/
 build/
 dist/
 *.egg-info/

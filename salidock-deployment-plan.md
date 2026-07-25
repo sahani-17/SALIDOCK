@@ -2,6 +2,21 @@
 
 Stack: Supabase (DB/storage) + Render (backend API/compute) + Vercel (frontend) + your own domain.
 
+## Current situation (handover, not fresh build)
+
+SaliDock is already live at `https://salidock.salixirax.com/`, originally deployed by someone else. You are taking over full ownership.
+
+**Already secured:**
+- [x] GitHub repo ownership
+- [x] Supabase project ownership
+
+**Still needed from the original deployer:**
+- [ ] DNS access for `salixirax.com` (or their agreement to make one DNS change when you're ready)
+- [ ] Current production environment variables (check for anything beyond Supabase keys — third-party services, analytics, etc.)
+- [ ] Confirmation the GitHub repo's latest commit matches what's actually live right now
+
+**Revised strategy:** Since you already own the code and database, deploy fresh on your own Render + Vercel accounts in parallel with the existing live site (zero risk to what's currently working). Test until it matches the live site's behavior, then do a single DNS cutover at the end. You do NOT need access to the original hosting account under this approach — Phase 2 and 3 below already build this new deployment; the only new step is the DNS cutover in Phase 3.5.
+
 ---
 
 ## Phase 0: Before you touch any cloud service
@@ -82,6 +97,22 @@ Stack: Supabase (DB/storage) + Render (backend API/compute) + Vercel (frontend) 
 
 ---
 
+## Phase 3.5: DNS Cutover (handover-specific step)
+
+This replaces the generic "connect your domain" step from Phase 2/3 above — you're switching an *existing* live subdomain, not registering a new one.
+
+1. Before touching DNS, have your new Render + Vercel deployments fully tested and working on their temporary URLs (`*.onrender.com`, `*.vercel.app`) — confirm they behave identically to the current live site at `salidock.salixirax.com`.
+2. Get the exact target values for your new deployments:
+   - Render will give you a CNAME target for `api.salidock.salixirax.com` (or whatever subdomain you use for the API)
+   - Vercel will give you an A record / CNAME target for `salidock.salixirax.com`
+3. Ask the original deployer (or whoever controls DNS) to update the existing DNS records for `salidock.salixirax.com` to point to these new targets — this is the one action you may still need them for if you don't have DNS access yourself.
+4. **Lower the DNS TTL a day in advance if possible** — this makes the cutover take effect faster and makes rollback faster too if something goes wrong.
+5. After the change propagates, verify `https://salidock.salixirax.com` is now serving your new deployment (check response headers or add a temporary visible marker to confirm) — don't assume, confirm.
+6. Keep the old deployment running for a few days after cutover as a fallback, in case you need to revert the DNS change quickly.
+7. Once you're confident the new deployment is stable, the original deployer can decommission the old hosting.
+
+---
+
 ## Phase 4: End-to-End Testing (do this before announcing it to anyone)
 
 **Functional tests**
@@ -117,13 +148,13 @@ Stack: Supabase (DB/storage) + Render (backend API/compute) + Vercel (frontend) 
 
 ## Launch order (do phases strictly in this sequence)
 
-1. Supabase configured and tested in isolation
+1. Supabase already owned — confirm tables, RLS, and storage bucket match what's needed (Phase 1 tests)
 2. Backend deployed to Render, tested via `*.onrender.com` URL first
-3. Backend custom domain (`api.salidock.com`) attached and tested
-4. Frontend deployed to Vercel, tested via `*.vercel.app` URL first
-5. Frontend custom domain attached and tested
-6. Full end-to-end test suite (Phase 4) run against the real domain
+3. Frontend deployed to Vercel, tested via `*.vercel.app` URL first
+4. Confirm both temporary-URL deployments match current live site behavior exactly
+5. DNS cutover (Phase 3.5) — switch `salidock.salixirax.com` to the new deployment
+6. Full end-to-end test suite (Phase 4) run against the real, now-cutover domain
 7. Monitoring turned on
-8. Announce/launch
+8. Keep old deployment as fallback for a few days, then have it decommissioned
 
 Testing each piece in isolation before wiring domains together means that if something breaks, you know exactly which layer caused it — DNS, backend logic, or frontend config — instead of debugging all three at once.
