@@ -4,14 +4,9 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { useScrollAnimation } from "../hooks/useScrollAnimation";
 import {
-  Lightbulb,
   Target,
   Network,
-  Users,
-  GraduationCap,
-  Briefcase,
   Zap,
-  Quote,
   FlaskConical,
   History,
   Microscope,
@@ -21,7 +16,6 @@ import {
   Factory,
   BookOpen
 } from "lucide-react";
-import { Mail, Linkedin, Globe, Github} from "lucide-react";
 
 /* ─── Scroll Section Wrapper ─── */
 const AnimatedSection = ({ children, className = "", delay = 0 }) => {
@@ -117,7 +111,7 @@ const About = () => {
     { id: "mission", label: "Our Mission", icon: Target },
     { id: "story", label: "Our Story", icon: History },
     { id: "what-we-do", label: "What We Do", icon: Microscope },
-    { id: "team", label: "The Team", icon: Users },
+    { id: "technology", label: "Technology", icon: Zap },
     { id: "who-we-serve", label: "Who We Serve", icon: ClipboardList },
   ];
   const [activeSection, setActiveSection] = useState("mission");
@@ -194,7 +188,7 @@ const About = () => {
       </aside>
 
       <div className="xl:pl-64">
-        <main className="max-w-5xl mx-auto px-8 md:px-12 py-24 flex flex-col gap-32">
+        <main className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-24 flex flex-col gap-32">
           {/* ─── OUR MISSION ─── */}
           <section id="mission" className="scroll-mt-32">
             <AnimatedSection>
@@ -316,8 +310,8 @@ const About = () => {
         </main>
 
 
-      {/* ─── THE TEAM ─── */}
-      <section id="team" className="py-24 bg-background relative border-y border-border">
+      {/* ─── TECHNOLOGY STACK ─── */}
+      <section id="technology" className="py-24 bg-background relative border-y border-border">
         <div
           className="absolute right-0 top-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[180px] pointer-events-none opacity-20"
           style={{ background: "hsl(var(--primary) / 0.12)" }}
@@ -327,263 +321,97 @@ const About = () => {
           style={{ background: "hsl(var(--primary) / 0.08)" }}
         />
 
-        <div className="max-w-5xl mx-auto px-8 md:px-12 relative z-10">
+        <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 relative z-10">
           <AnimatedSection className="mb-16">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-8 h-[2px] bg-primary" />
               <span className="text-[11px] font-bold tracking-widest text-primary uppercase">
-                04 / LEADERSHIP
+                04 / TECHNOLOGY
               </span>
             </div>
             <h2 className="text-4xl md:text-[42px] font-medium text-foreground mb-6">
-              Behind the Vision of Salidock
+              Powered by Proven Tools
             </h2>
-            <p className="text-muted-foreground font-bold text-[15px]">
-              Built by students, guided by industry experts.
+            <p className="text-muted-foreground font-bold text-[15px] max-w-2xl">
+              Every component of Salidock is built on battle-tested, open-source scientific software.
             </p>
           </AnimatedSection>
 
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            <AnimatedSection delay={100} className="md:col-span-1">
+          <div className="grid md:grid-cols-3 gap-5 lg:gap-8 max-w-7xl mx-auto">
+            <AnimatedSection delay={100}>
               <TiltCard className="h-full">
-                <div className="rounded-2xl border border-border bg-card p-8 text-center h-full hover:border-primary/40 transition-colors shadow-sm">
-                  <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-6 border-2 border-primary/20 bg-primary/10">
-                    <img
-                      src="/photo.png"
-                      alt="Ahan Kumar Biswal"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-
-                  <h3 className="font-bold text-xl mb-4">
-                    Mr. Ahan Kumar Biswal
-                  </h3>
-
-                  {/* Social Icons */}
-                  <div className="flex justify-center gap-4">
-                    <a
-                      href="mailto:ahanbiswal2003@gmail.com"
-                      className="text-muted-foreground hover:text-primary transition"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Mail size={20} />
-                    </a>
-
-                    <a
-                      href="https://www.linkedin.com/in/ahan-biswal-56a614333"
-                      className="text-muted-foreground hover:text-primary transition"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Linkedin size={20} />
-                    </a>
-
-                    <a
-                      href="https://github.com/Toxicvampire007"
-                      className="text-muted-foreground hover:text-primary transition"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                       <Github size={20} />
-                    </a>
-                  </div>
+                <div className="relative p-8 border border-border rounded-sm bg-card min-h-[200px] h-full hover:border-primary/40 transition-colors">
+                  <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-[2.5px] border-l-[2.5px] border-primary" />
+                  <Zap className="w-6 h-6 text-primary mb-5" strokeWidth={2.5} />
+                  <h4 className="text-[15px] md:text-base font-bold text-foreground mb-3">GNINA Engine</h4>
+                  <p className="text-muted-foreground font-medium text-[13px] leading-[1.8]">
+                    Deep learning CNN molecular docking engine providing neural network score evaluation, affinity prediction, and focused sampling.
+                  </p>
                 </div>
               </TiltCard>
             </AnimatedSection>
 
-            <AnimatedSection delay={200} className="md:col-span-1">
+            <AnimatedSection delay={150}>
               <TiltCard className="h-full">
-                <div className="rounded-2xl border border-border bg-card p-8 text-center h-full hover:border-primary/40 transition-colors shadow-sm">
-                  <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-6 border-2 border-primary/20 bg-primary/10">
-                    <img
-                      src="/photo2.png"
-                      alt="Soumya Ranjan Sahani"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <h3 className="font-bold text-xl mb-1">
-                    Mr. Soumya Ranjan Sahani
-                  </h3>
-
-                  <div className="flex justify-center gap-4 mt-4">
-                    <a
-                      href="mailto:sahanisoumya356@gmail.com"
-                      className="text-muted-foreground hover:text-primary transition"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Mail size={20} />
-                    </a>
-
-                    <a
-                      href="https://www.linkedin.com/in/soumya-ranjan-sahani-581874379"
-                      className="text-muted-foreground hover:text-primary transition"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Linkedin size={20} />
-                    </a>
-
-                    <a
-                      href="https://github.com/sahani-17"
-                      className="text-muted-foreground hover:text-primary transition"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Github size={20} />
-                    </a>
-                  </div>
+                <div className="relative p-8 border border-border rounded-sm bg-card min-h-[200px] h-full hover:border-primary/40 transition-colors">
+                  <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-[2.5px] border-l-[2.5px] border-primary" />
+                  <Eye className="w-6 h-6 text-primary mb-5" strokeWidth={2.5} />
+                  <h4 className="text-[15px] md:text-base font-bold text-foreground mb-3">Mol* Viewer</h4>
+                  <p className="text-muted-foreground font-medium text-[13px] leading-[1.8]">
+                    WebGL-powered 3D molecular visualization with interactive rotation, sectioning, and multiple representation modes.
+                  </p>
                 </div>
               </TiltCard>
             </AnimatedSection>
 
-            <AnimatedSection delay={200} className="md:col-span-1">
+            <AnimatedSection delay={200}>
               <TiltCard className="h-full">
-                <div className="rounded-2xl border border-border bg-card p-8 text-center h-full hover:border-primary/40 transition-colors shadow-sm">
-                  <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-6 border-2 border-primary/20 bg-primary/10">
-                    <img
-                      src="/deep.jpeg"
-                      alt="Deepan"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <h3 className="font-bold text-xl mb-1">
-                    Mr. Deepan Balu
-                  </h3>
-
-                  <div className="flex justify-center gap-4 mt-4">
-                    <a
-                      href="mailto:deepanbalud@gmail.com.com"
-                      className="text-muted-foreground hover:text-primary transition"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Mail size={20} />
-                    </a>
-
-                    <a
-                      href="https://linkedin.com/in/deepan-balu"
-                      className="text-muted-foreground hover:text-primary transition"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Linkedin size={20} />
-                    </a>
-
-                    <a
-                      href="https://github.com/deepan-codebuster"
-                      className="text-muted-foreground hover:text-primary transition"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Github size={20} />
-                    </a>
-
-                    <a
-                      href="https://deepanbalu.vercel.app"
-                      className="text-muted-foreground hover:text-primary transition"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Globe size={20} />
-                    </a>
-                  </div>
+                <div className="relative p-8 border border-border rounded-sm bg-card min-h-[200px] h-full hover:border-primary/40 transition-colors">
+                  <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-[2.5px] border-l-[2.5px] border-primary" />
+                  <Microscope className="w-6 h-6 text-primary mb-5" strokeWidth={2.5} />
+                  <h4 className="text-[15px] md:text-base font-bold text-foreground mb-3">RDKit</h4>
+                  <p className="text-muted-foreground font-medium text-[13px] leading-[1.8]">
+                    Cheminformatics toolkit for ligand preparation, SMILES parsing, molecular descriptor calculation, and 2D depiction.
+                  </p>
                 </div>
               </TiltCard>
             </AnimatedSection>
 
-            <AnimatedSection delay={200} className="md:col-span-1">
+            <AnimatedSection delay={250}>
               <TiltCard className="h-full">
-                <div className="rounded-2xl border border-border bg-card p-8 text-center h-full hover:border-primary/40 transition-colors shadow-sm">
-                  <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-6 border-2 border-primary/20 bg-primary/10">
-                    <img
-                      src="/alaka.png"
-                      alt="Dr. Alaka Sahoo"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <h3 className="font-bold text-xl mb-1">Dr. Alaka Sahoo</h3>
-
-                  <div className="flex justify-center gap-4 mt-4">
-                    <a
-                      href="mailto:salixiras.bbsr@gmail.com"
-                      className="text-muted-foreground hover:text-primary transition"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Mail size={20} />
-                    </a>
-
-                    <a
-                      href="https://www.linkedin.com/in/salixiras-research-private-limited/"
-                      className="text-muted-foreground hover:text-primary transition"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Linkedin size={20} />
-                    </a>
-
-                    <a
-                      href="https://salixirax.com/leadership"
-                      className="text-muted-foreground hover:text-primary transition"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Globe size={20} />
-                    </a>
-                  </div>
+                <div className="relative p-8 border border-border rounded-sm bg-card min-h-[200px] h-full hover:border-primary/40 transition-colors">
+                  <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-[2.5px] border-l-[2.5px] border-primary" />
+                  <Network className="w-6 h-6 text-primary mb-5" strokeWidth={2.5} />
+                  <h4 className="text-[15px] md:text-base font-bold text-foreground mb-3">Open Babel</h4>
+                  <p className="text-muted-foreground font-medium text-[13px] leading-[1.8]">
+                    Universal molecular format converter handling PDB, SDF, MOL2, and PDBQT transformations across the pipeline.
+                  </p>
                 </div>
               </TiltCard>
             </AnimatedSection>
 
-            <AnimatedSection delay={300} className="md:col-span-1">
+            <AnimatedSection delay={300}>
               <TiltCard className="h-full">
-                <div className="rounded-2xl border border-border bg-card p-8 text-center h-full hover:border-primary/40 transition-colors relative overflow-hidden shadow-sm">
-                  <div className="absolute top-0 right-0 p-4 opacity-10">
-                    <Lightbulb size={100} />
-                  </div>
-                  <div className="relative z-10">
-                    <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-6 border-2 border-primary/20 bg-primary/10">
-                      <img
-                        src="/Shasank.JPG.png"
-                        alt="Dr. Shasank Sekhar Swain"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <h3 className="font-bold text-xl mb-1">
-                      Dr. Shasank Sekhar Swain
-                    </h3>
+                <div className="relative p-8 border border-border rounded-sm bg-card min-h-[200px] h-full hover:border-primary/40 transition-colors">
+                  <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-[2.5px] border-l-[2.5px] border-primary" />
+                  <Target className="w-6 h-6 text-primary mb-5" strokeWidth={2.5} />
+                  <h4 className="text-[15px] md:text-base font-bold text-foreground mb-3">fpocket, P2Rank & PUResNet</h4>
+                  <p className="text-muted-foreground font-medium text-[13px] leading-[1.8]">
+                    3-method wRRF consensus pipeline fusing geometric, machine learning, and deep learning cavity predictions for binding-site identification.
+                  </p>
+                </div>
+              </TiltCard>
+            </AnimatedSection>
 
-                    <div className="flex justify-center gap-4 mt-4">
-                      <a
-                        href="mailto:salixiras.bbsr@gmail.com"
-                        className="text-muted-foreground hover:text-primary transition"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <Mail size={20} />
-                      </a>
-
-                      <a
-                        href="https://www.linkedin.com/in/salixiras-research-private-limited/"
-                        className="text-muted-foreground hover:text-primary transition"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <Linkedin size={20} />
-                      </a>
-
-                      <a
-                        href="https://salixirax.com/leadership"
-                        className="text-muted-foreground hover:text-primary transition"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <Globe size={20} />
-                      </a>
-                    </div>
-                  </div>
+            <AnimatedSection delay={350}>
+              <TiltCard className="h-full">
+                <div className="relative p-8 border border-border rounded-sm bg-card min-h-[200px] h-full hover:border-primary/40 transition-colors">
+                  <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-[2.5px] border-l-[2.5px] border-primary" />
+                  <Database className="w-6 h-6 text-primary mb-5" strokeWidth={2.5} />
+                  <h4 className="text-[15px] md:text-base font-bold text-foreground mb-3">PLIP</h4>
+                  <p className="text-muted-foreground font-medium text-[13px] leading-[1.8]">
+                    Protein-Ligand Interaction Profiler for automated detection of hydrogen bonds, hydrophobic contacts, π-stacking, and salt bridges.
+                  </p>
                 </div>
               </TiltCard>
             </AnimatedSection>
@@ -593,7 +421,7 @@ const About = () => {
 
       {/* ─── WHO WE SERVE ─── */}
       <section id="who-we-serve" className="py-20 lg:py-24 bg-background scroll-mt-24">
-        <div className="max-w-5xl mx-auto px-8 md:px-12 relative z-10">
+        <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 relative z-10">
           <AnimatedSection>
             <div className="flex items-center gap-3 mb-6">
               <div className="w-8 h-[2px] bg-primary" />

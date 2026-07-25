@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
-import { Loader2, Camera, RefreshCw } from 'lucide-react';
+import { Camera, RefreshCw } from 'lucide-react';
+import { AnimatedCircularProgressBar } from './ui/animated-circular-progress-bar';
 
 import { createPluginUI } from 'molstar/lib/mol-plugin-ui';
 import { renderReact18 } from 'molstar/lib/mol-plugin-ui/react18';
@@ -90,10 +91,10 @@ const MolecularViewer = forwardRef(function MolecularViewer({
   proteinRepr = 'cartoon',
   ligandRepr = 'ball-and-stick',
   colorScheme = 'element-symbol',
-  showPocketResidues = true,
-  showPocketLabels = true,
-  showPocketSurface = false,
-  showInteractions = true,
+  showPocketResidues = false,
+  showPocketLabels = false,
+  showPocketSurface = true,
+  showInteractions = false,
   spin = false,
   showProtein = true,
   minimal = false,
@@ -131,7 +132,9 @@ const MolecularViewer = forwardRef(function MolecularViewer({
 
       const structureRef = plugin.managers.structure.hierarchy.current.structures[0];
       const structure = structureRef?.cell?.obj?.data;
-      if (structureRef && structure) {
+      if (minimal) {
+        plugin.managers.camera.reset();
+      } else if (structureRef && structure) {
         // Focus camera on the ligand loci
         const ligandExpression = MS.struct.modifier.union([
           MS.struct.generator.atomGroups({
@@ -153,13 +156,20 @@ const MolecularViewer = forwardRef(function MolecularViewer({
       } else {
         plugin.managers.camera.reset();
       }
+
+      setTimeout(() => {
+        try {
+          plugin.canvas3D?.requestResize();
+          plugin.managers.camera.reset();
+        } catch (e) {}
+      }, 150);
     } catch (err) {
       console.error('Error loading structure:', err);
       setError('Failed to load molecular structure');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [minimal]);
 
   const handleResetCamera = useCallback(() => {
     pluginRef.current?.managers.camera.reset();
@@ -646,10 +656,10 @@ const MolecularViewer = forwardRef(function MolecularViewer({
         // rely on SSAO and silhouette outlines for depth perception.
         PluginCommands.Canvas3D.SetSettings(plugin, {
           settings: (props) => {
-            // Clean white background — matches reference pocket-view style
+            // Crisp white background for canvas (PyMOL / publication style)
             props.renderer.backgroundColor = Color(0xffffff);
 
-            // Disable fog / depth cueing entirely (prevents dissolving)
+            // Disable fog / depth cueing entirely (prevents structure fading)
             if ('fog' in props.renderer) {
               props.renderer.fog = false;
             }
@@ -738,7 +748,12 @@ const MolecularViewer = forwardRef(function MolecularViewer({
   }
 
   return (
-    <div className="relative" id="molecular-viewer-container" data-minimal={minimal ? 'true' : 'false'}>
+    <div
+      className={`relative ${minimal ? 'w-full h-full' : ''}`}
+      id="molecular-viewer-container"
+      data-minimal={minimal ? 'true' : 'false'}
+      style={minimal ? { height: '100%', minHeight: '100%' } : {}}
+    >
       {/* Hide specific Mol* UI elements via CSS */}
       <style>{`
         #molecular-viewer-container .msp-log { display: none !important; }
@@ -755,8 +770,8 @@ const MolecularViewer = forwardRef(function MolecularViewer({
       `}</style>
 
       <div
-        className="relative w-full bg-background rounded-lg border border-primary/10"
-        style={{ minHeight: '600px' }}
+        className={`relative w-full bg-background rounded-lg border border-primary/10 ${minimal ? 'h-full border-none rounded-none' : ''}`}
+        style={minimal ? { height: '100%', minHeight: '100%' } : { minHeight: '600px' }}
       >
         {/* Mol* Viewer Canvas — background matches canvas3D backgroundColor (#ffffff) */}
         <div
@@ -765,7 +780,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
             position: 'relative',
             overflow: 'hidden',
             borderRadius: '8px',
-            height: '600px',
+            height: minimal ? '100%' : '600px',
             backgroundColor: '#ffffff',
           }}
         />
@@ -794,10 +809,9 @@ const MolecularViewer = forwardRef(function MolecularViewer({
 
         {/* Loading Overlay */}
         {loading && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center backdrop-blur-sm z-20 rounded-lg"
-            style={{ backgroundColor: 'rgba(255, 255, 255, 0.82)' }}>
-            <Loader2 className="w-10 h-10 text-primary animate-spin mb-2" />
-            <p className="text-sm font-medium text-slate-700">Processing Structure...</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center backdrop-blur-sm z-20 rounded-lg bg-card/85 gap-2">
+            <AnimatedCircularProgressBar label="Structure" size={70} strokeWidth={6} />
+            <p className="text-xs font-semibold text-foreground">Processing 3D Structure...</p>
           </div>
         )}
       </div>

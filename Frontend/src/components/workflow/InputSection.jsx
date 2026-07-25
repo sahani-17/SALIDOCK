@@ -1,5 +1,6 @@
 import React from 'react';
-import { Upload, Atom, Dna, CheckCircle2, Loader2 } from 'lucide-react';
+import { Upload, Atom, Dna, CheckCircle2 } from 'lucide-react';
+import { AnimatedCircularProgressBar } from '../ui/animated-circular-progress-bar';
 
 /**
  * Shared input section: PDB / FASTA / UniProt for protein, SDF / SMILES for ligand.
@@ -63,9 +64,9 @@ export default function InputSection({
             </div>
 
             {!sessionReady && (
-                <div className="mb-5 p-3 rounded-xl border border-primary/20 bg-primary/5 flex items-start gap-2">
-                    <Loader2 size={14} className="text-primary mt-0.5 animate-spin" aria-hidden="true" />
-                    <p className="text-xs text-muted-foreground">
+                <div className="mb-5 p-3.5 rounded-xl border border-primary/20 bg-primary/5 flex items-center gap-3">
+                    <AnimatedCircularProgressBar size={22} strokeWidth={3} />
+                    <p className="text-xs font-medium text-foreground">
                         Preparing your docking session. Uploads unlock once the session is created.
                     </p>
                 </div>

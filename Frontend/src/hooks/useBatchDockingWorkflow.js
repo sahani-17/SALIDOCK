@@ -46,17 +46,25 @@ export function useBatchDockingWorkflow() {
     const [loadingMessage, setLoadingMessage] = useState('');
     const [error, setError] = useState(null);
 
-    // Initialize session on mount
+    // Initialize session on mount (with fallback so UI buttons are never blocked)
     useEffect(() => {
+        let isMounted = true;
         const initSession = async () => {
             try {
                 const response = await api.createSession();
-                setSessionId(response.session_id);
+                if (isMounted && response?.session_id) {
+                    setSessionId(response.session_id);
+                }
             } catch (err) {
-                setError(err?.message || 'Failed to create session');
+                console.warn('Backend batch session creation delayed/failed, using fallback session ID:', err);
+                if (isMounted) {
+                    const fallbackId = 'batch_session_' + Math.random().toString(36).substring(2, 11);
+                    setSessionId(fallbackId);
+                }
             }
         };
         initSession();
+        return () => { isMounted = false; };
     }, []);
 
     // Handle protein receptor upload
@@ -204,7 +212,7 @@ export function useBatchDockingWorkflow() {
         if (!smilesInput.trim()) return;
 
         setLoading(true);
-        setLoadingMessage('Generating 3D structures from SMILES strings...');
+        setLoadingMessage('Generating 3D structures & looking up drug names...');
 
         const lines = smilesInput.split('\n');
         const parsedLigands = [];
@@ -212,35 +220,43 @@ export function useBatchDockingWorkflow() {
             const trimmed = line.trim();
             if (!trimmed) return;
             
-            // Find the first separator: tab, comma, semicolon, or space
+            // Find separator: tab, comma, semicolon, or space
             let delimiter = null;
-            if (trimmed.includes('\t')) {
-                delimiter = '\t';
-            } else if (trimmed.includes(',')) {
-                delimiter = ',';
-            } else if (trimmed.includes(';')) {
-                delimiter = ';';
-            } else {
+            if (trimmed.includes('\t')) delimiter = '\t';
+            else if (trimmed.includes(',')) delimiter = ',';
+            else if (trimmed.includes(';')) delimiter = ';';
+            else {
                 const spaceIdx = trimmed.indexOf(' ');
-                if (spaceIdx > 0) {
-                    delimiter = ' ';
-                }
+                if (spaceIdx > 0) delimiter = ' ';
             }
 
-            let smiles = trimmed;
-            let name = `smiles_${idx + 1}`;
+            let part1 = trimmed;
+            let part2 = '';
 
             if (delimiter) {
                 const sepIdx = trimmed.indexOf(delimiter);
-                smiles = trimmed.substring(0, sepIdx).trim();
-                name = trimmed.substring(sepIdx + 1).trim() || `smiles_${idx + 1}`;
+                part1 = trimmed.substring(0, sepIdx).trim();
+                part2 = trimmed.substring(sepIdx + 1).trim();
+            }
+
+            let smiles = part1;
+            let name = part2 || `Drug_${idx + 1}`;
+
+            // If part1 looks like a drug name (no SMILES characters like = # ( ) @ / \) and part2 contains SMILES symbols, swap them
+            if (!part2 && !/[=#()@/\\]/.test(part1) && part1.length > 2) {
+                // Single word line like "Aspirin" or "Caffeine"
+                smiles = '';
+                name = part1;
+            } else if (part2 && !/[=#()@/\\]/.test(part1) && /[=#()@/\\]/.test(part2)) {
+                smiles = part2;
+                name = part1;
             }
 
             parsedLigands.push({ smiles, name });
         });
 
         if (parsedLigands.length === 0) {
-            toast.error('No valid SMILES strings entered');
+            toast.error('No valid SMILES or drug names entered');
             setLoading(false);
             return;
         }

@@ -4,11 +4,12 @@ import { Play, Rocket, Wand2, Target, ArrowRight } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import Hero3D from "../components/Hero3D";
+import PerspectiveGrid from "../components/PerspectiveGrid";
 
 const Feature = ({ icon, title, desc }) => {
     const Icon = icon;
     return (
-        <div className="rounded-2xl border border-border bg-card p-5 hover:border-primary/40 hover:shadow-elevated transition-all">
+        <div className="interactive rounded-2xl border border-border bg-card p-5 hover:border-primary/40 hover:shadow-elevated transition-all">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
                 <Icon size={18} className="text-primary" aria-hidden="true" />
             </div>
@@ -30,20 +31,19 @@ const HowStep = ({ n, title, desc }) => (
 
 const Landing = () => (
     <div className="min-h-screen bg-background relative overflow-hidden font-sans z-0 flex flex-col">
-            <div
-                className="absolute inset-0 -z-10 opacity-60"
-                style={{
-                    backgroundImage: 'radial-gradient(circle at 1px 1px, hsl(var(--border)) 1px, transparent 0)',
-                    backgroundSize: '40px 40px',
-                }}
-                aria-hidden="true"
-            />
+            {/* Perspective Grid Background – z-0 so tiles receive hover */}
+            <div className="absolute inset-0 z-0">
+                <PerspectiveGrid gridSize={40} showOverlay={true} fadeRadius={80} />
+            </div>
+
+            {/* Content layer – pointer-events:none lets hover pass to grid; interactive children re-enable it via CSS */}
+            <div className="relative z-10 flex flex-col min-h-screen landing-content">
 
             <Navbar />
 
             {/* Hero */}
-            <section className="pt-32 pb-20 relative z-10">
-                <div className="max-w-[1300px] mx-auto w-full px-6 lg:px-12">
+            <section className="relative min-h-screen flex items-center">
+                <div className="max-w-[1300px] mx-auto w-full px-6 lg:px-12 py-12">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
                         <div className="flex flex-col">
                             <h1 className="font-display text-5xl md:text-6xl lg:text-[64px] leading-[1.05] text-foreground">
@@ -53,7 +53,7 @@ const Landing = () => (
                             </h1>
 
                             <p className="mt-6 text-lg text-muted-foreground leading-relaxed max-w-[540px]">
-                                Salidock runs the full pipeline — protein preparation, wRRF consensus cavity detection, AutoDock Vina scoring — with an interactive Mol* viewer for every pose.
+                                Salidock runs the full pipeline — protein preparation, wRRF consensus cavity detection, GNINA CNN scoring — with an interactive Mol* viewer for every pose.
                             </p>
 
                             <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -66,7 +66,7 @@ const Landing = () => (
                                 </Link>
                                 <Link
                                     to="/batch-dock"
-                                    className="inline-flex items-center gap-2 px-6 py-3 rounded-full border border-border text-foreground font-semibold text-sm hover:border-primary/40 hover:text-primary transition-all"
+                                    className="inline-flex items-center gap-2 px-6 py-3 rounded-full border border-border bg-background text-foreground font-semibold text-sm hover:border-primary/40 hover:text-primary transition-all"
                                 >
                                     <Target size={16} aria-hidden="true" />
                                     Batch Dock
@@ -82,7 +82,7 @@ const Landing = () => (
 
                             <div className="mt-12 pt-6 border-t border-border grid grid-cols-3 gap-6 max-w-[560px]">
                                 <div>
-                                    <p className="font-display text-2xl text-foreground">Vina</p>
+                                    <p className="font-display text-2xl text-foreground">GNINA</p>
                                     <p className="text-[11px] uppercase tracking-widest text-muted-foreground mt-0.5">Scoring engine</p>
                                 </div>
                                 <div>
@@ -100,17 +100,17 @@ const Landing = () => (
                             <div className="relative w-full max-w-[720px] mx-auto lg:ml-auto">
                                 <div className="absolute -top-4 -left-4 w-16 h-16 border-t border-l border-border pointer-events-none" aria-hidden="true" />
                                 <div className="absolute -bottom-4 -right-4 w-16 h-16 border-b-2 border-r-2 border-primary pointer-events-none" aria-hidden="true" />
-                                <div className="bg-card p-3 shadow-elevated rounded-2xl border border-border relative">
+                                <div className="interactive bg-card p-3 shadow-elevated rounded-2xl border border-border relative">
                                     <div className="absolute -top-3.5 left-6 bg-card border border-border shadow-sm px-3 py-1.5 flex items-center gap-2 z-10 rounded-full">
                                         <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                                         <span className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">Live · PDB 1STP</span>
                                     </div>
-                                    <div className="relative aspect-[16/10] rounded-xl overflow-hidden bg-muted">
+                                    <div className="relative aspect-[16/10] rounded-xl overflow-hidden bg-card">
                                         <Hero3D pdbId="1STP" />
                                     </div>
                                 </div>
                                 <p className="mt-4 text-xs text-muted-foreground text-center">
-                                    Streptavidin bound to biotin — the same Mol* engine that powers every result.
+                                    Streptavidin bound to biotin — interactable 3D structure viewer.
                                 </p>
                             </div>
                         </div>
@@ -119,7 +119,7 @@ const Landing = () => (
             </section>
 
             {/* How it works */}
-            <section className="py-20 border-t border-border bg-card/40 relative z-10">
+            <section className="py-20 border-t border-border bg-background/80 backdrop-blur-sm relative">
                 <div className="max-w-[1200px] mx-auto px-6 lg:px-12">
                     <div className="max-w-2xl mb-12">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-primary mb-2">How it works</p>
@@ -135,7 +135,7 @@ const Landing = () => (
             </section>
 
             {/* Features */}
-            <section className="py-20 relative z-10">
+            <section className="py-20 relative">
                 <div className="max-w-[1200px] mx-auto px-6 lg:px-12">
                     <div className="max-w-2xl mb-12">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-primary mb-2">Capabilities</p>
@@ -144,7 +144,7 @@ const Landing = () => (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <Feature icon={Wand2} title="Single Dock" desc="Prepare a single protein-ligand pair, choose your pocket, and run docking simulation." />
                         <Feature icon={Target} title="Batch Dock" desc="Screen a library of multiple ligands against a target protein in a single automated run." />
-                        <Feature icon={Rocket} title="AutoDock Vina" desc="Battle-tested scoring engine with pose ranking, RMSD, and binding affinity." />
+                        <Feature icon={Rocket} title="GNINA Engine" desc="Deep learning CNN scoring engine with pose ranking, CNN score, and affinity prediction." />
                         <Feature icon={Play} title="Mol* 3D Viewer" desc="Rotate, section, and colour by chain, secondary structure, hydrophobicity, or element." />
                         <Feature icon={ArrowRight} title="2D Interactions" desc="Ligplot-style diagrams of every contact between ligand and pocket residues." />
                         <Feature icon={Rocket} title="AlphaFold-ready" desc="Predict structures from sequence or pull directly from UniProt in one click." />
@@ -154,7 +154,7 @@ const Landing = () => (
 
 
             {/* CTA */}
-            <section className="py-24 relative z-10">
+            <section className="py-24 relative">
                 <div className="max-w-[900px] mx-auto px-6 lg:px-12 text-center">
                     <h2 className="font-display text-4xl md:text-5xl text-foreground">Ready to dock your first ligand?</h2>
                     <p className="mt-4 text-lg text-muted-foreground">Start a run in under a minute — no install, no queue.</p>
@@ -168,7 +168,7 @@ const Landing = () => (
                         </Link>
                         <Link
                             to="/batch-dock"
-                            className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full border border-border text-foreground font-semibold text-sm hover:border-primary/40 hover:text-primary transition-all"
+                            className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full border border-border bg-background text-foreground font-semibold text-sm hover:border-primary/40 hover:text-primary transition-all"
                         >
                             <Target size={16} aria-hidden="true" />
                             Batch Dock
@@ -180,6 +180,8 @@ const Landing = () => (
 
 
             <Footer />
+
+            </div>{/* end landing-content */}
         </div>
     );
 

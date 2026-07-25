@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Loader2, Eye, Download, Search, Info, BarChart2, CheckCircle2, AlertTriangle, FileText, ChevronRight } from 'lucide-react';
+import { Eye, Download, Search, Info, BarChart2, CheckCircle2, AlertTriangle, FileText, ChevronRight } from 'lucide-react';
 import { api, API_BASE_URL } from '../services/api';
 import MolecularViewer from '../components/MolecularViewer';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
 
 function BatchResults() {
   const [searchParams] = useSearchParams();
@@ -50,10 +51,12 @@ function BatchResults() {
         const data = await api.getBatchResults(sessionId);
         setReport(data);
         
-        // Find first successful ligand to select
-        const completed = (data.results || []).find(r => r.status === 'completed');
-        if (completed) {
-          setSelectedLigandIdx(completed.index);
+        // Find top binder (lowest affinity) among completed runs to visualize exclusively
+        const sortedCompleted = (data.results || [])
+          .filter(r => r.status === 'completed')
+          .sort((a, b) => a.affinity - b.affinity);
+        if (sortedCompleted.length > 0) {
+          setSelectedLigandIdx(sortedCompleted[0].index);
         }
       } catch (err) {
         console.error('Failed to load batch results:', err);
@@ -66,7 +69,7 @@ function BatchResults() {
     fetchResults();
   }, [sessionId]);
 
-  // Load 3D structure for selected ligand pose
+  // Load 3D structure for top binder pose
   useEffect(() => {
     if (!sessionId || selectedLigandIdx === null || selectedLigandIdx === undefined) return;
     
@@ -78,7 +81,6 @@ function BatchResults() {
         setPdbData(text);
       } catch (err) {
         console.error('Failed to load 3D complex:', err);
-        toast.error('Failed to fetch 3D structure');
       } finally {
         setLoadingViewer(false);
       }
@@ -87,28 +89,7 @@ function BatchResults() {
     fetchStructure();
   }, [sessionId, selectedLigandIdx, selectedPose]);
 
-  // Load 2D interaction diagram SVG for selected ligand pose
-  useEffect(() => {
-    if (!sessionId || selectedLigandIdx === null || selectedLigandIdx === undefined || viewMode !== '2d') return;
-    
-    const fetchSvg = async () => {
-      setLoadingSvg(true);
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/batch/interactions/2d/${sessionId}/${selectedLigandIdx}/${selectedPose}`);
-        if (!response.ok) throw new Error('Failed to load SVG');
-        const text = await response.text();
-        setSvgContent(text);
-      } catch (err) {
-        console.error('Failed to load 2D interactions SVG:', err);
-      } finally {
-        setLoadingSvg(false);
-      }
-    };
-
-    fetchSvg();
-  }, [sessionId, selectedLigandIdx, selectedPose, viewMode]);
-
-  // Helper properties of selected ligand
+  // Helper properties of selected top binder
   const selectedLigand = useMemo(() => {
     if (!report || !report.results) return null;
     return report.results.find(r => r.index === selectedLigandIdx);
@@ -161,7 +142,7 @@ function BatchResults() {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {
       setSortBy(field);
-      setSortOrder(field === 'name' ? 'asc' : 'desc'); // default asc for alphabetical, desc for numerical
+      setSortOrder(field === 'name' ? 'asc' : 'desc');
     }
   };
 
@@ -172,86 +153,43 @@ function BatchResults() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `complex_ligand_${selectedLigandIdx}_pose_${selectedPose}.pdb`;
+      a.download = `top_binder_${selectedLigand?.name || 'complex'}_pose_1.pdb`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (err) {
-      console.error('Failed to download structure:', err);
+      console.error('Failed to download top binder complex:', err);
     }
   };
 
-  // Custom SVG Scatter Plot coordinates calculation
-  const scatterPlotData = useMemo(() => {
-    if (!report || !report.results) return null;
-    const completed = report.results.filter(r => r.status === 'completed');
-    if (completed.length === 0) return null;
-
-    const mws = completed.map(r => r.properties?.mw || 0);
-    const affinities = completed.map(r => r.affinity);
-
-    const minMW = Math.min(...mws);
-    const maxMW = Math.max(...mws);
-    const minAff = Math.min(...affinities);
-    const maxAff = Math.max(...affinities);
-
-    // Padding for min/max to not touch axes
-    const mwPadding = (maxMW - minMW) * 0.15 || 50;
-    const affPadding = (maxAff - minAff) * 0.15 || 2;
-
-    const xMin = Math.max(0, minMW - mwPadding);
-    const xMax = maxMW + mwPadding;
-    const yMin = minAff - affPadding;
-    const yMax = maxAff + affPadding;
-
-    const width = 500;
-    const height = 300;
-    const padding = 45;
-
-    // Convert coordinates helper
-    const getX = (mw) => padding + ((mw - xMin) / (xMax - xMin)) * (width - 2 * padding);
-    const getY = (aff) => height - padding - ((aff - yMin) / (yMax - yMin)) * (height - 2 * padding);
-
-    const points = completed.map(r => ({
-      index: r.index,
-      name: r.name,
-      mw: r.properties?.mw || 0,
-      affinity: r.affinity,
-      x: getX(r.properties?.mw || 0),
-      y: getY(r.affinity)
-    }));
-
-    return { points, width, height, padding, xMin, xMax, yMin, yMax, getX, getY };
-  }, [report]);
-
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex flex-col pt-16">
-        <Navbar />
-        <div className="flex-1 flex flex-col items-center justify-center space-y-3">
-          <Loader2 size={36} className="animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground font-semibold">Generating results dashboard...</p>
-        </div>
+      <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-6">
+        <AnimatedCircularProgressBar label="Loading" size={80} strokeWidth={6} />
+        <p className="mt-4 text-sm font-semibold text-muted-foreground animate-pulse">Loading batch screening dashboard...</p>
       </div>
     );
   }
 
   if (error || !report) {
     return (
-      <div className="min-h-screen bg-background flex flex-col pt-16">
+      <div className="min-h-screen bg-background text-foreground flex flex-col">
         <Navbar />
-        <div className="flex-1 flex flex-col items-center justify-center max-w-md mx-auto px-4 text-center">
-          <AlertTriangle size={48} className="text-destructive mb-3" />
-          <h2 className="text-xl font-bold text-foreground mb-2">Results Unavailable</h2>
-          <p className="text-sm text-muted-foreground mb-6">{error || 'No batch results report was found for this session.'}</p>
+        <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-20 flex flex-col items-center justify-center text-center">
+          <div className="p-4 rounded-2xl bg-destructive/10 text-destructive mb-4">
+            <AlertTriangle size={32} />
+          </div>
+          <h2 className="text-xl font-bold mb-2">Failed to Load Batch Results</h2>
+          <p className="text-sm text-muted-foreground mb-6 max-w-md">{error || 'Unable to retrieve batch docking output.'}</p>
           <button
             onClick={() => navigate('/batch-dock')}
-            className="px-6 py-2.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:brightness-110 active:scale-95 transition-all"
+            className="px-6 py-2.5 rounded-full bg-primary text-primary-foreground font-semibold text-xs hover:brightness-110 transition-all"
           >
-            Back to Docking Uploader
+            Return to Batch Docking
           </button>
-        </div>
+        </main>
+        <Footer />
       </div>
     );
   }
@@ -259,12 +197,12 @@ function BatchResults() {
   const summary = report.summary || {};
 
   return (
-    <div className="min-h-screen bg-background flex flex-col pt-16">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
       <Navbar />
 
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        {/* Header Title */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-8 space-y-6">
+        {/* Header Title & Actions */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card border border-border p-6 rounded-2xl shadow-elevated">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Batch Docking Dashboard</h1>
             <p className="text-sm text-muted-foreground">Comparative virtual screening results for target protein.</p>
@@ -327,14 +265,20 @@ function BatchResults() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {filteredResults.map((res, i) => {
-                    const active = res.index === selectedLigandIdx;
+                    const isTopBinder = res.index === selectedLigandIdx;
                     return (
                       <tr 
                         key={res.index}
-                        onClick={() => { if (res.status === 'completed') setSelectedLigandIdx(res.index); }}
-                        className={`transition-colors ${res.status !== 'completed' ? 'opacity-60 cursor-not-allowed bg-muted/10' : 'cursor-pointer hover:bg-muted/20'} ${active ? 'bg-primary/5' : ''}`}
+                        className={`transition-colors ${res.status !== 'completed' ? 'opacity-60 bg-muted/10' : ''} ${isTopBinder ? 'bg-primary/10 font-bold' : ''}`}
                       >
-                        <td className="p-3 font-semibold text-foreground">{res.status === 'completed' ? `${i+1}` : '—'}</td>
+                        <td className="p-3 font-semibold text-foreground flex items-center gap-1.5">
+                          {res.status === 'completed' ? `${i+1}` : '—'}
+                          {isTopBinder && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-amber-500/20 text-amber-500 border border-amber-500/30">
+                              Top Binder
+                            </span>
+                          )}
+                        </td>
                         <td className="p-3 font-semibold text-foreground truncate max-w-40">{res.name}</td>
                         <td className="p-3 font-mono-code text-muted-foreground">{res.properties?.mw?.toFixed(1) || 'N/A'}</td>
                         <td className="p-3 font-mono-code font-bold">
@@ -359,11 +303,14 @@ function BatchResults() {
           {selectedLigand && selectedLigand.status === 'completed' && (
             <div className="lg:col-span-1 bg-card border border-border p-5 rounded-2xl shadow-elevated flex flex-col h-[380px]">
               <div className="flex justify-between items-center pb-3 border-b border-border mb-3">
-                <h3 className="font-bold text-foreground truncate">{selectedLigand.name}</h3>
+                <div className="truncate">
+                  <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-500 block">Top Ranked Binder</span>
+                  <h3 className="font-bold text-foreground truncate">{selectedLigand.name}</h3>
+                </div>
                 <button
                   onClick={handleDownloadPose}
-                  className="p-2 rounded-lg border border-border hover:border-primary/30 hover:bg-primary/5 transition-all text-muted-foreground hover:text-primary"
-                  title="Download Complex PDB"
+                  className="p-2 rounded-lg border border-border hover:border-primary/30 hover:bg-primary/5 transition-all text-muted-foreground hover:text-primary shrink-0"
+                  title="Download Top Binder Complex PDB"
                 >
                   <Download size={14} />
                 </button>
@@ -386,72 +333,39 @@ function BatchResults() {
                   </div>
                 ))}
               </div>
-
-              <div className="mt-auto p-3 bg-muted/40 border border-border rounded-xl text-xs flex gap-2">
-                <Info size={16} className="text-primary shrink-0 mt-0.5" />
-                <p className="text-muted-foreground leading-relaxed">
-                  <span className="font-semibold text-foreground">Routing engine:</span> {selectedLigand.engine === 'gnina' ? 'GNINA Deep Learning CNN' : 'QuickVina-W blind selector'}.
-                  <br />
-                  <span className="text-[11px] font-mono-code">{selectedLigand.routing_reason}</span>
-                </p>
-              </div>
             </div>
           )}
         </div>
 
-        {/* Bottom Section: Visualizer (Full Width) */}
+        {/* Bottom Section: 3D Visualizer (Top Binder Exclusively) */}
         {selectedLigand && selectedLigand.status === 'completed' && (
           <section className="rounded-2xl bg-card border border-border p-5 shadow-elevated flex flex-col">
-            <div className="flex bg-muted rounded-lg p-1 border border-border mb-3 max-w-fit">
-              <button
-                onClick={() => setViewMode('3d')}
-                className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-md transition-all ${
-                  viewMode === '3d' ? 'bg-card shadow-sm text-primary border border-primary/20' : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                3D Visualization
-              </button>
-              <button
-                onClick={() => setViewMode('2d')}
-                className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-md transition-all ${
-                  viewMode === '2d' ? 'bg-card shadow-sm text-primary border border-primary/20' : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                2D Interaction Map
-              </button>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-3">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
+                  Top Binder 3D Visualization: <span className="text-primary">{selectedLigand.name}</span> ({selectedLigand.affinity.toFixed(2)} kcal/mol)
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Displaying 3D complex of the top ranked binder. Download full ZIP archive to access all compound structures.
+                </p>
+              </div>
             </div>
 
             <div className="flex-1 bg-background/50 border border-border rounded-2xl relative overflow-hidden h-[600px]">
-              {viewMode === '3d' ? (
-                pdbData ? (
-                  <MolecularViewer
-                    ref={viewerRef}
-                    pdbData={pdbData}
-                    poseNumber={selectedPose}
-                    showPocketResidues={true}
-                    showPocketLabels={true}
-                  />
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Loader2 className="animate-spin text-primary mr-2" />
-                    <span className="text-xs text-muted-foreground">Loading molecular model...</span>
-                  </div>
-                )
+              {pdbData ? (
+                <MolecularViewer
+                  ref={viewerRef}
+                  pdbData={pdbData}
+                  poseNumber={selectedPose}
+                  showPocketSurface={true}
+                  showPocketResidues={false}
+                  showPocketLabels={false}
+                  showInteractions={false}
+                />
               ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
-                  {loadingSvg ? (
-                    <div className="flex items-center">
-                      <Loader2 className="animate-spin text-primary mr-2" />
-                      <span className="text-xs text-muted-foreground">Rendering ProLIF interactions...</span>
-                    </div>
-                  ) : svgContent ? (
-                    <div 
-                      className="w-full h-full flex items-center justify-center p-2 [&>svg]:w-full [&>svg]:h-full [&>svg]:max-w-full [&>svg]:max-h-full"
-                      dangerouslySetInnerHTML={{ __html: svgContent }}
-                    />
-                  ) : (
-                    <p className="text-xs text-muted-foreground italic">Failed to load interaction diagram.</p>
-                  )}
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                  <AnimatedCircularProgressBar label="Model" size={64} strokeWidth={5} />
+                  <span className="text-xs font-semibold text-foreground">Loading top binder 3D model...</span>
                 </div>
               )}
             </div>

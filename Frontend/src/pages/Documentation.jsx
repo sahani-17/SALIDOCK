@@ -4,6 +4,7 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { useScrollAnimation } from "../hooks/useScrollAnimation";
 import Button from "../components/ui/Button";
+import { StickyScroll } from "../components/ui/sticky-scroll-reveal";
 import {
   BookOpen,
   Cpu,
@@ -125,6 +126,232 @@ const StepBadge = ({ n, label }) => (
   </div>
 );
 
+/* ─── Premium Screenshot Frame (Mac Window Style with Full Content Fitting) ─── */
+const ScreenshotFrame = ({ src, alt, caption, className = "" }) => (
+  <div className={`flex flex-col w-full h-full ${className}`}>
+    <TiltCard className="h-full">
+      <div className="w-full h-full rounded-2xl border border-border/80 bg-card shadow-2xl overflow-hidden flex flex-col group transition-all duration-300 hover:border-primary/40">
+        <div className="h-7 bg-muted/60 border-b border-border/80 px-3.5 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-[#FF5F56]/80 border border-[#E0443E]/40" />
+            <div className="w-2.5 h-2.5 rounded-full bg-[#FFBD2E]/80 border border-[#DEA123]/40" />
+            <div className="w-2.5 h-2.5 rounded-full bg-[#27C93F]/80 border border-[#1AAB29]/40" />
+          </div>
+          <span className="text-[10px] font-mono tracking-wider text-muted-foreground/70 uppercase truncate px-2">
+            salidock-interface // preview
+          </span>
+          <div className="w-10" />
+        </div>
+        <div className="flex-1 relative w-full h-full overflow-hidden bg-card flex items-center justify-center p-2">
+          <img
+            src={src}
+            alt={alt}
+            className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-[1.01]"
+          />
+        </div>
+      </div>
+    </TiltCard>
+    {caption && (
+      <p className="text-[10px] text-muted-foreground font-medium mt-2 text-center tracking-wide uppercase shrink-0">
+        {caption}
+      </p>
+    )}
+  </div>
+);
+
+const stickyDocsContent = [
+  {
+    id: "input",
+    title: "Step 1 — Input Ingestion",
+    description: (
+      <div className="flex flex-col gap-4 mt-2">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary">
+          <FlaskConical size={16} /> SYSTEM PROTOCOL 01 // INGESTION
+        </div>
+        <AccentCard className="p-5">
+          <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide mb-2">Protein Receptor Modes</h4>
+          <ul className="text-[13px] text-muted-foreground font-medium space-y-2">
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">PDB File</strong> — Direct upload (.pdb, .ent)</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">FASTA</strong> — ESMFold sequence structure prediction</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">UniProt ID</strong> — Direct AlphaFold DB model fetch</span></li>
+          </ul>
+        </AccentCard>
+
+        <AccentCard className="p-5">
+          <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide mb-2">Ligand Molecule Modes</h4>
+          <ul className="text-[13px] text-muted-foreground font-medium space-y-2">
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">SDF / MOL2</strong> — Direct 3D chemical file upload</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">SMILES</strong> — Canonical SMILES with auto 3D conformer generation</span></li>
+          </ul>
+        </AccentCard>
+      </div>
+    ),
+    content: (
+      <ScreenshotFrame
+        src="/auto_blind_docking.png"
+        alt="Step 1 — Input Intake Panels"
+        caption="Fig. 1 — Input step showing receptor and ligand intake panels"
+      />
+    ),
+  },
+  {
+    id: "prepare",
+    title: "Step 2 — Structure Preparation",
+    description: (
+      <div className="flex flex-col gap-4 mt-2">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary">
+          <Layers size={16} /> SYSTEM PROTOCOL 02 // PREPARATION
+        </div>
+        <AccentCard className="p-5">
+          <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide mb-2">Preparation Protocol</h4>
+          <ul className="text-[13px] text-muted-foreground font-medium space-y-2.5">
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Chain Filtering</strong> — Toggle specific target chains to retain</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Heteroatoms & Water</strong> — Strip or preserve specific ions & cofactors</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Automated Repair</strong> — PDBFixer protonation & OpenBabel PDBQT conversion</span></li>
+          </ul>
+        </AccentCard>
+      </div>
+    ),
+    content: (
+      <ScreenshotFrame
+        src="/prepare.png"
+        alt="Step 2 — Protein Configuration"
+        caption="Fig. 2 — Structure preparation & chain selection"
+      />
+    ),
+  },
+  {
+    id: "auto-blind",
+    title: "Step 3 — Auto-Blind Cavities (wRRF)",
+    description: (
+      <div className="flex flex-col gap-4 mt-2">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary">
+          <Compass size={16} /> SYSTEM PROTOCOL 03 // CONSENSUS
+        </div>
+        <AccentCard className="p-5">
+          <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide mb-2">Consensus Pocket Detection</h4>
+          <ul className="text-[13px] text-muted-foreground font-medium space-y-2.5">
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">3 Predictors</strong> — fpocket, P2Rank, PUResNetV2.0</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Top Cavities</strong> — Automatic ranking of top 5 consensus binding sites</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Smart Routing</strong> — GNINA (CNN scoring) for compact sites, QuickVina-W for large volumes</span></li>
+          </ul>
+        </AccentCard>
+      </div>
+    ),
+    content: (
+      <ScreenshotFrame
+        src="/modes.png"
+        alt="Auto-Blind Docking mode selection"
+        caption="Fig. 3 — Auto-Blind Docking mode configuration"
+      />
+    ),
+  },
+  {
+    id: "batch-dock",
+    title: "Step 4 — Batch Screening",
+    description: (
+      <div className="flex flex-col gap-4 mt-2">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary">
+          <Network size={16} /> SYSTEM PROTOCOL 04 // SCREENING
+        </div>
+        <AccentCard className="p-5">
+          <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide mb-2">Multi-Ligand Screening</h4>
+          <ul className="text-[13px] text-muted-foreground font-medium space-y-2.5">
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Library Intake</strong> — Multi-SDF, ZIP archive, or newline SMILES list</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Target Cavity Lock</strong> — Select 1 target pocket from consensus table for uniform scoring</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">MMFF94 Optimization</strong> — Parallel 3D conformer geometry optimization</span></li>
+          </ul>
+        </AccentCard>
+      </div>
+    ),
+    content: (
+      <ScreenshotFrame
+        src="/batch_cavity.png"
+        alt="Batch Dock Cavity Selection"
+        caption="Fig. 4 — Batch Dock cavity selection table with confidence tiers"
+      />
+    ),
+  },
+  {
+    id: "active-site",
+    title: "Step 5 — Targeted Active-Site Box",
+    description: (
+      <div className="flex flex-col gap-4 mt-2">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary">
+          <Grid size={16} /> SYSTEM PROTOCOL 05 // TARGETING
+        </div>
+        <AccentCard className="p-5">
+          <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide mb-2">Targeted Grid Setup</h4>
+          <ul className="text-[13px] text-muted-foreground font-medium space-y-2.5">
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Spatial Coordinates</strong> — Custom X, Y, Z grid center (Å) & box dimensions</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">3D Viewport Overlay</strong> — Live real-time grid box visualization in Mol*</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Auto-Detect Centroid</strong> — 1-click centroid initialization from target residues</span></li>
+          </ul>
+        </AccentCard>
+      </div>
+    ),
+    content: (
+      <ScreenshotFrame
+        src="/grid.png"
+        alt="Active-Site 3D Grid Box Viewer"
+        caption="Fig. 5 — Grid Box Viewer with axis-coloured search volume overlay"
+      />
+    ),
+  },
+  {
+    id: "results-3d",
+    title: "Step 6 — 3D Pose & Surface Analytics",
+    description: (
+      <div className="flex flex-col gap-4 mt-2">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary">
+          <LayoutDashboard size={16} /> SYSTEM PROTOCOL 06 // 3D VISUALIZATION
+        </div>
+        <AccentCard className="p-5">
+          <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide mb-2">3D Binding Complex Inspection</h4>
+          <ul className="text-[13px] text-muted-foreground font-medium space-y-2.5">
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Interactive Mol* Canvas</strong> — Full 3D rotation, zooming, slab slicing, & pose switching</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Pocket & Surface Display</strong> — Toggle cavity surface mesh, pocket residues, & atom labels</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Complex Download</strong> — 1-click PDB export of receptor bound to top-ranked ligand poses</span></li>
+          </ul>
+        </AccentCard>
+      </div>
+    ),
+    content: (
+      <ScreenshotFrame
+        src="/mol.png"
+        alt="Results 3D Pose Analytics"
+        caption="Fig. 6 — 3D binding complex & pocket surface in Mol*"
+      />
+    ),
+  },
+  {
+    id: "results-2d",
+    title: "Step 7 — 2D Interaction Diagram",
+    description: (
+      <div className="flex flex-col gap-4 mt-2">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary">
+          <Activity size={16} /> SYSTEM PROTOCOL 07 // 2D MAPS
+        </div>
+        <AccentCard className="p-5">
+          <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide mb-2">2D Contact Analysis</h4>
+          <ul className="text-[13px] text-muted-foreground font-medium space-y-2.5">
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">ProLIF Contact Mapping</strong> — Color-coded non-covalent bonds (H-bonds, salt bridges, hydrophobic)</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Bond Distance Overlay</strong> — Explicit distance annotations (Å) between ligand heavy atoms and pocket residues</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Vector Graphic Export</strong> — Download high-resolution publication-ready SVG diagrams</span></li>
+          </ul>
+        </AccentCard>
+      </div>
+    ),
+    content: (
+      <ScreenshotFrame
+        src="/2d_interaction.png"
+        alt="Results 2D Interaction Diagram"
+        caption="Fig. 7 — 2D non-covalent interaction map & bond distance annotations"
+      />
+    ),
+  },
+];
+
 const Documentation = () => {
   const sections = [
     { id: "docs-hero",   label: "Overview",           icon: BookOpen },
@@ -133,7 +360,8 @@ const Documentation = () => {
     { id: "auto-blind",  label: "Single Dock",          icon: Compass },
     { id: "batch-dock",  label: "Batch Dock",           icon: Network },
     { id: "active-site", label: "Active-Site Mode",     icon: Grid },
-    { id: "results",     label: "Results & Exports",   icon: LayoutDashboard },
+    { id: "results-3d",  label: "3D Viewer",           icon: LayoutDashboard },
+    { id: "results-2d",  label: "2D Interactions",     icon: Activity },
   ];
   const [activeSection, setActiveSection] = useState("docs-hero");
   const [showDockingOptions, setShowDockingOptions] = useState(false);
@@ -247,7 +475,7 @@ const Documentation = () => {
             HERO
         ══════════════════════════════════════════════ */}
         <section id="docs-hero" className="relative pt-32 pb-20 overflow-hidden">
-          <div className="max-w-5xl mx-auto px-8 md:px-12 relative z-10 w-full">
+          <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 relative z-10 w-full">
             <AnimatedSection>
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-8 h-[2px] bg-primary" />
@@ -289,579 +517,21 @@ const Documentation = () => {
         <div className="border-t border-border" />
 
         {/* ══════════════════════════════════════════════
-            STEP 1 — INPUT
+            STICKY SCROLL WORKFLOW PIPELINE
         ══════════════════════════════════════════════ */}
-        <section id="input" className="py-24 relative">
-          <div className="max-w-5xl mx-auto px-8 md:px-12">
-
-            <AnimatedSection className="mb-12">
-              <div className="flex items-center gap-6">
-                <div className="w-[72px] h-[72px] shrink-0 bg-primary/10 flex items-center justify-center">
-                  <FlaskConical className="w-8 h-8 text-primary" strokeWidth={2} />
-                </div>
-                <div>
-                  <h2 className="text-[16px] font-bold text-foreground tracking-wider mb-1 uppercase">Step 1 — Input</h2>
-                  <div className="text-[11px] font-bold tracking-widest text-muted-foreground uppercase">
-                    SYSTEM PROTOCOL 01 // STRUCTURE INGESTION
-                  </div>
-                </div>
-              </div>
-            </AnimatedSection>
-
-            <div className="grid md:grid-cols-2 gap-16 items-start">
-
-              <AnimatedSection className="flex flex-col gap-8">
-                <p className="text-muted-foreground font-medium leading-[1.9] text-[15px]">
-                  The workflow begins at the <strong className="text-foreground">Input</strong> step.
-                  Both a protein receptor and a small-molecule ligand must be provided before
-                  the pipeline can proceed.
-                </p>
-
-                <div className="flex flex-col gap-5">
-                  <AccentCard className="p-6">
-                    <div className="flex items-center gap-3 mb-3">
-                      <Layers className="w-5 h-5 text-primary" strokeWidth={2.5} />
-                      <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide">
-                        Protein Receptor
-                      </h4>
-                    </div>
-                    <p className="text-[13px] text-muted-foreground font-medium leading-[1.7] mb-4">
-                      Three intake modes are supported:
-                    </p>
-                    <ul className="text-[13px] text-muted-foreground font-medium space-y-2">
-                      <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">PDB File</strong> — upload a crystallographic or homology-modelled structure directly.</span></li>
-                      <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">FASTA</strong> — submit an amino-acid sequence; ESMFold generates a predicted structure.</span></li>
-                      <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">UniProt ID</strong> — the AlphaFold DB model is fetched directly from EMBL-EBI.</span></li>
-                    </ul>
-                  </AccentCard>
-
-                  <AccentCard className="p-6">
-                    <div className="flex items-center gap-3 mb-3">
-                      <Zap className="w-5 h-5 text-primary" strokeWidth={2.5} />
-                      <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide">
-                        Ligand Molecule
-                      </h4>
-                    </div>
-                    <ul className="text-[13px] text-muted-foreground font-medium space-y-2">
-                      <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">SDF / MOL2</strong> — upload a 3D structure file.</span></li>
-                      <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">SMILES</strong> — enter a canonical SMILES string; 3D coordinates are generated automatically via OpenBabel.</span></li>
-                    </ul>
-                  </AccentCard>
-                </div>
-
-                <div className="p-4 border-l-2 border-primary/40 bg-muted/30">
-                  <p className="text-[13px] text-muted-foreground font-medium leading-[1.7]">
-                    <strong className="text-foreground">Step 2 — Prepare</strong> immediately follows.
-                    Select which protein chains and heteroatom groups to retain, then confirm.
-                    Protonation and PDBQT conversion are handled automatically by PDBFixer and OpenBabel.
-                  </p>
-                </div>
-              </AnimatedSection>
-
-              <AnimatedSection delay={200}>
-                <TiltCard>
-                  <img
-                    src="/auto_blind_docking.png"
-                    alt="Step 1 — Upload Input Files: protein receptor (PDB / FASTA / UniProt) and ligand molecule (SDF / SMILES)"
-                    className="rounded-xl border border-border shadow-2xl w-full"
-                  />
-                </TiltCard>
-                <p className="text-[11px] text-muted-foreground font-medium mt-3 text-center tracking-wide uppercase">
-                  Fig. 1 — Input step showing receptor and ligand intake panels
-                </p>
-              </AnimatedSection>
-
-            </div>
+        <section className="py-20 relative">
+          <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
+            <StickyScroll content={stickyDocsContent} />
           </div>
         </section>
 
         <div className="border-t border-border" />
 
         {/* ══════════════════════════════════════════════
-            STEP 2 — PREPARE
+            EXPORTS & TIPS
         ══════════════════════════════════════════════ */}
-        <section id="prepare" className="py-24 relative">
-          <div className="max-w-5xl mx-auto px-8 md:px-12">
-
-            <AnimatedSection className="mb-12">
-              <div className="flex items-center gap-6">
-                <div className="w-[72px] h-[72px] shrink-0 bg-primary/10 flex items-center justify-center">
-                  <Layers className="w-8 h-8 text-primary" strokeWidth={2} />
-                </div>
-                <div>
-                  <h2 className="text-[16px] font-bold text-foreground tracking-wider mb-1 uppercase">Step 2 — Prepare</h2>
-                  <div className="text-[11px] font-bold tracking-widest text-muted-foreground uppercase">
-                    SYSTEM PROTOCOL 02 // STRUCTURE PREPARATION
-                  </div>
-                </div>
-              </div>
-            </AnimatedSection>
-
-            <div className="grid md:grid-cols-2 gap-16 items-start">
-
-              <AnimatedSection delay={200}>
-                <TiltCard>
-                  <img
-                    src="/prepare.png"
-                    alt="Step 2 — Protein Configuration: chain selection toggles and heteroatom checkboxes before structure preparation"
-                    className="rounded-xl border border-border shadow-2xl w-full"
-                  />
-                </TiltCard>
-                <p className="text-[11px] text-muted-foreground font-medium mt-3 text-center tracking-wide uppercase">
-                  Fig. 2 — Prepare step showing cofactor/heteroatom selection and ligand optimisation
-                </p>
-              </AnimatedSection>
-
-              <AnimatedSection className="flex flex-col gap-8">
-                <p className="text-muted-foreground font-medium leading-[1.9] text-[15px]">
-                  Before docking can proceed, the raw input structure must be cleaned and
-                  standardised. The <strong className="text-foreground">Prepare</strong> step exposes
-                  the structural elements detected in the uploaded file and lets you decide
-                  exactly what the docking engine will see.
-                </p>
-
-                <div className="flex flex-col gap-5">
-                  <AccentCard className="p-6">
-                    <div className="flex items-center gap-3 mb-3">
-                      <Layers className="w-5 h-5 text-primary" strokeWidth={2.5} />
-                      <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide">
-                        Chain Selection
-                      </h4>
-                    </div>
-                    <p className="text-[13px] text-muted-foreground font-medium leading-[1.7]">
-                      Multi-chain structures display each chain as a selectable toggle.
-                      Retain only the chains that constitute the target binding domain —
-                      removing unrelated chains reduces noise in cavity detection and
-                      accelerates the docking calculation.
-                    </p>
-                  </AccentCard>
-
-                  <AccentCard className="p-6">
-                    <div className="flex items-center gap-3 mb-3">
-                      <Search className="w-5 h-5 text-primary" strokeWidth={2.5} />
-                      <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide">
-                        Heteroatom Handling
-                      </h4>
-                    </div>
-                    <p className="text-[13px] text-muted-foreground font-medium leading-[1.7]">
-                      Co-crystallised ligands, ions, and solvent molecules are parsed and listed
-                      individually. Tick any heteroatoms to retain in the final receptor — useful
-                      when a catalytic metal ion or cofactor is essential to the binding site
-                      geometry.
-                    </p>
-                  </AccentCard>
-
-                  <div className="p-4 border-l-2 border-primary/40 bg-muted/30">
-                    <p className="text-[13px] text-muted-foreground font-medium leading-[1.7]">
-                      Clicking <strong className="text-foreground">Prepare Protein</strong> triggers
-                      PDBFixer for structure repair (missing residues, non-standard amino acids)
-                      followed by OpenBabel for protonation and PDBQT conversion.
-                      The ligand undergoes the same conversion automatically.
-                    </p>
-                  </div>
-                </div>
-              </AnimatedSection>
-
-            </div>
-          </div>
-        </section>
-
-        <div className="border-t border-border" />
-
-        {/* ══════════════════════════════════════════════
-            SECTION 3 — AUTO-BLIND DOCKING
-        ══════════════════════════════════════════════ */}
-        <section id="auto-blind" className="py-24 relative">
-          <div className="max-w-5xl mx-auto px-8 md:px-12">
-
-            <AnimatedSection className="mb-12">
-              <div className="flex items-center gap-6">
-                <div className="w-[72px] h-[72px] shrink-0 bg-primary/10 flex items-center justify-center">
-                  <Compass className="w-8 h-8 text-primary" strokeWidth={2} />
-                </div>
-                <div>
-                  <h2 className="text-[16px] font-bold text-foreground tracking-wider mb-1 uppercase">Auto-Blind Docking</h2>
-                  <div className="text-[11px] font-bold tracking-widest text-muted-foreground uppercase">
-                    SYSTEM PROTOCOL 02 // AUTOMATED CAVITY CONSENSUS
-                  </div>
-                </div>
-              </div>
-            </AnimatedSection>
-
-            <div className="grid md:grid-cols-2 gap-16 items-start">
-
-              <AnimatedSection className="order-2 md:order-1 flex flex-col gap-8">
-                <p className="text-muted-foreground font-medium leading-[1.9] text-[15px]">
-                  Select <strong className="text-foreground">Auto-Blind Docking</strong> at the Configure step to
-                  let Salidock autonomously detect the most probable binding sites across the entire
-                  protein surface and dock into each one simultaneously.
-                </p>
-
-                <div className="flex flex-col gap-5">
-                  <AccentCard className="p-6">
-                    <div className="flex items-center gap-3 mb-3">
-                      <Network className="w-5 h-5 text-primary" strokeWidth={2.5} />
-                      <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide">
-                        Consensus Cavity Detection
-                      </h4>
-                    </div>
-                    <p className="text-[13px] text-muted-foreground font-medium leading-[1.7]">
-                      Three independent tools run in parallel and their ranked pocket lists are
-                      merged into a single consensus ranking: a geometric algorithm (fpocket),
-                      a machine-learning predictor (P2Rank), and a deep-learning residue classifier
-                      (PUResNetV2.0). The top 5 cavities by consensus score are forwarded to docking.
-                    </p>
-                  </AccentCard>
-
-                  <AccentCard className="p-6">
-                    <div className="flex items-center gap-3 mb-3">
-                      <Cpu className="w-5 h-5 text-primary" strokeWidth={2.5} />
-                      <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide">
-                        Adaptive Engine Routing
-                      </h4>
-                    </div>
-                    <p className="text-[13px] text-muted-foreground font-medium leading-[1.7]">
-                      Each cavity is dispatched to the most appropriate docking engine based on its
-                      predicted volume and confidence tier. Compact, high-confidence sites are routed
-                      to <strong className="text-foreground">GNINA</strong> for focused CNN-scored docking;
-                      large or low-confidence volumes are handled by <strong className="text-foreground">QuickVina-W</strong> for
-                      efficient whole-protein blind search.
-                    </p>
-                  </AccentCard>
-                </div>
-              </AnimatedSection>
-
-              <AnimatedSection delay={200} className="order-1 md:order-2 space-y-6">
-                <TiltCard>
-                  <img
-                    src="/modes.png"
-                    alt="Configure step showing Auto-Blind and Active-Site docking mode selection"
-                    className="rounded-xl border border-border shadow-2xl w-full"
-                  />
-                </TiltCard>
-                <p className="text-[11px] text-muted-foreground font-medium mt-3 text-center tracking-wide uppercase">
-                  Fig. 4 — Configure step with Auto-Blind Docking selected
-                </p>
-              </AnimatedSection>
-
-            </div>
-          </div>
-        </section>
-
-        <div className="border-t border-border" />
-
-        {/* ══════════════════════════════════════════════
-            BATCH DOCKING
-        ══════════════════════════════════════════════ */}
-        <section id="batch-dock" className="py-24 relative">
-          <div className="max-w-5xl mx-auto px-8 md:px-12">
-
-            <AnimatedSection className="mb-12">
-              <div className="flex items-center gap-6">
-                <div className="w-[72px] h-[72px] shrink-0 bg-primary/10 flex items-center justify-center">
-                  <Network className="w-8 h-8 text-primary" strokeWidth={2} />
-                </div>
-                <div>
-                  <h2 className="text-[16px] font-bold text-foreground tracking-wider mb-1 uppercase">Batch Docking</h2>
-                  <div className="text-[11px] font-bold tracking-widest text-muted-foreground uppercase">
-                    SYSTEM PROTOCOL 04 // MULTI-LIGAND SCREENING
-                  </div>
-                </div>
-              </div>
-            </AnimatedSection>
-
-            <div className="grid md:grid-cols-2 gap-16 items-start">
-
-              <AnimatedSection className="flex flex-col gap-8">
-                <p className="text-muted-foreground font-medium leading-[1.9] text-[15px]">
-                  <strong className="text-foreground">Batch Dock</strong> screens an entire ligand
-                  library against a single protein receptor in one submission. It mirrors the
-                  Single Dock workflow (Input → Prepare → Configure) but adds a parallel
-                  ligand optimisation stage and an explicit cavity selection step.
-                </p>
-
-                <div className="flex flex-col gap-5">
-                  <AccentCard className="p-6">
-                    <div className="flex items-center gap-3 mb-3">
-                      <Network className="w-5 h-5 text-primary" strokeWidth={2.5} />
-                      <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide">
-                        Consensus Cavity Selection
-                      </h4>
-                    </div>
-                    <p className="text-[13px] text-muted-foreground font-medium leading-[1.7]">
-                      Unlike Single Dock — where all top-ranked cavities are docked automatically —
-                      Batch Dock presents the consensus pocket table and lets you <strong className="text-foreground">select
-                      exactly one target cavity</strong>. Every ligand in the library is docked
-                      exclusively into that site, keeping results directly comparable across compounds.
-                    </p>
-                  </AccentCard>
-
-                  <AccentCard className="p-6">
-                    <div className="flex items-center gap-3 mb-3">
-                      <Cpu className="w-5 h-5 text-primary" strokeWidth={2.5} />
-                      <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide">
-                        Cavity Table Columns
-                      </h4>
-                    </div>
-                    <ul className="text-[13px] text-muted-foreground font-medium space-y-2">
-                      <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Rank</strong> — consensus rank across all three detection tools.</span></li>
-                      <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Confidence</strong> — HIGH / MEDIUM / LOW badge based on inter-tool agreement.</span></li>
-                      <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Volume (&#8491;³)</strong> — estimated pocket volume; also determines which docking engine is assigned.</span></li>
-                      <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Center [X, Y, Z]</strong> — spatial coordinates of the pocket centroid.</span></li>
-                    </ul>
-                  </AccentCard>
-
-                  <div className="p-4 border-l-2 border-primary/40 bg-muted/30">
-                    <p className="text-[13px] text-muted-foreground font-medium leading-[1.7]">
-                      Ligand library files are accepted as individual <strong className="text-foreground">SDF / MOL2</strong> files,
-                      a multi-molecule SDF, a ZIP archive, or as a newline-delimited
-                      <strong className="text-foreground"> SMILES list</strong>. All conformers are
-                      geometry-optimised (MMFF94) before docking begins.
-                    </p>
-                  </div>
-                </div>
-              </AnimatedSection>
-
-              <AnimatedSection delay={200}>
-                <TiltCard>
-                  <img
-                    src="/batch_cavity.png"
-                    alt="Batch Dock Configure step — Consensus Cavity Site table listing pocket rank, confidence, volume and centre coordinates with one cavity selected"
-                    className="rounded-xl border border-border shadow-2xl w-full"
-                  />
-                </TiltCard>
-                <p className="text-[11px] text-muted-foreground font-medium mt-3 text-center tracking-wide uppercase">
-                  Fig. 5 — Batch Dock cavity selection table with confidence tiers
-                </p>
-              </AnimatedSection>
-
-            </div>
-          </div>
-        </section>
-
-        <div className="border-t border-border" />
-
-        {/* ══════════════════════════════════════════════
-            SECTION 3 — ACTIVE-SITE DOCKING
-        ══════════════════════════════════════════════ */}
-        <section id="active-site" className="py-24 relative">
-          <div className="max-w-5xl mx-auto px-8 md:px-12">
-
-            <AnimatedSection className="mb-12">
-              <div className="flex items-center gap-6">
-                <div className="w-[72px] h-[72px] shrink-0 bg-primary/10 flex items-center justify-center">
-                  <Grid className="w-8 h-8 text-primary" strokeWidth={2} />
-                </div>
-                <div>
-                  <h2 className="text-[16px] font-bold text-foreground tracking-wider mb-1 uppercase">Active-Site Docking</h2>
-                  <div className="text-[11px] font-bold tracking-widest text-muted-foreground uppercase">
-                    SYSTEM PROTOCOL 03 // MANUAL TARGETING
-                  </div>
-                </div>
-              </div>
-            </AnimatedSection>
-
-            <div className="grid md:grid-cols-2 gap-16 items-start">
-
-              <AnimatedSection>
-                <TiltCard>
-                  <img
-                    src="/grid.png"
-                    alt="Active-Site Docking — 3D Grid Box Viewer showing search volume positioned over protein binding pocket"
-                    className="rounded-xl border border-border shadow-2xl w-full"
-                  />
-                </TiltCard>
-                <p className="text-[11px] text-muted-foreground font-medium mt-3 text-center tracking-wide uppercase">
-                  Fig. 6 — Grid Box Viewer with axis-coloured search volume overlay
-                </p>
-              </AnimatedSection>
-
-              <AnimatedSection delay={200} className="flex flex-col gap-8">
-                <p className="text-muted-foreground font-medium leading-[1.9] text-[15px]">
-                  When the binding pocket is known a priori — from a co-crystal structure,
-                  mutagenesis data, or literature — select <strong className="text-foreground">Active-Site Docking</strong> to
-                  constrain the search volume to that specific region.
-                </p>
-
-                <div className="flex flex-col gap-5">
-                  <AccentCard className="p-6">
-                    <div className="flex items-center gap-3 mb-3">
-                      <Search className="w-5 h-5 text-primary" strokeWidth={2.5} />
-                      <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide">
-                        Grid Box Configuration
-                      </h4>
-                    </div>
-                    <p className="text-[13px] text-muted-foreground font-medium leading-[1.7]">
-                      Define the search volume by specifying the grid centre coordinates
-                      (X, Y, Z in Å) and box dimensions. Use <strong className="text-foreground">Auto-Detect</strong> to
-                      initialise the centre at the protein's geometric centroid, then manually
-                      refine to surround the residues of interest. The translucent box overlay in
-                      the Mol* viewport updates in real time.
-                    </p>
-                  </AccentCard>
-
-                  <AccentCard className="p-6">
-                    <div className="flex items-center gap-3 mb-3">
-                      <Activity className="w-5 h-5 text-primary" strokeWidth={2.5} />
-                      <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide">
-                        Automatic Engine Selection
-                      </h4>
-                    </div>
-                    <p className="text-[13px] text-muted-foreground font-medium leading-[1.7]">
-                      The docking engine is selected automatically from the grid geometry.
-                      Focused search boxes routed to <strong className="text-foreground">GNINA</strong> produce
-                      CNN-scored binding affinities; broader search volumes are handled
-                      by <strong className="text-foreground">QuickVina-W</strong>. No manual engine selection is required.
-                    </p>
-                  </AccentCard>
-
-                  <AccentCard className="p-6">
-                    <div className="flex items-center gap-3 mb-3">
-                      <Grid className="w-5 h-5 text-primary" strokeWidth={2.5} />
-                      <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide">
-                        Axis Legend
-                      </h4>
-                    </div>
-                    <div className="grid grid-cols-3 gap-3">
-                      {[
-                        { color: "#ef4444", label: "X-axis" },
-                        { color: "#22c55e", label: "Y-axis" },
-                        { color: "#3b82f6", label: "Z-axis" },
-                      ].map((c) => (
-                        <div key={c.label} className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-sm shrink-0" style={{ background: c.color }} />
-                          <span className="text-[12px] text-muted-foreground font-medium">{c.label}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </AccentCard>
-                </div>
-              </AnimatedSection>
-
-            </div>
-          </div>
-        </section>
-
-        <div className="border-t border-border" />
-
-        {/* ══════════════════════════════════════════════
-            SECTION 4 — RESULTS & EXPORTS
-        ══════════════════════════════════════════════ */}
-        <section id="results" className="py-24 relative">
-          <div className="max-w-5xl mx-auto px-8 md:px-12">
-
-            <AnimatedSection className="mb-12">
-              <div className="flex items-center gap-6">
-                <div className="w-[72px] h-[72px] shrink-0 bg-primary/10 flex items-center justify-center">
-                  <LayoutDashboard className="w-8 h-8 text-primary" strokeWidth={2} />
-                </div>
-                <div>
-                  <h2 className="text-[16px] font-bold text-foreground tracking-wider mb-1 uppercase">Results & Exports</h2>
-                  <div className="text-[11px] font-bold tracking-widest text-muted-foreground uppercase">
-                    SYSTEM PROTOCOL 04 // RESULT ANALYTICS
-                  </div>
-                </div>
-              </div>
-            </AnimatedSection>
-
-            <AnimatedSection delay={100} className="mb-10">
-              <p className="text-muted-foreground font-medium leading-[1.9] text-[15px] max-w-3xl">
-                On completion, all docked poses are presented in an interactive analysis environment.
-                Results are grouped by cavity and ordered by binding affinity (kcal/mol, most negative first).
-              </p>
-            </AnimatedSection>
-
-            {/* 3D Viewer + 2D Interactions */}
-            <div className="grid md:grid-cols-2 gap-8 mb-12">
-
-              <AnimatedSection delay={100} className="h-full">
-                <div className="relative p-1 border border-border rounded-sm bg-muted/20 h-full flex flex-col">
-                  <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-[2.5px] border-l-[2.5px] border-primary" />
-                  <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b-[2.5px] border-r-[2.5px] border-primary" />
-                  <div className="p-5 flex flex-col h-full">
-                    <div className="flex items-center gap-3 mb-3">
-                      <Target className="w-5 h-5 text-primary" strokeWidth={2.5} />
-                      <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide">
-                        3D Pose Viewer
-                      </h4>
-                    </div>
-                    {/* mol.png is a 3840×2160 Mol* export — crop into the upper-left
-                        quadrant where the protein-ligand complex sits */}
-                    <div
-                      className="rounded-lg border border-border mb-4 w-full overflow-hidden"
-                      style={{ aspectRatio: "16/9" }}
-                    >
-                      <img
-                        src="/mol.png"
-                        alt="Mol* 3D viewer — protein shown as cartoon ribbon with docked ligand in ball-and-stick, binding residues labelled"
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                          objectPosition: "35% 30%",
-                        }}
-                      />
-                    </div>
-                    <p className="text-[13px] text-muted-foreground font-medium leading-[1.7] mt-auto">
-                      Protein–ligand complexes are rendered in Mol* with residue labels, non-covalent
-                      interaction contacts, and full camera control (rotate / pan / zoom). Representation
-                      style and colour scheme are adjustable via the viewer toolbar.
-                    </p>
-                  </div>
-                </div>
-                <p className="text-[11px] text-muted-foreground font-medium mt-2 text-center tracking-wide uppercase">
-                  Fig. 7 — 3D binding complex with pocket residues labelled
-                </p>
-              </AnimatedSection>
-
-              <AnimatedSection delay={200} className="h-full">
-                <div className="relative p-1 border border-border rounded-sm bg-muted/20 h-full flex flex-col">
-                  <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-[2.5px] border-l-[2.5px] border-primary" />
-                  <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b-[2.5px] border-r-[2.5px] border-primary" />
-                  <div className="p-5 flex flex-col h-full">
-                    <div className="flex items-center gap-3 mb-3">
-                      <FileText className="w-5 h-5 text-primary" strokeWidth={2.5} />
-                      <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide">
-                        2D Interaction Map
-                      </h4>
-                    </div>
-                    <img
-                      src="/2d_interaction.png"
-                      alt="2D interaction diagram with colour-coded residue nodes: hydrogen bonds (green), salt bridges (orange), van der Waals (grey)"
-                      className="rounded-lg shadow-sm border border-border mb-4 w-full"
-                    />
-                    <p className="text-[13px] text-muted-foreground font-medium leading-[1.7] mt-auto">
-                      Automatically generated per pose using ProLIF and RDKit. Residue nodes are
-                      colour-coded by interaction type — hydrogen bond, salt bridge, π-cation,
-                      attractive charge, and van der Waals — with binding affinity annotated
-                      at the bottom of the diagram.
-                    </p>
-                  </div>
-                </div>
-                <p className="text-[11px] text-muted-foreground font-medium mt-2 text-center tracking-wide uppercase">
-                  Fig. 8 — 2D interaction map with colour-coded residue contacts
-                </p>
-              </AnimatedSection>
-
-            </div>
-
-            {/* Binding Cavities Table */}
-            <AnimatedSection delay={250} className="mb-12">
-              <div className="relative p-1 border border-border rounded-sm bg-muted/20 overflow-hidden">
-                <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-[2.5px] border-l-[2.5px] border-primary" />
-                <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b-[2.5px] border-r-[2.5px] border-primary" />
-                <div className="bg-card p-2">
-                  <img
-                    src="/table.png"
-                    alt="Binding Cavities table listing cavity IDs, docking modes, affinities in kcal/mol, pocket centres, and per-pose view/download actions"
-                    className="rounded border border-border shadow-sm w-full mx-auto"
-                  />
-                </div>
-              </div>
-              <p className="text-[11px] text-muted-foreground font-medium mt-3 text-center tracking-wide uppercase">
-                Fig. 9 — Binding Cavities table ranked by affinity with cavity IDs and spatial coordinates
-              </p>
-            </AnimatedSection>
+        <section id="exports" className="py-20 relative">
+          <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
 
             {/* Export Details */}
             <AnimatedSection delay={300}>
@@ -895,10 +565,10 @@ const Documentation = () => {
                     <h4 className="text-[12px] font-bold text-foreground uppercase tracking-widest mb-3">
                       2D Interaction Map Export
                     </h4>
-                    <ul className="text-[13px] text-muted-foreground font-medium space-y-3">
+                    <ul className="text-[13px] text-muted-foreground font-medium space-y-3 mb-4">
                       <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />Switch to the <em>2D Interactions</em> tab.</li>
-                      <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />Use the pose selector to navigate between conformations.</li>
-                      <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />Click the download icon to save a lossless SVG ready for publication.</li>
+                      <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />Toggle contact distance annotations and bond type color matches.</li>
+                      <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />Click the download icon to save a publication-ready SVG.</li>
                     </ul>
                   </div>
                 </div>

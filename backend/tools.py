@@ -1884,43 +1884,92 @@ def parse_and_prepare_batch_sdf(sdf_path: str, session_dir: Path) -> list:
 
 def generate_batch_ligands_from_smiles(smiles_list: list, session_dir: Path) -> list:
     """
-    Generate 3D coordinates and SDF files from a list of SMILES strings.
+    Generate 3D coordinates and SDF files from a list of SMILES strings or drug names.
     Each smiles_list item is a dict: {"smiles": "...", "name": "..."}
+    Supports SMILES -> 3D and Drug Name -> PubChem lookup -> 3D conversion.
     """
+    from rdkit import Chem
     from rdkit.Chem import Descriptors, rdMolDescriptors, AllChem
     import re
+    import json
+    import urllib.request
+    import urllib.parse
     
     ligands = []
     
     for idx, item in enumerate(smiles_list):
-        smiles = item.get("smiles", "").strip()
-        name = item.get("name", "").strip()
-        if not smiles:
+        raw_smiles = item.get("smiles", "").strip()
+        raw_name = item.get("name", "").strip()
+        
+        if not raw_smiles and not raw_name:
             continue
             
-        if not name:
-            name = f"smiles_{idx+1}"
+        mol = None
+        smiles = raw_smiles
+        name = raw_name
+
+        # 1. Try parsing raw_smiles directly with RDKit
+        if raw_smiles:
+            mol = Chem.MolFromSmiles(raw_smiles)
+
+        # 2. If raw_smiles didn't parse, check if raw_name is valid SMILES (swapped name/smiles)
+        if mol is None and raw_name:
+            mol = Chem.MolFromSmiles(raw_name)
+            if mol is not None:
+                smiles = raw_name
+                name = raw_smiles
+
+        # 3. If still None, try PubChem REST API lookup for drug name
+        if mol is None:
+            drug_query = raw_name or raw_smiles
+            if drug_query:
+                try:
+                    encoded_query = urllib.parse.quote(drug_query)
+                    url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{encoded_query}/property/CanonicalSMILES/JSON"
+                    req = urllib.request.Request(url, headers={'User-Agent': 'Salidock/1.0'})
+                    with urllib.request.urlopen(req, timeout=4) as resp:
+                        data = json.loads(resp.read().decode('utf-8'))
+                        props = data.get("PropertyTable", {}).get("Properties", [])
+                        if props and "CanonicalSMILES" in props[0]:
+                            smiles = props[0]["CanonicalSMILES"]
+                            mol = Chem.MolFromSmiles(smiles)
+                            if not name or name.startswith("smiles_"):
+                                name = drug_query
+                except Exception as pubchem_err:
+                    logger.warning(f"PubChem lookup for '{drug_query}' failed: {pubchem_err}")
+
+        if mol is None:
+            logger.warning(f"Failed to parse SMILES or drug name at index {idx}: SMILES='{raw_smiles}', Name='{raw_name}'")
+            continue
             
-        safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', name)[:50]
+        if not name or name.startswith("smiles_"):
+            name = f"Drug_{idx+1}"
+            
+        safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', name)[:50].strip('_')
         if not safe_name:
-            safe_name = f"smiles_{idx+1}"
+            safe_name = f"Drug_{idx+1}"
             
         try:
-            mol = Chem.MolFromSmiles(smiles)
-            if mol is None:
-                logger.warning(f"Invalid SMILES string at index {idx}: {smiles}")
-                continue
-                
             # Add hydrogens
             mol = Chem.AddHs(mol)
+            mol.SetProp("_Name", name)
             
-            # Embed molecule to generate 3D coordinates
-            embed_status = AllChem.EmbedMolecule(mol, AllChem.ETKDG())
+            # Embed molecule to generate 3D coordinates with ETKDG + fallback
+            params = AllChem.ETKDGv3() if hasattr(AllChem, 'ETKDGv3') else AllChem.ETKDG()
+            params.randomSeed = 0xf00d
+            embed_status = AllChem.EmbedMolecule(mol, params)
             if embed_status == -1:
-                embed_status = AllChem.EmbedMolecule(mol)
+                embed_status = AllChem.EmbedMolecule(mol, useRandomCoordinates=True)
                 if embed_status == -1:
-                    logger.warning(f"Failed to generate 3D coordinates for {name}")
-                    continue
+                    embed_status = AllChem.EmbedMolecule(mol)
+                    
+            if embed_status != -1:
+                try:
+                    AllChem.MMFFOptimizeMolecule(mol, maxIters=200)
+                except Exception:
+                    pass
+            else:
+                AllChem.Compute2DCoords(mol)
                     
             # Save single mol to SDF file in the session
             single_sdf_name = f"batch_ligand_{idx}_{safe_name}.sdf"
@@ -1954,8 +2003,11 @@ def generate_batch_ligands_from_smiles(smiles_list: list, session_dir: Path) -> 
                     "heavy_atoms": heavy_atoms
                 }
             })
+            logger.info(f"Generated 3D ligand '{name}' ({safe_name})")
         except Exception as e:
-            logger.error(f"Error converting SMILES {smiles}: {e}")
+            logger.error(f"Error converting molecule {name}: {e}", exc_info=True)
             continue
+            
+    return ligands
             
     return ligands

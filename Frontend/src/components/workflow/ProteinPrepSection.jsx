@@ -1,5 +1,6 @@
 import React from 'react';
-import { FileText, CheckCircle2, Loader2 } from 'lucide-react';
+import { FileText, CheckCircle2 } from 'lucide-react';
+import { AnimatedCircularProgressBar } from '../ui/animated-circular-progress-bar';
 
 export default function ProteinPrepSection({
     showProteinPrep,
@@ -112,7 +113,7 @@ export default function ProteinPrepSection({
                 className="px-5 py-2.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-2"
             >
                 {loading && loadingMessage?.includes('Preparing protein') ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> Preparing…</>
+                    <><AnimatedCircularProgressBar size={16} strokeWidth={3} /> Preparing…</>
                 ) : proteinPrepared ? (
                     <><CheckCircle2 className="w-4 h-4" aria-hidden="true" /> Protein Prepared</>
                 ) : (

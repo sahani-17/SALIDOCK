@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Grid3x3, Play, Loader2, Wand2, Target, ArrowRight, Upload, Atom, Dna, CheckCircle2, Trash2, FileText, AlertCircle } from 'lucide-react';
+import { Grid3x3, Play, Wand2, Target, ArrowRight, Upload, Atom, Dna, CheckCircle2, Trash2, FileText, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../services/api';
 import GridBoxViewer from '../components/GridBoxViewer';
@@ -9,6 +9,7 @@ import WorkflowHeader from '../components/workflow/WorkflowHeader';
 import StatusBanners from '../components/workflow/StatusBanners';
 import Stepper from '../components/workflow/Stepper';
 import Footer from '../components/Footer';
+import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
 
 const STEPS = [
     { key: 'input', label: 'Input' },
@@ -46,7 +47,36 @@ function BatchDock() {
         configure: configureDone,
     }), [inputDone, prepareDone, configureDone]);
 
-    // Auto-advance stepper as gates open
+    // Ligand-count based progress engine
+    const totalLigandsCount = dockingStatus?.total || workflow.batchLigands?.length || 1;
+    const completedLigandsCount = dockingStatus?.completed || 0;
+
+    const completedPercent = Math.round((completedLigandsCount / totalLigandsCount) * 100);
+    const nextLigandPercent = Math.min(98, Math.round(((completedLigandsCount + 0.92) / totalLigandsCount) * 100));
+
+    const [batchProgress, setBatchProgress] = useState(0);
+
+    useEffect(() => {
+        if (!dockingRunning && !dockingStatus) {
+            setBatchProgress(0);
+            return;
+        }
+
+        const timer = setInterval(() => {
+            setBatchProgress((prev) => {
+                if (prev < completedPercent) {
+                    return prev + 1;
+                }
+                if (prev < nextLigandPercent && dockingRunning) {
+                    return prev + 1;
+                }
+                return prev;
+            });
+        }, 350);
+
+        return () => clearInterval(timer);
+    }, [completedPercent, nextLigandPercent, dockingRunning, dockingStatus]);
+
     useEffect(() => {
         if (inputDone && stepIndex < 1) setStepIndex(1);
     }, [inputDone]);
@@ -174,14 +204,13 @@ function BatchDock() {
         }`;
 
     return (
-        <div className="min-h-screen bg-background flex flex-col pt-16">
+        <div className="min-h-screen bg-background flex flex-col">
             <WorkflowHeader
-                eyebrow="Workflow"
                 title="Batch Molecular Docking"
                 subtitle="Dock multiple chemical ligands against a single target protein receptor pocket."
             />
 
-            <div className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 pb-16">
+            <div className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pb-16">
                 <Stepper steps={STEPS} currentIndex={stepIndex} completed={completed} onStepClick={setStepIndex} />
 
                 <StatusBanners
@@ -206,9 +235,9 @@ function BatchDock() {
                             </div>
 
                             {!workflow.sessionId && (
-                                <div className="mb-5 p-3 rounded-xl border border-primary/20 bg-primary/5 flex items-start gap-2">
-                                    <Loader2 size={14} className="text-primary mt-0.5 animate-spin" aria-hidden="true" />
-                                    <p className="text-xs text-muted-foreground">Preparing docking session...</p>
+                                <div className="mb-5 p-3 rounded-xl border border-primary/20 bg-primary/5 flex items-center gap-2">
+                                    <AnimatedCircularProgressBar size={16} strokeWidth={3} />
+                                    <p className="text-xs text-muted-foreground font-medium">Preparing docking session...</p>
                                 </div>
                             )}
 
@@ -306,7 +335,7 @@ function BatchDock() {
                                                         <div className="flex flex-col items-center gap-2">
                                                             <CheckCircle2 size={24} className="text-primary" aria-hidden="true" />
                                                             <span className="text-sm font-medium text-foreground">
-                                                                Uploaded {workflow.batchLigands.length} ligand(s)
+                                                                Uploaded {workflow.batchLigands?.length || 0} ligand(s)
                                                             </span>
                                                         </div>
                                                     ) : (
@@ -318,16 +347,16 @@ function BatchDock() {
                                                     )}
                                                 </div>
                                             </label>
-                                            {workflow.batchLigands.length > 0 && (
+                                            {(workflow.batchLigands?.length || 0) > 0 && (
                                                 <div className="mt-3 max-h-32 overflow-y-auto border border-border bg-card rounded-xl p-2.5 text-xs space-y-1">
-                                                    {workflow.batchLigands.slice(0, 10).map((l, i) => (
+                                                    {(workflow.batchLigands || []).slice(0, 10).map((l, i) => (
                                                         <div key={i} className="flex justify-between text-muted-foreground font-mono-code truncate">
                                                             <span>{i+1}. {l.name}</span>
                                                             <span>{l.properties?.mw ? `${l.properties.mw.toFixed(1)} Da` : ''}</span>
                                                         </div>
                                                     ))}
-                                                    {workflow.batchLigands.length > 10 && (
-                                                        <p className="text-[10px] text-muted-foreground italic text-center pt-1 border-t border-border">...and {workflow.batchLigands.length - 10} more molecules</p>
+                                                    {(workflow.batchLigands?.length || 0) > 10 && (
+                                                        <p className="text-[10px] text-muted-foreground italic text-center pt-1 border-t border-border">...and {(workflow.batchLigands?.length || 0) - 10} more molecules</p>
                                                     )}
                                                 </div>
                                             )}
@@ -347,8 +376,8 @@ function BatchDock() {
                                             <button type="button" onClick={workflow.handleBatchSmilesSubmit} disabled={!workflow.sessionId || !workflow.smilesInput.trim() || workflow.loading} className={btnPrimary}>
                                                 Generate & Validate Ligands
                                             </button>
-                                            {workflow.batchLigands.length > 0 && (
-                                                <p className="text-xs text-primary font-semibold">✓ Generated and saved {workflow.batchLigands.length} ligands from SMILES list</p>
+                                            {(workflow.batchLigands?.length || 0) > 0 && (
+                                                <p className="text-xs text-primary font-semibold">✓ Generated and saved {workflow.batchLigands?.length || 0} ligands from SMILES list</p>
                                             )}
                                         </div>
                                     )}
@@ -482,7 +511,7 @@ function BatchDock() {
 
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center bg-background border border-border p-3.5 rounded-xl text-sm">
-                                    <span className="text-muted-foreground">Molecules loaded in library: <span className="font-semibold text-foreground font-mono-code">{workflow.batchLigands.length}</span></span>
+                                    <span className="text-muted-foreground">Molecules loaded in library: <span className="font-semibold text-foreground font-mono-code">{workflow.batchLigands?.length || 0}</span></span>
                                     <button
                                         onClick={workflow.handlePrepareBatchLigands}
                                         disabled={workflow.loading || prepareDone}
@@ -584,9 +613,9 @@ function BatchDock() {
                             {dockingMode === 'cavity' && (
                                 <div className="space-y-4">
                                     {detectingCavities ? (
-                                        <div className="flex flex-col items-center py-6 text-muted-foreground space-y-2">
-                                            <Loader2 size={24} className="animate-spin text-primary" />
-                                            <p className="text-xs">Detecting surface cavities using fpocket + P2Rank + PUResNet...</p>
+                                        <div className="flex flex-col items-center py-6 text-muted-foreground gap-3 bg-muted/20 border border-border rounded-xl">
+                                            <AnimatedCircularProgressBar label="Predicting" size={68} strokeWidth={6} />
+                                            <p className="text-xs font-medium text-foreground">Detecting surface cavities using fpocket + P2Rank + PUResNet...</p>
                                         </div>
                                     ) : cavities.length > 0 ? (
                                         <div className="overflow-x-auto border border-border rounded-xl bg-background">
@@ -701,41 +730,53 @@ function BatchDock() {
                                     </button>
                                 </div>
                             ) : (
-                                <div className="space-y-4 border border-border bg-background p-4 rounded-xl">
-                                    <div className="flex justify-between items-center text-xs">
-                                        <span className="font-semibold uppercase tracking-wider text-muted-foreground">Docking Progress</span>
-                                        <span className="font-mono-code font-bold">
-                                            {dockingStatus?.completed || 0} / {dockingStatus?.total || workflow.batchLigands.length} docked
-                                        </span>
-                                    </div>
+                                <div className="space-y-6 border border-border bg-card p-5 rounded-2xl flex flex-col md:flex-row items-center gap-6 shadow-elevated">
+                                    <AnimatedCircularProgressBar
+                                        value={batchProgress}
+                                        sublabel={`${dockingStatus?.completed || 0}/${dockingStatus?.total || workflow.batchLigands?.length || 0}`}
+                                        label="Docked"
+                                        size={85}
+                                        strokeWidth={7}
+                                        gaugePrimaryColor="hsl(var(--primary))"
+                                        gaugeSecondaryColor="hsl(var(--border))"
+                                    />
 
-                                    <div className="w-full bg-border rounded-full h-2 overflow-hidden">
-                                        <div 
-                                            className="bg-primary h-2 rounded-full transition-all duration-300 animate-pulse"
-                                            style={{ width: `${((dockingStatus?.completed || 0) / (dockingStatus?.total || workflow.batchLigands.length)) * 100}%` }}
-                                        />
-                                    </div>
+                                    <div className="flex-1 w-full space-y-3">
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="font-semibold uppercase tracking-wider text-muted-foreground">Docking Progress</span>
+                                            <span className="font-mono-code font-bold text-primary">
+                                                {dockingStatus?.completed || 0} / {dockingStatus?.total || workflow.batchLigands?.length || 0} molecules docked
+                                            </span>
+                                        </div>
 
-                                    <div className="mt-4 max-h-60 overflow-y-auto text-xs space-y-1.5 divide-y divide-border/40">
-                                        {dockingStatus?.results?.map((res, i) => (
-                                            <div key={i} className="flex justify-between items-center pt-1.5">
-                                                <span className="font-mono-code font-semibold text-muted-foreground">{res.name}</span>
-                                                <div className="flex items-center gap-2">
-                                                    {res.status === 'completed' && (
-                                                        <span className="text-xs font-bold text-primary font-mono-code">{res.affinity.toFixed(2)} kcal/mol</span>
-                                                    )}
-                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${res.status === 'completed' ? 'bg-primary/10 text-primary' : 'bg-destructive/10 text-destructive'}`}>
-                                                        {res.status === 'completed' ? 'Success' : 'Failed'}
-                                                    </span>
+                                        <div className="w-full bg-border/60 rounded-full h-2 overflow-hidden">
+                                            <div 
+                                                className="bg-primary h-2 rounded-full transition-all duration-300 ease-out"
+                                                style={{ width: `${batchProgress}%` }}
+                                            />
+                                        </div>
+
+                                        <div className="max-h-48 overflow-y-auto text-xs space-y-1.5 divide-y divide-border/40 pr-1">
+                                            {dockingStatus?.results?.map((res, i) => (
+                                                <div key={i} className="flex justify-between items-center pt-1.5">
+                                                    <span className="font-mono-code font-semibold text-muted-foreground">{res.name}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        {res.status === 'completed' && (
+                                                            <span className="text-xs font-bold text-primary font-mono-code">{res.affinity?.toFixed(2)} kcal/mol</span>
+                                                        )}
+                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${res.status === 'completed' ? 'bg-primary/10 text-primary' : 'bg-destructive/10 text-destructive'}`}>
+                                                            {res.status === 'completed' ? 'Success' : 'Failed'}
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ))}
-                                        {dockingRunning && (!dockingStatus || dockingStatus.results?.length < workflow.batchLigands.length) && (
-                                            <div className="flex items-center gap-2 pt-2 text-muted-foreground text-xs italic animate-pulse">
-                                                <Loader2 size={12} className="animate-spin text-primary" />
-                                                <span>Running calculations on compute pool...</span>
-                                            </div>
-                                        )}
+                                            ))}
+                                            {dockingRunning && (!dockingStatus || dockingStatus.results?.length < (workflow.batchLigands?.length || 0)) && (
+                                                <div className="flex items-center gap-2 pt-2 text-muted-foreground text-xs italic">
+                                                    <AnimatedCircularProgressBar size={16} strokeWidth={3} />
+                                                    <span className="font-medium text-foreground">Running calculations on compute pool...</span>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             )}

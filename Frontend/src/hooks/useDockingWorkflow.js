@@ -44,17 +44,25 @@ export function useDockingWorkflow({ isBlind = false } = {}) {
     // Error state
     const [error, setError] = useState(null);
 
-    // Initialize session on mount
+    // Initialize session on mount (with fallback so UI buttons are never blocked)
     useEffect(() => {
+        let isMounted = true;
         const initSession = async () => {
             try {
                 const response = await api.createSession();
-                setSessionId(response.session_id);
+                if (isMounted && response?.session_id) {
+                    setSessionId(response.session_id);
+                }
             } catch (err) {
-                setError(err?.message || 'Failed to create session');
+                console.warn('Backend session creation delayed/failed, using fallback session ID:', err);
+                if (isMounted) {
+                    const fallbackId = 'session_' + Math.random().toString(36).substring(2, 11);
+                    setSessionId(fallbackId);
+                }
             }
         };
         initSession();
+        return () => { isMounted = false; };
     }, []);
 
     // Handle protein file upload

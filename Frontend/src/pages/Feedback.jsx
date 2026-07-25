@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Loader2, Star, MessageSquareText, Quote } from "lucide-react";
+import { Star, MessageSquareText, Quote } from "lucide-react";
+import { AnimatedCircularProgressBar } from "../components/ui/animated-circular-progress-bar";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { supabase } from "../lib/supabase";
@@ -77,7 +77,7 @@ const Feedback = () => {
 
         {loading ? (
           <div className="py-20 flex items-center justify-center">
-            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+            <AnimatedCircularProgressBar label="Feedback" size={68} strokeWidth={6} />
           </div>
         ) : error ? (
           <div className="bg-white border border-red-200 rounded-xl p-4 text-red-600 text-sm">

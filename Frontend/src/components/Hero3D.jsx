@@ -1,12 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
 import MolecularViewer from "./MolecularViewer";
+import { AnimatedCircularProgressBar } from "./ui/animated-circular-progress-bar";
 
 /**
- * Hero3D — Loads a small demo protein-ligand complex from RCSB and
- * renders it with the same Mol* pipeline the workflow uses.
- *
- * Default: 1STP (streptavidin + biotin) — small, ligand-bound, iconic.
+ * Hero3D — Loads demo protein-ligand complex (PDB 1STP: streptavidin + biotin)
+ * Renders a STILL 3D protein & ligand viewer without auto-rotation.
  */
 const Hero3D = ({ pdbId = "1STP" }) => {
     const viewerRef = useRef(null);
@@ -33,29 +31,12 @@ const Hero3D = ({ pdbId = "1STP" }) => {
         };
     }, [pdbId]);
 
-    // Gentle idle rotation
-    useEffect(() => {
-        if (!pdbData) return;
-        const t = setTimeout(() => {
-            const plugin = viewerRef.current?.getPlugin?.();
-            if (!plugin) return;
-            try {
-                plugin.canvas3d?.setProps({ trackball: { ...plugin.canvas3d.props.trackball, animate: { name: "spin", params: { speed: 0.15 } } } });
-            } catch {
-                /* noop */
-            }
-        }, 900);
-        return () => clearTimeout(t);
-    }, [pdbData]);
-
     return (
-        <div className="relative w-full h-full bg-card">
+        <div className="relative w-full h-full min-h-[360px] bg-card rounded-xl overflow-hidden flex flex-col">
             {!pdbData && !error && (
-                <div className="absolute inset-0 flex items-center justify-center bg-card z-10">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Loading {pdbId}…
-                    </div>
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-card z-10 gap-2">
+                    <AnimatedCircularProgressBar label="RCSB" size={64} strokeWidth={5} />
+                    <span className="text-xs font-semibold text-foreground">Loading {pdbId}…</span>
                 </div>
             )}
             {error && (

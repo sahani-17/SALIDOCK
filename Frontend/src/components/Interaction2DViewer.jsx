@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Download } from 'lucide-react';
+import { Download, Ruler } from 'lucide-react';
 import { API_BASE_URL } from '../services/api';
 
 const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
@@ -10,6 +10,7 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
   const [error, setError]                   = useState(null);
   const [isCompareMode, setIsCompareMode]   = useState(false);     // toggle compare panel
   const [comparePose, setComparePose]       = useState(null);      // which pose to compare against
+  const [showDistances, setShowDistances]   = useState(false);     // toggle bond distances display
 
   // Pan + zoom state for PRIMARY viewer
   const [scale, setScale]   = useState(1);
@@ -284,11 +285,14 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
           max-width: 100% !important;
           max-height: 100% !important;
         }
+        .bond-distance-label {
+          display: ${showDistances ? "inline !important" : "none !important"};
+        }
       `}</style>
       {/* ── TOOLBAR ─────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 flex-shrink-0">
 
-        {/* Left: download + reset view */}
+        {/* Left: download + reset view + distance toggle */}
         <div className="flex items-center gap-2">
           {/* Download primary PNG */}
           <button
@@ -307,6 +311,21 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
             title="Reset view"
           >
             Reset
+          </button>
+
+          {/* Toggle Bond Distances */}
+          <button
+            onClick={() => setShowDistances(prev => !prev)}
+            disabled={!svgContent}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold transition-all ${
+              showDistances
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-300"
+            }`}
+            title="Toggle Bond Distances (Å)"
+          >
+            <Ruler className="w-3.5 h-3.5" />
+            {showDistances ? "Distances ON" : "Show Distances"}
           </button>
         </div>
 

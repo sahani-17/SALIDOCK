@@ -1314,9 +1314,42 @@ def _group_by_residue_raw(interactions: list) -> list[ResidueGroup]:
 # SVG drawing
 # --------------------------------------------------------------------------
 
+def _shorten(x1: float, y1: float, x2: float, y2: float, d1: float = 0.0, d2: float = 0.0) -> Tuple[float, float, float, float]:
+    dx = x2 - x1
+    dy = y2 - y1
+    dist = math.hypot(dx, dy) or 1.0
+    ux = dx / dist
+    uy = dy / dist
+    return x1 + ux * d1, y1 + uy * d1, x2 - ux * d2, y2 - uy * d2
+
+
 def _draw_line(g: ResidueGroup, node_radius: float) -> str:
     x1, y1, x2, y2 = _shorten(g.origin_x, g.origin_y, g.node_x, g.node_y, d2=node_radius + 8.0)
-    return f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" {LINE_STYLE}/>'
+    colors = NODE_COLORS.get(g.primary_type, NODE_COLORS["van_der_waals"])
+    stroke_color = colors["stroke"]
+    
+    # Calculate perpendicular offset for distance label
+    dx = x2 - x1
+    dy = y2 - y1
+    dist_len = math.hypot(dx, dy) or 1.0
+    nx = -dy / dist_len
+    ny = dx / dist_len
+    
+    mid_x = (x1 + x2) / 2.0 + nx * 9.0
+    mid_y = (y1 + y2) / 2.0 + ny * 9.0
+    
+    dist_val = g.min_dist
+    dist_text = f"{dist_val:.2f} \u00c5" if dist_val < 900 else ""
+    
+    line_svg = f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="{stroke_color}" stroke-width="1.6" stroke-dasharray="5,3.5" fill="none"/>'
+    dist_svg = ""
+    if dist_text:
+        dist_svg = (
+            f'<text x="{mid_x:.1f}" y="{mid_y:.1f}" class="bond-distance-label" '
+            f'fill="{stroke_color}" font-family="{FONT_FAMILY}" font-size="9.5" font-weight="700" '
+            f'text-anchor="middle">{dist_text}</text>'
+        )
+    return line_svg + dist_svg
 
 
 def _draw_node(g: ResidueGroup, node_radius: float) -> str:

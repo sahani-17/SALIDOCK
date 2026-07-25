@@ -5,10 +5,15 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localho
  * `error`) so callers receive the *real* reason instead of a generic string.
  * Throws an Error whose `.message` is the backend-provided message.
  */
-async function request(path, { method = 'GET', body, fallback = 'Request failed' } = {}) {
+async function request(path, { method = 'GET', body, headers = {}, fallback = 'Request failed' } = {}) {
   let response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, { method, body });
+    const defaultHeaders = (body && !(body instanceof FormData)) ? { 'Content-Type': 'application/json' } : {};
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers: { ...defaultHeaders, ...headers },
+      body,
+    });
   } catch (networkErr) {
     throw new Error(`Network error: ${networkErr.message || 'could not reach server'}`);
   }

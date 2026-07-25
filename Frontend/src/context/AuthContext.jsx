@@ -10,23 +10,49 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      setUser(data?.session?.user ?? null);
-      setLoading(false);
-    });
+    // Safety fallback: Never allow auth loading to block the app for >1.5s
+    const timer = setTimeout(() => {
+      if (mounted && loading) {
+        setLoading(false);
+      }
+    }, 1500);
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    try {
+      if (supabase && supabase.auth) {
+        supabase.auth.getSession()
+          .then(({ data }) => {
+            if (!mounted) return;
+            clearTimeout(timer);
+            setUser(data?.session?.user ?? null);
+            setLoading(false);
+          })
+          .catch((err) => {
+            console.warn("Auth getSession error:", err);
+            if (!mounted) return;
+            clearTimeout(timer);
+            setLoading(false);
+          });
 
-    return () => {
-      mounted = false;
-      subscription?.unsubscribe();
-    };
+        const {
+          data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, session) => {
+          if (!mounted) return;
+          setUser(session?.user ?? null);
+          setLoading(false);
+        });
+
+        return () => {
+          mounted = false;
+          clearTimeout(timer);
+          subscription?.unsubscribe();
+        };
+      } else {
+        setLoading(false);
+      }
+    } catch (err) {
+      console.warn("Auth initialization error:", err);
+      if (mounted) setLoading(false);
+    }
   }, []);
 
   const value = useMemo(

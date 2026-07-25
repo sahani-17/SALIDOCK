@@ -1,5 +1,6 @@
 import React from 'react';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
+import { AnimatedCircularProgressBar } from '../ui/animated-circular-progress-bar';
 
 export default function StatusBanners({ error, setError, loading, loadingMessage }) {
     return (
@@ -21,7 +22,7 @@ export default function StatusBanners({ error, setError, loading, loadingMessage
 
             {loading && (
                 <div className="mb-6 p-4 bg-primary/5 border border-primary/20 rounded-xl flex items-center gap-3">
-                    <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                    <AnimatedCircularProgressBar size={24} strokeWidth={3.5} />
                     <p className="text-sm font-medium text-foreground">{loadingMessage}</p>
                 </div>
             )}

@@ -6,7 +6,7 @@ const Undermaintence = () => {
 
 	return (
 		<div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-blue-50 px-6 py-10 md:px-10">
-			<div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-5xl items-center justify-center">
+			<div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-7xl items-center justify-center">
 				<div className="w-full overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_30px_80px_-40px_rgba(15,23,42,0.35)]">
 					<div className="grid gap-0 lg:grid-cols-2">
 						<div className="relative flex flex-col justify-between border-b border-slate-100 bg-slate-900 p-8 text-white lg:border-b-0 lg:border-r lg:border-slate-800 md:p-10">

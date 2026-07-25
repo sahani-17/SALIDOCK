@@ -1,5 +1,6 @@
 import React from 'react';
-import { Download, Eye, Loader2 } from 'lucide-react';
+import { Download, Eye } from 'lucide-react';
+import { AnimatedCircularProgressBar } from '../ui/animated-circular-progress-bar';
 
 export default function PosesTable({
   allPoses, filteredPoses, selectedPose, loadingViewer, downloadingPose,
@@ -69,7 +70,7 @@ export default function PosesTable({
                         } disabled:opacity-50`}
                       >
                         {loadingViewer && isSelected
-                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ? <AnimatedCircularProgressBar size={14} strokeWidth={3} />
                           : <Eye className="w-3.5 h-3.5" />}
                         {isSelected ? 'Viewing' : 'View'}
                       </button>
@@ -80,7 +81,7 @@ export default function PosesTable({
                         title="Download PDB"
                       >
                         {downloadingPose === globalIndex
-                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ? <AnimatedCircularProgressBar size={14} strokeWidth={3} />
                           : <Download className="w-3.5 h-3.5" />}
                       </button>
                     </div>

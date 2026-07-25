@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Loader2, Eye } from 'lucide-react';
+import { Eye } from 'lucide-react';
+import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
 import { api } from '../services/api';
 import MolecularViewer from '../components/MolecularViewer';
 import Interaction2DViewer from '../components/Interaction2DViewer';
@@ -27,14 +28,14 @@ function Results() {
   const [selectedCavityFilter, setSelectedCavityFilter] = useState('all');
 
 
-  // Viewer controls
+  // Viewer controls (Default: only Cavity Surface is ON, rest are OFF)
   const [proteinRepr, setProteinRepr] = useState('cartoon');
   const [ligandRepr, setLigandRepr] = useState('ball-and-stick');
   const [colorScheme, setColorScheme] = useState('chain-id');
-  const [showCavityResidues, setShowCavityResidues] = useState(true);
-  const [showCavityLabels, setShowCavityLabels] = useState(true);
-  const [showCavitySurface, setShowCavitySurface] = useState(false);
-  const [showInteractions, setShowInteractions] = useState(true);
+  const [showCavityResidues, setShowCavityResidues] = useState(false);
+  const [showCavityLabels, setShowCavityLabels] = useState(false);
+  const [showCavitySurface, setShowCavitySurface] = useState(true);
+  const [showInteractions, setShowInteractions] = useState(false);
 
   const viewerRef = useRef(null);
 
@@ -170,7 +171,7 @@ function Results() {
   };
 
   return (
-    <div className="min-h-screen bg-background pt-16">
+    <div className="min-h-screen bg-background pt-20">
       <Navbar />
       <div className="max-w-7xl mx-auto px-6 py-8">
         <section className="bg-card rounded-2xl border border-border p-6 mb-6 shadow-elevated">
@@ -247,9 +248,9 @@ function Results() {
 
               <div className="relative rounded-xl overflow-hidden border border-border bg-background/30">
                 {loadingViewer && (
-                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/75 backdrop-blur-sm rounded-xl">
-                    <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
-                    <p className="font-medium text-foreground pb-2 px-4 rounded-md shadow-sm">Loading molecular structure...</p>
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-card/85 backdrop-blur-sm rounded-xl gap-2">
+                    <AnimatedCircularProgressBar label="Pose" size={68} strokeWidth={6} />
+                    <p className="text-xs font-semibold text-foreground">Loading pose {selectedPose}...</p>
                   </div>
                 )}
                 {pdbData ? (

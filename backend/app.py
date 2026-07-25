@@ -12,7 +12,7 @@ if python_bin_dir and python_bin_dir not in os.environ.get("PATH", ""):
 # Add project root to path so 'salidock' can be imported
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Body
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -2337,7 +2337,7 @@ async def run_docking_endpoint(
         return json_error(str(e))
 
 
-from typing import List
+from typing import List, Any
 
 class SmilesItem(BaseModel):
     smiles: str
@@ -2454,22 +2454,41 @@ async def upload_batch_ligands(session_id: str, files: List[UploadFile] = File(.
         return json_error(f"Failed to upload batch ligands: {str(e)}")
 
 @app.post("/api/batch/smiles/ligands/{session_id}")
-async def upload_batch_smiles(session_id: str, request: BatchSmilesRequest):
+async def upload_batch_smiles(session_id: str, payload: Any = Body(...)):
     """
-    Generate 3D ligands from a list of SMILES strings.
+    Generate 3D ligands from a list of SMILES strings or drug names.
+    Accepts {"ligands": [...]}, a list [...], or Pydantic BatchSmilesRequest.
     """
     try:
         session_dir = get_session_dir(session_id)
         check_disk_space(required_mb=100)
         
-        smiles_list = [{"smiles": item.smiles, "name": item.name or f"smiles_{i+1}"} 
-                       for i, item in enumerate(request.ligands)]
+        raw_items = []
+        if isinstance(payload, dict):
+            raw_items = payload.get("ligands", [])
+        elif isinstance(payload, list):
+            raw_items = payload
+        elif hasattr(payload, "ligands"):
+            raw_items = payload.ligands
+
+        smiles_list = []
+        for i, item in enumerate(raw_items):
+            if isinstance(item, dict):
+                s = item.get("smiles", "")
+                n = item.get("name", "")
+            elif hasattr(item, "smiles"):
+                s = getattr(item, "smiles", "")
+                n = getattr(item, "name", "")
+            else:
+                s = str(item)
+                n = f"Drug_{i+1}"
+            smiles_list.append({"smiles": s, "name": n or f"Drug_{i+1}"})
         
         # Generate 3D coordinates and SDF files
         all_ligands_meta = tools.generate_batch_ligands_from_smiles(smiles_list, session_dir)
         
         if not all_ligands_meta:
-            raise HTTPException(status_code=400, detail="Failed to parse/generate any molecules from the SMILES list")
+            raise HTTPException(status_code=400, detail="Failed to parse/generate any 3D molecules from the input list")
             
         # Save batch metadata to session_dir
         batch_meta_file = session_dir / "batch_ligands.json"
@@ -2491,7 +2510,7 @@ async def upload_batch_smiles(session_id: str, request: BatchSmilesRequest):
         raise
     except Exception as e:
         logger.error(f"Batch SMILES generation failed: {e}", exc_info=True)
-        return json_error(f"Failed to generate ligands from SMILES: {str(e)}")
+        return json_error(f"Failed to generate ligands: {str(e)}")
 
 @app.post("/api/batch/prepare/ligands/{session_id}")
 async def prepare_batch_ligands_endpoint(session_id: str):
@@ -2949,9 +2968,25 @@ async def download_batch_results_zip(session_id: str):
             
         results = report_data.get("results", [])
         
+        # Extract inputted protein name for ZIP naming and receptor file naming
+        protein_name = "protein"
+        raw_protein = report_data.get("protein_name") or report_data.get("protein_file") or report_data.get("protein_id")
+        if not raw_protein:
+            for p_file in session_dir.glob("protein_*.*"):
+                if p_file.name not in ["protein_prepared.pdbqt", "protein_prepared.pdb"]:
+                    raw_protein = p_file.stem
+                    break
+        if raw_protein:
+            p_stem = Path(raw_protein).stem
+            if p_stem.startswith("protein_"):
+                p_stem = p_stem[8:]
+            p_clean = re.sub(r'[^a-zA-Z0-9_-]', '_', p_stem).strip('_')
+            if p_clean:
+                protein_name = p_clean
+
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-            zip_file.writestr("batch_docking_report.json", json.dumps(report_data, indent=2))
+            # Note: JSON report and README file omitted as requested
             
             csv_lines = ["Rank,Ligand Name,Best Affinity (kcal/mol),CNN Score,CNN Affinity,Ligand Efficiency,Formula,Molecular Weight"]
             sorted_completed = [r for r in results if r["status"] == "completed"]
@@ -2966,26 +3001,12 @@ async def download_batch_results_zip(session_id: str):
                 )
             zip_file.writestr("summary_report.csv", "\n".join(csv_lines))
             
-            readme = (
-                f"SALIDOCK BATCH DOCKING RESULTS\n"
-                f"==============================\n"
-                f"Session ID: {session_id}\n"
-                f"Total Ligands: {report_data['summary']['total_ligands']}\n"
-                f"Docked Successfully: {report_data['summary']['docked_successfully']}\n"
-                f"Failed: {report_data['summary']['failed']}\n"
-                f"Best Binder: {report_data['summary']['best_binder']} ({report_data['summary']['best_affinity']} kcal/mol)\n\n"
-                f"Files Structure:\n"
-                f"  - prepared_receptor.pdb / prepared_receptor.pdbqt: Prepared protein structure\n"
-                f"  - ligands/: Docking output PDBQT poses and combined complex PDBs (pose 1) for each ligand\n"
-            )
-            zip_file.writestr("README.txt", readme)
-            
             protein_pdbqt = session_dir / "protein_prepared.pdbqt"
             protein_pdb = session_dir / "protein_prepared.pdb"
             if protein_pdbqt.exists():
-                zip_file.write(str(protein_pdbqt), "prepared_receptor.pdbqt")
+                zip_file.write(str(protein_pdbqt), f"{protein_name}_prepared.pdbqt")
             if protein_pdb.exists():
-                zip_file.write(str(protein_pdb), "prepared_receptor.pdb")
+                zip_file.write(str(protein_pdb), f"{protein_name}_prepared.pdb")
                 
             for idx, lig in enumerate(results):
                 if lig["status"] != "completed":
@@ -3019,7 +3040,7 @@ async def download_batch_results_zip(session_id: str):
         return StreamingResponse(
             zip_buffer,
             media_type="application/x-zip-compressed",
-            headers={"Content-Disposition": f"attachment; filename=salidock_batch_results_{session_id}.zip"}
+            headers={"Content-Disposition": f"attachment; filename={protein_name}_docking_results.zip"}
         )
     except Exception as e:
         logger.error(f"Failed to build results ZIP: {e}", exc_info=True)

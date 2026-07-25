@@ -4,29 +4,29 @@
 
 @layer base {
   :root {
-    /* Surfaces */
-    --background: 210 40% 98%;         /* #f7fafc — off-white canvas */
-    --foreground: 222 47% 11%;         /* #0f172a — near-black ink */
+    /* Surfaces — Lab Light off-white canvas with pure white cards */
+    --background: 60 14% 97%;              /* #FAFAF7 — soft clinical off-white */
+    --foreground: 215 32% 15%;             /* #1A2433 — dark navy ink text */
 
-    --card: 0 0% 100%;                 /* #ffffff */
-    --card-foreground: 222 47% 11%;
-    --card-hover: 210 40% 96%;
+    --card: 0 0% 100%;                    /* #FFFFFF — pure white cards/panels */
+    --card-foreground: 215 32% 15%;
+    --card-hover: 60 12% 94%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 215 32% 15%;
 
-    /* Brand — sourced from the SALIDOCK wordmark */
-    --primary: 219 49% 22%;            /* #1D3054 — navy from logo "S" and "D" */
+    /* Brand — Logo Deep Navy primary, Burnt Orange accent, Olive Green secondary */
+    --primary: 213 62% 15%;                /* #0F2540 — deep navy from logo "S" & "D" */
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 219 45% 32%;
+    --primary-glow: 213 55% 25%;
 
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 11%;
+    --secondary: 60 12% 94%;
+    --secondary-foreground: 215 32% 15%;
 
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;   /* #64748b */
+    --muted: 60 12% 94%;
+    --muted-foreground: 215 14% 45%;       /* #5C6A7D — muted text */
 
-    --accent: 20 73% 45%;               /* #C55A1F — orange from logo "ALI" */
+    --accent: 24 79% 42%;                  /* #C15A17 — burnt orange from logo "ALI" */
     --accent-foreground: 0 0% 100%;
 
     /* Semantic */
@@ -34,15 +34,15 @@
     --destructive-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
-    --info: 219 49% 22%;                /* align info with brand navy */
+    --info: 213 62% 15%;
     --info-foreground: 0 0% 100%;
-    --success: 96 41% 35%;              /* #4E7F35 — green from logo "OCK" */
+    --success: 96 41% 38%;                 /* #5A8A3A — olive green from logo "OCK" */
     --success-foreground: 0 0% 100%;
 
-    /* Chrome */
-    --border: 214 32% 91%;             /* #e2e8f0 */
-    --input: 214 32% 91%;
-    --ring: 219 49% 22%;
+    /* Chrome & Grid */
+    --border: 215 16% 88%;                 /* #DCE1E8 — crisp lab border */
+    --input: 215 16% 88%;
+    --ring: 213 62% 15%;
 
     --radius: 0.75rem;
   }
@@ -133,3 +133,23 @@
 .msp-viewport-controls-panel {
   display: none !important;
 }
+
+
+/* ── Landing page: let grid receive hover through content ── */
+.landing-content {
+  pointer-events: none;
+}
+
+.landing-content nav,
+.landing-content footer,
+.landing-content a,
+.landing-content button,
+.landing-content input,
+.landing-content textarea,
+.landing-content select,
+.landing-content canvas,
+.landing-content [role="button"],
+.landing-content .interactive {
+  pointer-events: auto;
+}
+

@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Grid3x3, Play, Loader2, Wand2, Target, ArrowRight } from 'lucide-react';
+import { Grid3x3, Play, Wand2, Target, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../services/api';
 import GridBoxViewer from '../components/GridBoxViewer';
@@ -11,6 +11,7 @@ import InputSection from '../components/workflow/InputSection';
 import ProteinPrepSection from '../components/workflow/ProteinPrepSection';
 import Stepper from '../components/workflow/Stepper';
 import Footer from '../components/Footer';
+import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
 
 const STEPS = [
     { key: 'input', label: 'Input' },
@@ -31,7 +32,7 @@ function Dock() {
     const [autoDetectDone, setAutoDetectDone] = useState(false);
     const [stepIndex, setStepIndex] = useState(0);
 
-    const inputDone = workflow.uploadProgress.protein && workflow.uploadProgress.ligand;
+    const inputDone = workflow.uploadProgress?.protein && workflow.uploadProgress?.ligand;
     const configureDone = dockingMode === 'auto' ? true : autoDetectDone;
 
     const completed = useMemo(() => ({
@@ -47,6 +48,40 @@ function Dock() {
     React.useEffect(() => {
         if (workflow.proteinPrepared && stepIndex < 2) setStepIndex(2);
     }, [workflow.proteinPrepared]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const [targetProgress, setTargetProgress] = useState(0);
+    const [progressDuration, setProgressDuration] = useState(1000);
+    const [dockProgress, setDockProgress] = useState(0);
+
+    const isRunning = workflow.loading && /Detecting|docking|Running/i.test(workflow.loadingMessage);
+
+    // Time-proportional smooth progress increment engine
+    useEffect(() => {
+        if (!isRunning) {
+            if (dockProgress !== 0 && !workflow.loading) {
+                setDockProgress(0);
+                setTargetProgress(0);
+            }
+            return;
+        }
+
+        const distance = Math.max(1, targetProgress - dockProgress);
+        const tickInterval = Math.max(40, Math.round(progressDuration / distance));
+
+        const timer = setInterval(() => {
+            setDockProgress((prev) => {
+                if (prev < targetProgress) {
+                    return prev + 1;
+                } else if (prev < 95 && isRunning) {
+                    // Creep up slowly while waiting for backend execution
+                    return prev + 1;
+                }
+                return prev;
+            });
+        }, tickInterval);
+
+        return () => clearInterval(timer);
+    }, [targetProgress, progressDuration, isRunning, workflow.loading, dockProgress]);
 
     const handleAutoDetectCenter = async () => {
         workflow.setLoading(true);
@@ -66,30 +101,52 @@ function Dock() {
 
     const handleRunDocking = async () => {
         workflow.setLoading(true);
+        setDockProgress(1);
         try {
             let dockingData = {};
             if (dockingMode === 'auto') {
-                workflow.setLoadingMessage('Detecting binding sites (top 5 cavities)...');
+                workflow.setLoadingMessage('Detecting binding sites (surface cavities & pocket mapping)...');
+                // Phase 1: Cavity Detection slowly goes 1% -> 20% over 22s (15-30s window)
+                setTargetProgress(20);
+                setProgressDuration(22000);
+
                 const response = await api.detectCavities(workflow.sessionId);
                 const cavities = response.cavities || [];
                 if (cavities.length === 0) throw new Error('No cavities detected on the protein surface');
                 dockingData.cavity_indices = cavities.map(c => c.cavity_id);
-                workflow.setLoadingMessage(`Running docking on ${cavities.length} cavities...`);
+
+                workflow.setLoadingMessage(`Running docking on ${cavities.length} detected cavities...`);
             } else {
-                workflow.setLoadingMessage('Calculating grid parameters...');
+                workflow.setLoadingMessage('Calculating grid parameters & cavity bounds...');
+                // Manual mode grid calc 1% -> 20% over 5s
+                setTargetProgress(20);
+                setProgressDuration(5000);
+
                 await api.calculateGrid(workflow.sessionId, {
                     mode: 'manual',
                     center_x: gridCenter.x, center_y: gridCenter.y, center_z: gridCenter.z,
                     size_x: gridSize.x, size_y: gridSize.y, size_z: gridSize.z,
                 });
-                workflow.setLoadingMessage('Running docking simulation...');
+                workflow.setLoadingMessage('Running docking on target cavity...');
                 dockingData = { center_x: gridCenter.x, center_y: gridCenter.y, center_z: gridCenter.z, size_x: gridSize.x, size_y: gridSize.y, size_z: gridSize.z };
             }
+
+            // Phase 2: Docking Simulation slowly goes 20% -> 95% over 35s (proportional to cavity volume & CNN scoring)
+            setTargetProgress(95);
+            setProgressDuration(35000);
+
             await api.runDocking(workflow.sessionId, dockingData);
+
+            // Phase 3: Complete 95% -> 100%
+            setTargetProgress(100);
+            setProgressDuration(400);
+            await new Promise(r => setTimeout(r, 450));
             navigate(`/results?session=${workflow.sessionId}`);
         } catch (err) {
             workflow.setError(err.message || 'Failed to run docking');
             toast.error(err.message || 'Docking failed');
+            setTargetProgress(0);
+            setDockProgress(0);
         } finally {
             workflow.setLoading(false);
             workflow.setLoadingMessage('');
@@ -97,17 +154,15 @@ function Dock() {
     };
 
     const inputClass = "w-full h-10 px-3 rounded-lg bg-card border border-border text-foreground text-sm focus:border-primary focus:ring-2 focus:ring-primary/15 outline-none transition-all";
-    const isRunning = workflow.loading && /Detecting|docking|Running/i.test(workflow.loadingMessage);
 
     return (
         <div className="min-h-screen bg-background flex flex-col">
             <WorkflowHeader
-                eyebrow="Workflow"
                 title="Molecular Docking"
                 subtitle="Complete pipeline from protein/ligand input to docked poses."
             />
 
-            <div className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 pb-16">
+            <div className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pb-16">
                 <Stepper steps={STEPS} currentIndex={stepIndex} completed={completed} onStepClick={setStepIndex} />
 
                 <StatusBanners
@@ -279,19 +334,29 @@ function Dock() {
                             <button
                                 onClick={handleRunDocking}
                                 disabled={!configureDone || workflow.loading}
-                                className="px-6 py-2.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 inline-flex items-center gap-1.5"
+                                className="px-6 py-2.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 inline-flex items-center gap-2"
                             >
-                                {isRunning ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}
-                                {isRunning ? 'Running…' : 'Run Docking Simulation'}
+                                {isRunning ? <AnimatedCircularProgressBar value={dockProgress} size={18} strokeWidth={3} className="my-0" /> : <Play size={16} aria-hidden="true" />}
+                                {isRunning ? 'Running…' : 'Run Docking'}
                             </button>
                         </div>
 
                         {isRunning && (
-                            <div className="mt-4 border border-border bg-background p-4 rounded-xl">
-                                <div className="w-full bg-border rounded-full h-1.5 overflow-hidden">
-                                    <div className="bg-primary h-1.5 rounded-full animate-pulse" style={{ width: '100%' }} />
+                            <div className="mt-4 border border-border bg-card p-5 rounded-2xl flex items-center gap-6 shadow-elevated">
+                                <AnimatedCircularProgressBar value={dockProgress} label="Docking" size={85} strokeWidth={7} />
+                                <div className="flex-1 space-y-3">
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="font-semibold uppercase tracking-wider text-muted-foreground">Docking Progress</span>
+                                        <span className="font-mono-code font-bold text-primary">{dockProgress}%</span>
+                                    </div>
+                                    <div className="w-full bg-border/60 rounded-full h-2 overflow-hidden">
+                                        <div 
+                                            className="bg-primary h-2 rounded-full transition-all duration-300 ease-out"
+                                            style={{ width: `${dockProgress}%` }}
+                                        />
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">{workflow.loadingMessage || 'Running docking...'}</p>
                                 </div>
-                                <p className="text-xs text-muted-foreground mt-2">{workflow.loadingMessage || 'Running molecular docking simulation…'}</p>
                             </div>
                         )}
                     </div>
