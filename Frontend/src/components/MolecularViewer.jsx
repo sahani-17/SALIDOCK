@@ -79,6 +79,65 @@ function paintWatermark(ctx, width, height) {
 }
 
 /**
+ * Helper to build a comprehensive, robust selection expression for standard protein residues.
+ */
+function getProteinExpression() {
+  const standardProteinResidues = [
+    'ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE',
+    'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL',
+    'MSE', 'SEC', 'PYL', 'DA', 'DC', 'DG', 'DT', 'A', 'C', 'G', 'U'
+  ];
+
+  return MS.struct.modifier.union([
+    MS.struct.generator.atomGroups({
+      'entity-test': MS.core.rel.eq([MS.ammp('entityType'), 'polymer'])
+    }),
+    MS.struct.generator.atomGroups({
+      'residue-test': MS.core.rel.inSet([MS.ammp('label_comp_id'), standardProteinResidues])
+    })
+  ]);
+}
+
+/**
+ * Helper to build a comprehensive, robust selection expression for the ligand.
+ * Standard PDB files created by Vina/Gnina/QuickVina may use UNL, LIG, MOL, UNK,
+ * or custom residue names, and Mol* may classify them as 'non-polymer' or 'unknown'
+ * or 'macromol'.
+ */
+function getLigandExpression() {
+  const standardPolymerAndWater = [
+    'ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE',
+    'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL',
+    'MSE', 'SEC', 'PYL', 'DA', 'DC', 'DG', 'DT', 'A', 'C', 'G', 'U',
+    'HOH', 'WAT', 'H2O', 'DOD'
+  ];
+
+  return MS.struct.modifier.union([
+    MS.struct.generator.atomGroups({
+      'entity-test': MS.core.rel.eq([MS.ammp('entityType'), 'non-polymer'])
+    }),
+    MS.struct.generator.atomGroups({
+      'entity-test': MS.core.rel.eq([MS.ammp('entityType'), 'unknown'])
+    }),
+    MS.struct.generator.atomGroups({
+      'chain-test': MS.core.rel.eq([MS.ammp('objectType'), 'het'])
+    }),
+    MS.struct.generator.atomGroups({
+      'residue-test': MS.core.rel.inSet([
+        MS.ammp('label_comp_id'),
+        ['UNL', 'LIG', 'MOL', 'UNK', 'DRG', '001', '1', 'LIG1', 'LIGAND']
+      ])
+    }),
+    MS.struct.modifier.exceptBy({
+      0: MS.struct.generator.all(),
+      by: MS.struct.generator.atomGroups({
+        'residue-test': MS.core.rel.inSet([MS.ammp('label_comp_id'), standardPolymerAndWater])
+      })
+    })
+  ]);
+}
+
+/**
  * MolecularViewer — a clean Mol* viewer that exposes methods via ref.
  *
  * Exposed ref methods:
@@ -136,14 +195,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
         plugin.managers.camera.reset();
       } else if (structureRef && structure) {
         // Focus camera on the ligand loci
-        const ligandExpression = MS.struct.modifier.union([
-          MS.struct.generator.atomGroups({
-            'entity-test': MS.core.rel.eq([MS.ammp('entityType'), 'non-polymer'])
-          }),
-          MS.struct.generator.atomGroups({
-            'residue-test': MS.core.rel.eq([MS.ammp('label_comp_id'), 'UNK'])
-          })
-        ]);
+        const ligandExpression = getLigandExpression();
         const query = compile(ligandExpression);
         const result = query(new QueryContext(structure));
         const loci = StructureSelection.toLociWithCurrentUnits(result);
@@ -261,14 +313,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
     if (!structureRef || !structureRef.cell) return;
 
     try {
-      const ligandExpression = MS.struct.modifier.union([
-        MS.struct.generator.atomGroups({
-          'entity-test': MS.core.rel.eq([MS.ammp('entityType'), 'non-polymer'])
-        }),
-        MS.struct.generator.atomGroups({
-          'residue-test': MS.core.rel.eq([MS.ammp('label_comp_id'), 'UNK'])
-        })
-      ]);
+      const ligandExpression = getLigandExpression();
 
       const surroundingExpression = MS.struct.modifier.includeSurroundings({
         0: ligandExpression,
@@ -276,11 +321,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
         'as-whole-residues': true
       });
 
-      const proteinExpression = MS.struct.modifier.union([
-        MS.struct.generator.atomGroups({
-          'entity-test': MS.core.rel.eq([MS.ammp('entityType'), 'polymer'])
-        })
-      ]);
+      const proteinExpression = getProteinExpression();
 
       const pocketResExpression = MS.struct.modifier.exceptBy({
         0: surroundingExpression,
@@ -356,26 +397,35 @@ const MolecularViewer = forwardRef(function MolecularViewer({
         if (ligandRepr === 'spacefill') type = 'spacefill';
         if (ligandRepr === 'molecular-surface') type = 'gaussian-surface';
 
-        await plugin.builders.structure.representation.addRepresentation(
-          ligandComp,
-          {
-            type: type,
-            // Standard CPK element colors: C=grey, O=red, N=blue, S=yellow—
-            // identical to the reference image where the ligand has
-            // colored heteroatoms and grey carbon ball-and-sticks.
-            color: 'element-symbol',
-            colorParams: {
-              // Color carbons with uniform dark grey (#404040)
-              carbonColor: { name: 'uniform', params: { value: Color(0x404040) } },
-            },
-            typeParams: {
-              // Compact balls so atoms are clearly visible as spheres (matches CBDock2)
-              sizeFactor: type === 'spacefill' ? 1.0 : 0.22,
-              // Thinner sticks between heavy atoms
-              sizeAspectRatio: 0.36,
+        try {
+          await plugin.builders.structure.representation.addRepresentation(
+            ligandComp,
+            {
+              type: type,
+              color: 'element-symbol',
+              colorParams: {
+                carbonColor: { name: 'uniform', params: { value: Color(0x404040) } },
+              },
+              typeParams: {
+                sizeFactor: type === 'spacefill' ? 1.0 : 0.26,
+                sizeAspectRatio: 0.42,
+              }
             }
-          }
-        );
+          );
+        } catch (repErr) {
+          console.warn('[MolecularViewer] Custom carbon color failed, using standard element-symbol:', repErr);
+          await plugin.builders.structure.representation.addRepresentation(
+            ligandComp,
+            {
+              type: type,
+              color: 'element-symbol',
+              typeParams: {
+                sizeFactor: type === 'spacefill' ? 1.0 : 0.26,
+                sizeAspectRatio: 0.42,
+              }
+            }
+          );
+        }
       }
 
       // --- Pocket Residues ---
@@ -540,11 +590,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
       const structureRef = plugin.managers.structure.hierarchy.current.structures[0];
       const structure = structureRef?.cell?.obj?.data;
       if (structure) {
-        const ligandExpression = MS.struct.modifier.union([
-          MS.struct.generator.atomGroups({
-            'entity-test': MS.core.rel.eq([MS.ammp('entityType'), 'non-polymer'])
-          })
-        ]);
+        const ligandExpression = getLigandExpression();
         const surroundingExpression = MS.struct.modifier.includeSurroundings({
           0: ligandExpression,
           radius: 5.0,
@@ -749,10 +795,10 @@ const MolecularViewer = forwardRef(function MolecularViewer({
 
   return (
     <div
-      className={`relative ${minimal ? 'w-full h-full' : ''}`}
+      className={`relative ${minimal ? 'w-full h-full min-h-[380px] flex-1' : ''}`}
       id="molecular-viewer-container"
       data-minimal={minimal ? 'true' : 'false'}
-      style={minimal ? { height: '100%', minHeight: '100%' } : {}}
+      style={minimal ? { height: '100%', minHeight: '380px' } : {}}
     >
       {/* Hide specific Mol* UI elements via CSS */}
       <style>{`
@@ -770,8 +816,8 @@ const MolecularViewer = forwardRef(function MolecularViewer({
       `}</style>
 
       <div
-        className={`relative w-full bg-background rounded-lg border border-primary/10 ${minimal ? 'h-full border-none rounded-none' : ''}`}
-        style={minimal ? { height: '100%', minHeight: '100%' } : { minHeight: '600px' }}
+        className={`relative w-full bg-background rounded-lg border border-primary/10 ${minimal ? 'h-full min-h-[380px] flex-1 border-none rounded-none' : ''}`}
+        style={minimal ? { height: '100%', minHeight: '380px' } : { minHeight: '600px' }}
       >
         {/* Mol* Viewer Canvas — background matches canvas3D backgroundColor (#ffffff) */}
         <div
@@ -781,6 +827,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
             overflow: 'hidden',
             borderRadius: '8px',
             height: minimal ? '100%' : '600px',
+            minHeight: minimal ? '380px' : '600px',
             backgroundColor: '#ffffff',
           }}
         />

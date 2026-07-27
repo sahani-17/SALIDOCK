@@ -32,7 +32,7 @@ const Hero3D = ({ pdbId = "1STP" }) => {
     }, [pdbId]);
 
     return (
-        <div className="relative w-full h-full min-h-[360px] bg-card rounded-xl overflow-hidden flex flex-col">
+        <div className="relative w-full h-full min-h-[380px] bg-card rounded-xl overflow-hidden flex flex-col">
             {!pdbData && !error && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-card z-10 gap-2">
                     <AnimatedCircularProgressBar label="RCSB" size={64} strokeWidth={5} />
@@ -45,21 +45,23 @@ const Hero3D = ({ pdbId = "1STP" }) => {
                 </div>
             )}
             {pdbData && (
-                <MolecularViewer
-                    ref={viewerRef}
-                    pdbData={pdbData}
-                    poseNumber={1}
-                    proteinRepr="cartoon"
-                    ligandRepr="ball-and-stick"
-                    colorScheme="chain-id"
-                    showPocketResidues={false}
-                    showPocketLabels={false}
-                    showPocketSurface={false}
-                    showInteractions={false}
-                    spin={false}
-                    showProtein
-                    minimal
-                />
+                <div className="w-full h-full flex-1 min-h-[380px] relative">
+                    <MolecularViewer
+                        ref={viewerRef}
+                        pdbData={pdbData}
+                        poseNumber={1}
+                        proteinRepr="cartoon"
+                        ligandRepr="ball-and-stick"
+                        colorScheme="chain-id"
+                        showPocketResidues={false}
+                        showPocketLabels={false}
+                        showPocketSurface={false}
+                        showInteractions={false}
+                        spin={false}
+                        showProtein
+                        minimal
+                    />
+                </div>
             )}
         </div>
     );

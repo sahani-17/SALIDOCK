@@ -34,3 +34,10 @@ astex_benchmark/pdb_prep/
 real_benchmarks/pdb/
 consensus/
 
+# Session Data & Temp Output
+work/
+results/
+temp_*/
+*.tmp
+
+

@@ -713,6 +713,11 @@ def create_protein_ligand_complex(
             # so we convert unconditionally — every atom here IS a ligand atom.
             if pdb_line.startswith('ATOM'):
                 pdb_line = 'HETATM' + pdb_line[6:]
+
+            # Ensure ligand residue name (cols 18-20, index 17:20) is not blank
+            resname = pdb_line[17:20].strip() if len(pdb_line) > 20 else ''
+            if not resname:
+                pdb_line = pdb_line[:17] + 'UNL' + pdb_line[20:]
             
             pdb_lines.append(pdb_line)
             ligand_atom_count += 1
