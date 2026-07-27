@@ -3,6 +3,7 @@ import { Camera, RefreshCw } from 'lucide-react';
 import { AnimatedCircularProgressBar } from './ui/animated-circular-progress-bar';
 
 import { createPluginUI } from 'molstar/lib/mol-plugin-ui';
+import { DefaultPluginUISpec } from 'molstar/lib/mol-plugin-ui/spec';
 import { renderReact18 } from 'molstar/lib/mol-plugin-ui/react18';
 import { PluginCommands } from 'molstar/lib/mol-plugin/commands';
 import { Vec3 } from 'molstar/lib/mol-math/linear-algebra';
@@ -163,11 +164,16 @@ const MolecularViewer = forwardRef(function MolecularViewer({
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Track poseNumber safely for async operations
+  // Track poseNumber and pdbData safely for async operations
   const poseNumberRef = useRef(poseNumber);
   useEffect(() => {
     poseNumberRef.current = poseNumber;
   }, [poseNumber]);
+
+  const pdbDataRef = useRef(pdbData);
+  useEffect(() => {
+    pdbDataRef.current = pdbData;
+  }, [pdbData]);
 
   // Load PDB data into Mol*
   const loadStructureInternal = useCallback(async (plugin, data) => {
@@ -666,11 +672,20 @@ const MolecularViewer = forwardRef(function MolecularViewer({
 
     const initPlugin = async () => {
       try {
+        const defaultSpec = DefaultPluginUISpec();
         plugin = await createPluginUI({
           target: container,
           render: renderReact18,
           spec: {
-            ...SaliDockPluginSpec(),
+            ...defaultSpec,
+            actions: [
+              ...(defaultSpec.actions || []),
+              ...SaliDockPluginSpec().actions,
+            ],
+            behaviors: [
+              ...(defaultSpec.behaviors || []),
+              ...SaliDockPluginSpec().behaviors,
+            ],
             layout: {
               initial: {
                 isExpanded: false,
@@ -686,6 +701,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
             },
             components: { remoteState: 'none' },
             config: [
+              ...(defaultSpec.config || []),
               [PluginConfig.Viewport.ShowSelectionMode, false],
             ],
           },
@@ -750,8 +766,9 @@ const MolecularViewer = forwardRef(function MolecularViewer({
 
         pluginRef.current = plugin;
 
-        if (pdbData) {
-          await loadStructureInternal(plugin, pdbData);
+        const dataToLoad = pdbDataRef.current || pdbData;
+        if (dataToLoad) {
+          await loadStructureInternal(plugin, dataToLoad);
         } else {
           setLoading(false);
         }
