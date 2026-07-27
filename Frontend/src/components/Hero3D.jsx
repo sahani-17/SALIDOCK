@@ -15,9 +15,9 @@ const Hero3D = ({ pdbId = "1STP" }) => {
         let cancelled = false;
         setPdbData(null);
         setError(null);
-        fetch(`https://files.rcsb.org/download/${pdbId}.pdb`)
+        fetch(`/${pdbId}.pdb`)
             .then((r) => {
-                if (!r.ok) throw new Error(`RCSB ${r.status}`);
+                if (!r.ok) throw new Error(`Local fetch ${r.status}`);
                 return r.text();
             })
             .then((text) => {

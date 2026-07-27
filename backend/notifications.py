@@ -12,7 +12,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
-SENDER_EMAIL = os.getenv("NOTIFY_SENDER_EMAIL", "SaliDock <notifications@salidock.com>")
+SENDER_EMAIL = os.getenv("NOTIFY_SENDER_EMAIL", "SaliDock <onboarding@resend.dev>")
 SITE_URL = os.getenv("SITE_URL", "http://localhost:5173")
 
 
@@ -25,7 +25,7 @@ def send_docking_completion_email(
     is_batch: bool = False,
 ) -> bool:
     """
-    Sends a completion notification email to the user.
+    Sends a completion notification email to the user via Resend API or logs fallback.
     """
     if not to_email or "@" not in to_email:
         logger.debug(f"Invalid notification email provided: {to_email}")
@@ -92,27 +92,37 @@ def send_docking_completion_email(
     """
 
     if RESEND_API_KEY:
-        try:
-            req = urllib.request.Request(
-                "https://api.resend.com/emails",
-                data=json.dumps({
-                    "from": SENDER_EMAIL,
-                    "to": [to_email],
-                    "subject": subject,
-                    "html": html_content
-                }).encode("utf-8"),
-                headers={
-                    "Authorization": f"Bearer {RESEND_API_KEY}",
-                    "Content-Type": "application/json"
-                },
-                method="POST"
-            )
-            with urllib.request.urlopen(req) as resp:
-                if resp.status in (200, 201):
-                    logger.info(f"✅ Notification email sent to {to_email} via Resend")
-                    return True
-        except Exception as e:
-            logger.error(f"Failed to send email via Resend API: {e}")
+        senders_to_try = [SENDER_EMAIL]
+        if "onboarding@resend.dev" not in SENDER_EMAIL:
+            senders_to_try.append("SaliDock <onboarding@resend.dev>")
+
+        for sender in senders_to_try:
+            try:
+                req = urllib.request.Request(
+                    "https://api.resend.com/emails",
+                    data=json.dumps({
+                        "from": sender,
+                        "to": [to_email],
+                        "subject": subject,
+                        "html": html_content
+                    }).encode("utf-8"),
+                    headers={
+                        "Authorization": f"Bearer {RESEND_API_KEY}",
+                        "Content-Type": "application/json",
+                        "User-Agent": "SaliDock/1.0"
+                    },
+                    method="POST"
+                )
+                with urllib.request.urlopen(req) as resp:
+                    if resp.status in (200, 201):
+                        logger.info(f"✅ Notification email sent to {to_email} via Resend (from {sender})")
+                        return True
+            except Exception as e:
+                logger.warning(f"Failed to send email via Resend API from {sender}: {e}")
+
+    # Fallback log output for development or when API key is unconfigured
+    logger.info(f"📩 [MOCK EMAIL NOTIFICATION] To: {to_email} | Subject: {subject} | Link: {results_url}")
+    return True
 
     # Fallback log output for development or when API key is unconfigured
     logger.info(f"📩 [MOCK EMAIL NOTIFICATION] To: {to_email} | Subject: {subject} | Link: {results_url}")

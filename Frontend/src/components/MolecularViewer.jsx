@@ -94,7 +94,9 @@ function getProteinExpression() {
       'entity-test': MS.core.rel.eq([MS.ammp('entityType'), 'polymer'])
     }),
     MS.struct.generator.atomGroups({
-      'residue-test': MS.core.rel.inSet([MS.ammp('label_comp_id'), standardProteinResidues])
+      'residue-test': MS.core.logic.or(
+        standardProteinResidues.map(name => MS.core.rel.eq([MS.ammp('label_comp_id'), name]))
+      )
     })
   ]);
 }
@@ -106,36 +108,15 @@ function getProteinExpression() {
  * or 'macromol'.
  */
 function getLigandExpression() {
-  const standardPolymerAndWater = [
-    'ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE',
-    'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL',
-    'MSE', 'SEC', 'PYL', 'DA', 'DC', 'DG', 'DT', 'A', 'C', 'G', 'U',
-    'HOH', 'WAT', 'H2O', 'DOD'
+  const customLigandNames = [
+    'UNL', 'LIG', 'MOL', 'UNK', 'DRG', '001', '1', 'LIG1', 'LIGAND', 'BTN'
   ];
 
-  return MS.struct.modifier.union([
-    MS.struct.generator.atomGroups({
-      'entity-test': MS.core.rel.eq([MS.ammp('entityType'), 'non-polymer'])
-    }),
-    MS.struct.generator.atomGroups({
-      'entity-test': MS.core.rel.eq([MS.ammp('entityType'), 'unknown'])
-    }),
-    MS.struct.generator.atomGroups({
-      'chain-test': MS.core.rel.eq([MS.ammp('objectType'), 'het'])
-    }),
-    MS.struct.generator.atomGroups({
-      'residue-test': MS.core.rel.inSet([
-        MS.ammp('label_comp_id'),
-        ['UNL', 'LIG', 'MOL', 'UNK', 'DRG', '001', '1', 'LIG1', 'LIGAND']
-      ])
-    }),
-    MS.struct.modifier.exceptBy({
-      0: MS.struct.generator.all(),
-      by: MS.struct.generator.atomGroups({
-        'residue-test': MS.core.rel.inSet([MS.ammp('label_comp_id'), standardPolymerAndWater])
-      })
-    })
-  ]);
+  return MS.struct.generator.atomGroups({
+    'residue-test': MS.core.logic.or(
+      customLigandNames.map(name => MS.core.rel.eq([MS.ammp('label_comp_id'), name]))
+    )
+  });
 }
 
 /**
@@ -174,82 +155,6 @@ const MolecularViewer = forwardRef(function MolecularViewer({
   useEffect(() => {
     pdbDataRef.current = pdbData;
   }, [pdbData]);
-
-  // Load PDB data into Mol*
-  const loadStructureInternal = useCallback(async (plugin, data) => {
-    setLoading(true);
-    setError(null);
-    try {
-      await plugin.clear();
-
-      const dataObj = await plugin.builders.data.rawData({
-        data,
-        label: `Pose ${poseNumberRef.current || '?'}`,
-      });
-
-      const trajectory = await plugin.builders.structure.parseTrajectory(dataObj, 'pdb');
-
-      await plugin.builders.structure.hierarchy.applyPreset(trajectory, 'default', {
-        structure: { name: 'model', params: {} },
-        showUnitcell: false,
-        representationPreset: 'empty',
-      });
-
-      const structureRef = plugin.managers.structure.hierarchy.current.structures[0];
-      const structure = structureRef?.cell?.obj?.data;
-      if (minimal) {
-        plugin.managers.camera.reset();
-      } else if (structureRef && structure) {
-        // Focus camera on the ligand loci
-        const ligandExpression = getLigandExpression();
-        const query = compile(ligandExpression);
-        const result = query(new QueryContext(structure));
-        const loci = StructureSelection.toLociWithCurrentUnits(result);
-
-        if (loci && loci.elements && loci.elements.length > 0) {
-          plugin.managers.camera.focusLoci(loci);
-        } else {
-          plugin.managers.camera.reset();
-        }
-      } else {
-        plugin.managers.camera.reset();
-      }
-
-      setTimeout(() => {
-        try {
-          plugin.canvas3D?.requestResize();
-          plugin.managers.camera.reset();
-        } catch (e) {}
-      }, 150);
-    } catch (err) {
-      console.error('Error loading structure:', err);
-      setError('Failed to load molecular structure');
-    } finally {
-      setLoading(false);
-    }
-  }, [minimal]);
-
-  const handleResetCamera = useCallback(() => {
-    pluginRef.current?.managers.camera.reset();
-  }, []);
-
-  const handleDownloadUltraHD = useCallback(async () => {
-    const plugin = pluginRef.current;
-    if (!plugin) return;
-    try {
-      plugin.helpers.viewportScreenshot.behaviors.values.next({
-        ...plugin.helpers.viewportScreenshot.behaviors.values.value,
-        resolution: {
-          name: 'ultra-hd',
-          params: {}
-        },
-        transparent: false
-      });
-      await plugin.helpers.viewportScreenshot.download('salidock_pose_ultrahd.png');
-    } catch (err) {
-      console.error('Failed to export UltraHD image:', err);
-    }
-  }, []);
 
   // Helper function to delete component by tag or label across state data tree
   const deleteCompByTag = useCallback(async (plugin, structureRef, tag) => {
@@ -579,6 +484,97 @@ const MolecularViewer = forwardRef(function MolecularViewer({
     clearNodeChildren
   ]);
 
+  // Load PDB data into Mol*
+  const loadStructureInternal = useCallback(async (plugin, data) => {
+    if (!data || typeof data !== 'string') return;
+    const cleanData = data.replace(/^\uFEFF/, '');
+    if (cleanData.length < 50) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      await plugin.clear();
+
+      const dataObj = await plugin.builders.data.rawData({
+        data: cleanData,
+        label: `Pose ${poseNumberRef.current || '?'}`,
+      });
+
+      const trajectory = await plugin.builders.structure.parseTrajectory(dataObj, 'pdb');
+
+      await plugin.builders.structure.hierarchy.applyPreset(trajectory, 'default', {
+        structure: { name: 'model', params: {} },
+        showUnitcell: false,
+        representationPreset: 'empty',
+      });
+
+      const structureRef = plugin.managers.structure.hierarchy.current.structures[0];
+      const structure = structureRef?.cell?.obj?.data;
+
+      // Apply initial representations
+      try {
+        await applySettings();
+      } catch (appErr) {
+        console.warn('[MolecularViewer] Error applying representations inside loadStructureInternal:', appErr);
+      }
+
+      if (minimal) {
+        plugin.managers.camera.reset();
+      } else if (structureRef && structure) {
+        // Focus camera on the ligand loci
+        try {
+          const ligandExpression = getLigandExpression();
+          const query = compile(ligandExpression);
+          const result = query(new QueryContext(structure));
+          const loci = StructureSelection.toLociWithCurrentUnits(result);
+
+          if (loci && loci.elements && loci.elements.length > 0) {
+            plugin.managers.camera.focusLoci(loci);
+          } else {
+            plugin.managers.camera.reset();
+          }
+        } catch (camErr) {
+          plugin.managers.camera.reset();
+        }
+      } else {
+        plugin.managers.camera.reset();
+      }
+
+      setTimeout(() => {
+        try {
+          plugin.canvas3D?.requestResize();
+        } catch (e) {}
+      }, 150);
+    } catch (err) {
+      console.error('Error loading structure:', err);
+      setError('Failed to load molecular structure');
+    } finally {
+      setLoading(false);
+    }
+  }, [minimal, applySettings]);
+
+  const handleResetCamera = useCallback(() => {
+    pluginRef.current?.managers.camera.reset();
+  }, []);
+
+  const handleDownloadUltraHD = useCallback(async () => {
+    const plugin = pluginRef.current;
+    if (!plugin) return;
+    try {
+      plugin.helpers.viewportScreenshot.behaviors.values.next({
+        ...plugin.helpers.viewportScreenshot.behaviors.values.value,
+        resolution: {
+          name: 'ultra-hd',
+          params: {}
+        },
+        transparent: false
+      });
+      await plugin.helpers.viewportScreenshot.download('salidock_pose_ultrahd.png');
+    } catch (err) {
+      console.error('Failed to export UltraHD image:', err);
+    }
+  }, []);
+
   // Apply Settings whenever they change and PDB data is loaded
   useEffect(() => {
     if (!loading && pdbData) {
@@ -828,6 +824,10 @@ const MolecularViewer = forwardRef(function MolecularViewer({
         #molecular-viewer-container .msp-viewport-controls-buttons [title="Focus Camera On Selection"] { display: none !important; }
         #molecular-viewer-container .msp-selection-viewport-controls { display: none !important; }
         #molecular-viewer-container .msp-viewport-controls { display: none !important; }
+        #molecular-viewer-container button[title="Select Animation"],
+        #molecular-viewer-container .msp-btn[title="Select Animation"],
+        button[title="Select Animation"],
+        .msp-btn[title="Select Animation"] { display: none !important; }
         #molecular-viewer-container[data-minimal="true"] .msp-viewport-controls,
         #molecular-viewer-container[data-minimal="true"] .msp-viewport-controls-buttons { display: none !important; }
       `}</style>

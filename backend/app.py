@@ -158,8 +158,10 @@ def ensure_results_file(session_id: str, relative_path: str) -> Path:
     if local_path.exists():
         return local_path
     try:
-        # The storage key on Supabase for results is "results/{relative_path}"
+        # The storage key on Supabase for results is "results/{relative_path}" or "{relative_path}"
         data = cloud_read(session_id, f"results/{relative_path}")
+        if data is None:
+            data = cloud_read(session_id, relative_path)
         if data is not None:
             local_path.write_bytes(data)
             logger.info(f"Restored results file: {session_id}/results/{relative_path}")
@@ -619,33 +621,28 @@ def create_protein_ligand_complex(
     if not ligand_pdbqt.exists():
         raise FileNotFoundError(f"Ligand file not found: {ligand_pdbqt}")
     
-    pdb_lines = []
+    header_lines = []
+    protein_lines = []
+    ligand_lines = []
     
     # Add header remarks if requested
     if include_remarks:
-        pdb_lines.append("REMARK   Protein-Ligand Complex")
-        pdb_lines.append(f"REMARK   Protein: {protein_pdbqt.name}")
-        pdb_lines.append(f"REMARK   Ligand Pose: {pose_number}")
+        header_lines.append("REMARK   Protein-Ligand Complex")
+        header_lines.append(f"REMARK   Protein: {protein_pdbqt.name}")
+        header_lines.append(f"REMARK   Ligand Pose: {pose_number}")
         
         # Try to get affinity score from ligand file
         try:
             parsed_results = results.parse_vina_output(str(ligand_pdbqt))
             if parsed_results and len(parsed_results) >= pose_number:
                 affinity = parsed_results[pose_number - 1]['affinity']
-                pdb_lines.append(f"REMARK   Binding Affinity: {affinity} kcal/mol")
+                header_lines.append(f"REMARK   Binding Affinity: {affinity} kcal/mol")
         except:
             pass  # Skip if can't parse affinity
         
-        pdb_lines.append("REMARK")
+        header_lines.append("REMARK")
     
-    # Process protein structure.
-    # IMPORTANT: prefer protein_prepared.pdb over protein_prepared.pdbqt for
-    # reading protein atom records.  OpenBabel resets residue sequence numbers
-    # to start from 1 when it writes the PDBQT (e.g. residue 1093 becomes 1,
-    # residue 697 becomes 1).  protein_prepared.pdb is saved BEFORE OpenBabel
-    # runs and retains the original residue numbering.  Using it here ensures
-    # the 2D interaction diagram labels residues correctly (MET794 not MET98)
-    # and the 3D cartoon ribbon renders as one connected chain.
+    # Use prepared PDB if available (preserves full residue names and chains)
     protein_pdb_path = protein_pdbqt.parent / "protein_prepared.pdb"
     protein_source = protein_pdb_path if protein_pdb_path.exists() else protein_pdbqt
     protein_content = protein_source.read_text()
@@ -658,7 +655,7 @@ def create_protein_ligand_complex(
                 continue
             # Convert to PDB: keep only first 66 characters (removes PDBQT-specific columns)
             pdb_line = line[:66].rstrip()
-            pdb_lines.append(pdb_line)
+            protein_lines.append(pdb_line)
             protein_atom_count += 1
         elif line.startswith('HETATM'):
             # Skip water molecules and any leftover UNK/UNL residues from the protein source
@@ -666,16 +663,13 @@ def create_protein_ligand_complex(
             if resname in ('HOH', 'WAT', 'H2O', 'UNK', 'UNL'):
                 continue
             pdb_line = line[:66].rstrip()
-            pdb_lines.append(pdb_line)
+            protein_lines.append(pdb_line)
             protein_atom_count += 1
         elif line.startswith('REMARK'):
             if include_remarks:
-                pdb_lines.append(line)
+                header_lines.append(line)
 
     print(f"[DEBUG] Protein atoms: {protein_atom_count} from {protein_source}")
-    
-    # Add TER to separate protein from ligand
-    pdb_lines.append("TER")
     
     # Extract and process ligand pose
     print(f"[DEBUG] Extracting ligand pose {pose_number} from {ligand_pdbqt}")
@@ -719,19 +713,27 @@ def create_protein_ligand_complex(
             if not resname:
                 pdb_line = pdb_line[:17] + 'UNL' + pdb_line[20:]
             
-            pdb_lines.append(pdb_line)
+            ligand_lines.append(pdb_line)
             ligand_atom_count += 1
         elif line.startswith('REMARK'):
             if include_remarks:
-                pdb_lines.append(line)
+                header_lines.append(line)
     
     print(f"[DEBUG] Ligand atoms added: {ligand_atom_count}")
-    print(f"[DEBUG] Total PDB lines: {len(pdb_lines)}")
+    all_lines = header_lines + protein_lines + ["TER"] + ligand_lines + ["END"]
+    print(f"[DEBUG] Total PDB lines: {len(all_lines)}")
     
-    # Add END record
-    pdb_lines.append("END")
-    
-    return '\n'.join(pdb_lines)
+    return '\n'.join(all_lines)
+
+def check_disk_space(required_mb: int = 100):
+    """Check available disk space and log a warning if low."""
+    try:
+        total, used, free = shutil.disk_usage(WORK_DIR)
+        free_mb = free / (1024 * 1024)
+        if free_mb < required_mb:
+            logger.warning(f"Low disk space: {free_mb:.1f} MB available (requires {required_mb} MB)")
+    except Exception as e:
+        logger.debug(f"Could not check disk space: {e}")
 
 @app.post("/api/session/create")
 async def create_session():
@@ -2134,7 +2136,7 @@ async def run_docking_endpoint(
             cavity_results = []
             cavity_results_map = {}
             
-            max_workers = int(os.getenv("MAX_DOCKING_WORKERS", 2))
+            max_workers = int(os.getenv("MAX_DOCKING_WORKERS", 5))
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Submit all cavity docking jobs concurrently (5 jobs × 1 CPU thread each)
                 futures = [executor.submit(dock_single_cavity, cav) for cav in cavities]
@@ -3962,10 +3964,20 @@ def resolve_pose_pdbqt(session_dir: Path, rank: int) -> tuple[Path, int]:
 
     session_id = session_dir.name
 
+    # Pre-fetch key files from Supabase if missing locally
+    ensure_session_file(session_id, "cavities.json")
+    ensure_session_file(session_id, "docking_out_out.pdbqt")
+
     # Try to resolve pose via docking report first
     try:
         ensure_results_file(session_id, "reports/docking_report.json")
+        ensure_session_file(session_id, "reports/docking_report.json")
         docking_report = RESULTS_DIR / session_id / "reports" / "docking_report.json"
+        if not docking_report.exists():
+            docking_report = session_dir / "reports" / "docking_report.json"
+        if not docking_report.exists():
+            docking_report = session_dir / "docking_report.json"
+
         if docking_report.exists():
             with open(docking_report, 'r') as f:
                 report_data = json.load(f)
@@ -3973,9 +3985,11 @@ def resolve_pose_pdbqt(session_dir: Path, rank: int) -> tuple[Path, int]:
             if rank <= len(poses):
                 pose_info = poses[rank - 1]
                 if 'pdbqt_file' in pose_info:
-                    pdbqt_path = Path(pose_info['pdbqt_file'])
+                    pdbqt_name = Path(pose_info['pdbqt_file']).name
+                    ensure_session_file(session_id, pdbqt_name)
+                    pdbqt_path = session_dir / pdbqt_name
                     if not pdbqt_path.exists():
-                        pdbqt_path = session_dir / pdbqt_path.name
+                        pdbqt_path = Path(pose_info['pdbqt_file'])
                     if pdbqt_path.exists():
                         mode_in_file = pose_info.get('mode', 1)
                         logger.info(f"[resolve_pose_pdbqt] Resolved rank {rank} via report to {pdbqt_path} mode {mode_in_file}")
@@ -4024,6 +4038,7 @@ def resolve_pose_pdbqt(session_dir: Path, rank: int) -> tuple[Path, int]:
     current_global = 1
     for i, cav in enumerate(cavities):
         cavity_num = i + 1
+        ensure_session_file(session_id, f"docking_out_cavity_{cavity_num}_out.pdbqt")
         # Try cavity-specific file first, fall back to combined output
         pdbqt_path = session_dir / f"docking_out_cavity_{cavity_num}_out.pdbqt"
         if not pdbqt_path.exists():
@@ -4058,7 +4073,6 @@ async def get_2d_interaction_svg(session_id: str, pose: int):
     ensure_session_file(session_id, "protein_prepared.pdbqt")
     ensure_session_file(session_id, "protein_prepared.pdb")
     ensure_session_file(session_id, "cavities.json")
-    ensure_session_file(session_id, "grid_params.json")
     ensure_session_file(session_id, "ligand_ref.sdf")
     ensure_session_file(session_id, "docking_out_out.pdbqt")
     
@@ -4218,7 +4232,6 @@ async def get_3d_interaction_lines(session_id: str, pose: int):
     session_dir = get_session_dir(session_id)
     ensure_session_file(session_id, "protein_prepared.pdb")
     ensure_session_file(session_id, "protein_prepared.pdbqt")
-    ensure_session_file(session_id, "grid_params.json")
 
     protein_pdbqt = session_dir / "protein_prepared.pdbqt"
     ligand_pdbqt, internal_mode = resolve_pose_pdbqt(session_dir, pose)
