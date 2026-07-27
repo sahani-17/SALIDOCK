@@ -795,10 +795,10 @@ const MolecularViewer = forwardRef(function MolecularViewer({
 
   return (
     <div
-      className={`relative ${minimal ? 'w-full h-full min-h-[380px] flex-1' : ''}`}
+      className={`relative ${minimal ? 'w-full h-full' : ''}`}
       id="molecular-viewer-container"
       data-minimal={minimal ? 'true' : 'false'}
-      style={minimal ? { height: '100%', minHeight: '380px' } : {}}
+      style={minimal ? { height: '100%', width: '100%' } : {}}
     >
       {/* Hide specific Mol* UI elements via CSS */}
       <style>{`
@@ -816,8 +816,8 @@ const MolecularViewer = forwardRef(function MolecularViewer({
       `}</style>
 
       <div
-        className={`relative w-full bg-background rounded-lg border border-primary/10 ${minimal ? 'h-full min-h-[380px] flex-1 border-none rounded-none' : ''}`}
-        style={minimal ? { height: '100%', minHeight: '380px' } : { minHeight: '600px' }}
+        className={`relative w-full bg-background rounded-lg border border-primary/10 ${minimal ? 'h-full border-none rounded-none' : ''}`}
+        style={minimal ? { height: '100%', width: '100%' } : { minHeight: '600px' }}
       >
         {/* Mol* Viewer Canvas — background matches canvas3D backgroundColor (#ffffff) */}
         <div
@@ -826,8 +826,8 @@ const MolecularViewer = forwardRef(function MolecularViewer({
             position: 'relative',
             overflow: 'hidden',
             borderRadius: '8px',
+            width: '100%',
             height: minimal ? '100%' : '600px',
-            minHeight: minimal ? '380px' : '600px',
             backgroundColor: '#ffffff',
           }}
         />
