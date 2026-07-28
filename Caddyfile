@@ -3,12 +3,12 @@
     admin off
 }
 
-# ── Replace salidock.com with your actual domain ──────────────────────────
+# ── salixiras.com ────────────────────────────────────────────────────────
 # Caddy automatically provisions a free HTTPS certificate via Let's Encrypt
-salidock.com, www.salidock.com {
+salixiras.com, www.salixiras.com {
 
     # Redirect www → non-www
-    redir https://salidock.com{uri} permanent
+    redir https://salixiras.com{uri} permanent
 
     # Reverse proxy backend API calls
     handle /api/* {
