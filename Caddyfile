@@ -3,9 +3,13 @@
     admin off
 }
 
-# Replace :80 / DOMAIN with your actual domain name once DNS is configured
-# e.g., salidock.yourdomain.com
-:80 {
+# ── Replace salidock.com with your actual domain ──────────────────────────
+# Caddy automatically provisions a free HTTPS certificate via Let's Encrypt
+salidock.com, www.salidock.com {
+
+    # Redirect www → non-www
+    redir https://salidock.com{uri} permanent
+
     # Reverse proxy backend API calls
     handle /api/* {
         reverse_proxy backend:8000
