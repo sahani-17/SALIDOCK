@@ -30,6 +30,7 @@ lightgbm>=4.0.0
 # Supabase for database and storage
 supabase
 python-dotenv
+resend
 
 # ---------------------------------------------------------
 # Note: The following dependencies are recommended to be 

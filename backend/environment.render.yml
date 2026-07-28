@@ -25,3 +25,5 @@ dependencies:
       - MDAnalysis
       - supabase
       - python-dotenv
+      - pdb-tools
+      - resend
