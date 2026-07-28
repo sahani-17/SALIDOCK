@@ -27,7 +27,7 @@ services:
       - SUPABASE_KEY=${SUPABASE_KEY}
       - SUPABASE_STORAGE_BUCKET=${SUPABASE_STORAGE_BUCKET:-docking-results}
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
-      - MAX_DOCKING_WORKERS=${MAX_DOCKING_WORKERS:-4}
+      - MAX_DOCKING_WORKERS=${MAX_DOCKING_WORKERS:-2}
       - PORT=8000
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
