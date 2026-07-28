@@ -3,8 +3,8 @@ FROM mambaorg/micromamba:1.5.8
 WORKDIR /app
 
 USER root
-# Install Docker CLI so backend container can communicate with host Docker daemon for PUResNet
-RUN apt-get update && apt-get install -y --no-install-recommends docker.io && rm -rf /var/lib/apt/lists/*
+# Install Docker CLI and curl (wget is not available in micromamba base)
+RUN apt-get update && apt-get install -y --no-install-recommends docker.io curl && rm -rf /var/lib/apt/lists/*
 USER $MAMBA_USER
 
 COPY --chown=$MAMBA_USER:$MAMBA_USER backend/environment.render.yml /tmp/environment.render.yml
@@ -27,13 +27,13 @@ ENV PATH="${P2RANK_HOME}:$PATH"
 
 # ── GNINA 1.3 (CPU-only) ──────────────────────────────────────────────────
 USER root
-RUN wget -q https://github.com/gnina/gnina/releases/download/v1.3/gnina \
-         -O /usr/local/bin/gnina \
+RUN curl -fsSL https://github.com/gnina/gnina/releases/download/v1.3/gnina \
+         -o /usr/local/bin/gnina \
     && chmod +x /usr/local/bin/gnina
 
 # ── QuickVina-W (blind docking) ───────────────────────────────────────────
-RUN wget -q "https://github.com/QVina/qvina/raw/master/bin/qvina-w" \
-         -O /usr/local/bin/qvina-w \
+RUN curl -fsSL "https://github.com/QVina/qvina/raw/master/bin/qvina-w" \
+         -o /usr/local/bin/qvina-w \
     && chmod +x /usr/local/bin/qvina-w
 USER $MAMBA_USER
 
