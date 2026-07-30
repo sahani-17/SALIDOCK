@@ -3,9 +3,9 @@
     admin off
 }
 
-# ── salidock.salixiras.com ───────────────────────────────────────────────
+# ── salidock.salixirax.com ───────────────────────────────────────────────
 # Caddy automatically provisions a free HTTPS certificate via Let's Encrypt
-salidock.salixiras.com {
+salidock.salixirax.com {
 
     # Reverse proxy backend API calls
     handle /api/* {
