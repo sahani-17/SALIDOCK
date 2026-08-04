@@ -202,7 +202,7 @@ function GridBoxViewer({ sessionId, gridCenter, gridSize }) {
 
         pluginRef.current = plugin;
 
-        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
         const response = await fetch(`${API_BASE_URL}/api/results/download/protein/${sessionId}`);
         if (!response.ok) throw new Error('Failed to load protein structure');
         const pdbData = await response.text();
@@ -284,10 +284,10 @@ function GridBoxViewer({ sessionId, gridCenter, gridSize }) {
 
   if (error) {
     return (
-      <div className="w-full h-96 bg-gray-100 rounded-lg flex items-center justify-center">
+      <div className="w-full h-96 bg-muted rounded-lg flex items-center justify-center">
         <div className="text-center">
-          <AlertTriangle className="w-8 h-8 text-red-500 mx-auto mb-2" />
-          <p className="text-red-600 text-sm">{error}</p>
+          <AlertTriangle className="w-8 h-8 text-destructive mx-auto mb-2" />
+          <p className="text-destructive text-sm">{error}</p>
         </div>
       </div>
     );
@@ -306,9 +306,9 @@ function GridBoxViewer({ sessionId, gridCenter, gridSize }) {
         #gridbox-viewer-container .msp-selection-viewport-controls { display: none !important; }
       `}</style>
 
-      <div className="relative w-full bg-gray-50" style={{ height: '500px', minHeight: '500px' }}>
+      <div className="relative w-full bg-background" style={{ height: '500px', minHeight: '500px' }}>
         {/* Mol* viewer */}
-        <div ref={viewerRef} className="w-full h-full rounded-lg border-2 border-gray-200 bg-white" style={{ width: '100%', height: '100%' }} />
+        <div ref={viewerRef} className="w-full h-full rounded-lg border-2 border-border bg-card" style={{ width: '100%', height: '100%' }} />
 
         {/* Canvas overlay for grid box — positioned exactly on top of Mol* */}
         <canvas
@@ -318,7 +318,7 @@ function GridBoxViewer({ sessionId, gridCenter, gridSize }) {
         />
 
         {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-lg z-10">
+          <div className="absolute inset-0 flex items-center justify-center bg-background/80 rounded-lg z-10">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
         )}
@@ -332,15 +332,15 @@ function GridBoxViewer({ sessionId, gridCenter, gridSize }) {
 
         {/* Grid Box Info Overlay */}
         {proteinLoaded && gridCenter && gridSize && (
-          <div className="absolute bottom-4 left-4 bg-white/90 rounded-lg shadow-lg px-4 py-2.5 border border-gray-200 z-10">
-            <p className="text-xs font-semibold text-gray-700 mb-1">
+          <div className="absolute bottom-4 left-4 bg-card/90 rounded-lg shadow-lg px-4 py-2.5 border border-border z-10">
+            <p className="text-xs font-semibold text-foreground mb-1">
               <Eye className="w-3 h-3 inline mr-1" />
               Grid Box
             </p>
-            <p className="text-xs text-gray-600">
+            <p className="text-xs text-muted-foreground">
               Center: ({gridCenter.x?.toFixed(1)}, {gridCenter.y?.toFixed(1)}, {gridCenter.z?.toFixed(1)})
             </p>
-            <p className="text-xs text-gray-600">
+            <p className="text-xs text-muted-foreground">
               Size: {gridSize.x?.toFixed(0)} × {gridSize.y?.toFixed(0)} × {gridSize.z?.toFixed(0)} Å
             </p>
             <div className="flex gap-3 mt-1.5 text-[10px]">

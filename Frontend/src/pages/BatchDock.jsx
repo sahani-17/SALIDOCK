@@ -793,12 +793,7 @@ function BatchDock() {
                                                     </div>
                                                 </div>
                                             ))}
-                                            {dockingRunning && (!dockingStatus || dockingStatus.results?.length < (workflow.batchLigands?.length || 0)) && (
-                                                <div className="flex items-center gap-2 pt-2 text-muted-foreground text-xs italic">
-                                                    <AnimatedCircularProgressBar size={16} strokeWidth={3} />
-                                                    <span className="font-medium text-foreground">Running calculations on compute pool...</span>
-                                                </div>
-                                            )}
+
                                         </div>
                                     </div>
                                 </div>

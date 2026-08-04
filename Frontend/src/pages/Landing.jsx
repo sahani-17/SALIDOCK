@@ -13,7 +13,7 @@ const Feature = ({ icon, title, desc }) => {
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
                 <Icon size={18} className="text-primary" aria-hidden="true" />
             </div>
-            <h3 className="font-semibold text-foreground mb-1.5">{title}</h3>
+            <h3 className="font-medium text-foreground mb-1.5">{title}</h3>
             <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
         </div>
     );
@@ -22,8 +22,8 @@ const Feature = ({ icon, title, desc }) => {
 const HowStep = ({ n, title, desc }) => (
     <div className="relative">
         <div className="flex items-center gap-3 mb-2">
-            <span className="w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold text-sm flex items-center justify-center">{n}</span>
-            <h3 className="font-semibold text-foreground">{title}</h3>
+            <span className="w-8 h-8 rounded-full bg-primary/10 text-primary font-medium text-sm flex items-center justify-center">{n}</span>
+            <h3 className="font-medium text-foreground">{title}</h3>
         </div>
         <p className="text-sm text-muted-foreground leading-relaxed pl-11">{desc}</p>
     </div>
@@ -46,7 +46,7 @@ const Landing = () => (
                 <div className="max-w-[1300px] mx-auto w-full px-6 lg:px-12 py-12">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
                         <div className="flex flex-col">
-                            <h1 className="font-display text-5xl md:text-6xl lg:text-[64px] leading-[1.05] text-foreground">
+                            <h1 className="font-medium text-5xl md:text-6xl lg:text-[64px] leading-[1.05] text-foreground">
                                 Docking that respects
                                 <br />
                                 <em className="italic text-primary">the science.</em>
@@ -80,26 +80,10 @@ const Landing = () => (
                                 <ArrowRight size={14} aria-hidden="true" />
                             </Link>
 
-                            <div className="mt-12 pt-6 border-t border-border grid grid-cols-3 gap-6 max-w-[560px]">
-                                <div>
-                                    <p className="font-display text-2xl text-foreground">GNINA</p>
-                                    <p className="text-[11px] uppercase tracking-widest text-muted-foreground mt-0.5">Scoring engine</p>
-                                </div>
-                                <div>
-                                    <p className="font-display text-2xl text-foreground">wRRF</p>
-                                    <p className="text-[11px] uppercase tracking-widest text-muted-foreground mt-0.5">Cavity consensus</p>
-                                </div>
-                                <div>
-                                    <p className="font-display text-2xl text-foreground">AlphaFold</p>
-                                    <p className="text-[11px] uppercase tracking-widest text-muted-foreground mt-0.5">Structure input</p>
-                                </div>
-                            </div>
-                        </div>
+                        </div>{/* end left column */}
 
                         <div className="lg:pl-8 xl:pl-12 w-full mt-4 lg:mt-0">
                             <div className="relative w-full max-w-[720px] mx-auto lg:ml-auto">
-                                <div className="absolute -top-4 -left-4 w-16 h-16 border-t border-l border-border pointer-events-none" aria-hidden="true" />
-                                <div className="absolute -bottom-4 -right-4 w-16 h-16 border-b-2 border-r-2 border-primary pointer-events-none" aria-hidden="true" />
                                 <div className="interactive bg-card p-3 shadow-elevated rounded-2xl border border-border relative">
                                     <div className="absolute -top-3.5 left-6 bg-card border border-border shadow-sm px-3 py-1.5 flex items-center gap-2 z-10 rounded-full">
                                         <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
@@ -122,8 +106,8 @@ const Landing = () => (
             <section className="py-20 border-t border-border bg-background/80 backdrop-blur-sm relative">
                 <div className="max-w-[1200px] mx-auto px-6 lg:px-12">
                     <div className="max-w-2xl mb-12">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-primary mb-2">How it works</p>
-                        <h2 className="font-display text-4xl text-foreground">Four steps, one pipeline.</h2>
+                        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-primary mb-2">How it works</p>
+                        <h2 className="font-medium text-4xl text-foreground">Four steps, one pipeline.</h2>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
                         <HowStep n="1" title="Input" desc="Upload a PDB, paste a FASTA sequence, or fetch a UniProt structure. Add a ligand as SDF or SMILES." />
@@ -138,8 +122,8 @@ const Landing = () => (
             <section className="py-20 relative">
                 <div className="max-w-[1200px] mx-auto px-6 lg:px-12">
                     <div className="max-w-2xl mb-12">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-primary mb-2">Capabilities</p>
-                        <h2 className="font-display text-4xl text-foreground">Everything a docking run needs.</h2>
+                        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-primary mb-2">Capabilities</p>
+                        <h2 className="font-medium text-4xl text-foreground">Everything a docking run needs.</h2>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <Feature icon={Wand2} title="Single Dock" desc="Prepare a single protein-ligand pair, choose your pocket, and run docking simulation." />
@@ -156,7 +140,7 @@ const Landing = () => (
             {/* CTA */}
             <section className="py-24 relative">
                 <div className="max-w-[900px] mx-auto px-6 lg:px-12 text-center">
-                    <h2 className="font-display text-4xl md:text-5xl text-foreground">Ready to dock your first ligand?</h2>
+                    <h2 className="font-medium text-4xl md:text-5xl text-foreground">Ready to dock your first ligand?</h2>
                     <p className="mt-4 text-lg text-muted-foreground">Start a run in under a minute — no install, no queue.</p>
                     <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
                         <Link

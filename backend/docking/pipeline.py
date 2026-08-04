@@ -26,7 +26,7 @@ Error mapping
 from __future__ import annotations
 
 import logging
-from typing import Union
+from typing import Optional, Union
 
 from docking.engines.gnina     import run_gnina
 from docking.engines.quickvina import run_quickvina
@@ -112,6 +112,38 @@ def run_docking(
             volume_angstrom3 = cavity_metadata.volume_angstrom3,
             size             = size,
         )
+
+        # ── Fallback: GNINA can't start (missing library) or rejected the input ──
+        # LIBRARY_MISSING (exit 127): dynamic linker couldn't load a CUDA lib.
+        # MALFORMED_INPUT (exit 1):   GNINA rejected the PDBQT — common for
+        #   combination drugs or unusual atom tags that Open Babel emits.
+        # In both cases we transparently retry with QuickVina-W so the job
+        # still completes rather than showing a hard failure to the user.
+        _GNINA_FALLBACK_CODES = {"LIBRARY_MISSING", "MALFORMED_INPUT"}
+        if raw_error is not None and raw_error.get("error_code") in _GNINA_FALLBACK_CODES:
+            error_code = raw_error["error_code"]
+            log.warning(
+                "[docking] GNINA unavailable (%s) — falling back to QuickVina-W. Details: %s",
+                error_code, raw_error["message"],
+            )
+            fallback_reason = (
+                f"GNINA failed ({error_code}); automatically falling back to QuickVina-W. "
+                f"Original routing: {routing_reason}"
+            )
+            center = (
+                cavity_metadata.center_x,
+                cavity_metadata.center_y,
+                cavity_metadata.center_z,
+            ) if cavity_metadata.has_coordinates else None
+            raw_result, raw_error = run_quickvina(
+                receptor_pdbqt = receptor_pdbqt,
+                ligand_pdbqt   = ligand_pdbqt,
+                center         = center,  # type: ignore[arg-type]
+                size           = size,
+            )
+            engine        = EngineChoice.QUICKVINA
+            routing_reason = fallback_reason
+
     else:  # EngineChoice.QUICKVINA
         center = (
             cavity_metadata.center_x,
@@ -150,3 +182,4 @@ def run_docking(
         engine_used    = engine,
         routing_reason = routing_reason,
     )
+

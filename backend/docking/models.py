@@ -31,10 +31,11 @@ class EngineChoice(str, Enum):
 
 
 class ErrorCode(str, Enum):
-    """Distinct error codes for the three explicitly handled failure modes."""
+    """Distinct error codes for the four explicitly handled failure modes."""
     BINARY_NOT_FOUND = "BINARY_NOT_FOUND"   # Engine executable missing from PATH
     MALFORMED_INPUT  = "MALFORMED_INPUT"    # Receptor or ligand PDBQT is invalid
-    TIMEOUT          = "TIMEOUT"            # Job exceeded the 120-second wall-clock limit
+    TIMEOUT          = "TIMEOUT"            # Job exceeded the wall-clock limit
+    LIBRARY_MISSING  = "LIBRARY_MISSING"    # Required shared library (e.g. libcudart) not found
 
 
 # ---------------------------------------------------------------------------

@@ -58,7 +58,8 @@ export function useBatchDockingWorkflow() {
             } catch (err) {
                 console.warn('Backend batch session creation delayed/failed, using fallback session ID:', err);
                 if (isMounted) {
-                    const fallbackId = 'batch_session_' + Math.random().toString(36).substring(2, 11);
+                    // Fallback must be a valid UUID — backend validates with uuid.UUID()
+                    const fallbackId = crypto.randomUUID();
                     setSessionId(fallbackId);
                 }
             }

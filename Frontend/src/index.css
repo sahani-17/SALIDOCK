@@ -46,6 +46,48 @@
 
     --radius: 0.75rem;
   }
+
+  .dark {
+    /* Surfaces — sophisticated charcoal slate (low-saturation, premium feel) */
+    --background: 224 18% 7%;              /* deep charcoal with subtle cool tint */
+    --foreground: 210 18% 93%;             /* crisp off-white text */
+
+    --card: 224 14% 10%;                   /* slightly lifted surface */
+    --card-foreground: 210 18% 93%;
+    --card-hover: 224 12% 13%;
+
+    --popover: 224 14% 10%;
+    --popover-foreground: 210 18% 93%;
+
+    /* Brand */
+    --primary: 213 82% 68%;               /* vivid sky-blue accent */
+    --primary-foreground: 224 18% 7%;
+    --primary-glow: 213 65% 52%;
+
+    --secondary: 224 12% 15%;
+    --secondary-foreground: 210 18% 93%;
+
+    --muted: 224 12% 15%;
+    --muted-foreground: 215 12% 56%;
+
+    --accent: 25 88% 58%;                 /* warm amber-orange pop */
+    --accent-foreground: 0 0% 100%;
+
+    /* Semantic */
+    --destructive: 0 74% 57%;
+    --destructive-foreground: 0 0% 100%;
+    --warning: 38 88% 54%;
+    --warning-foreground: 0 0% 100%;
+    --info: 213 82% 68%;
+    --info-foreground: 224 18% 7%;
+    --success: 152 55% 46%;
+    --success-foreground: 0 0% 100%;
+
+    /* Chrome */
+    --border: 224 10% 17%;
+    --input: 224 10% 17%;
+    --ring: 213 82% 68%;
+  }
 }
 
 @layer base {
@@ -53,16 +95,22 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
   html { scroll-behavior: smooth; }
 
+  /* Ensure DM Sans applies to ALL elements including buttons and inputs */
+  button, input, select, textarea, a {
+    font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  }
+
   h1, h2, h3, h4, h5, h6 {
+    font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
     text-rendering: optimizeLegibility;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.01em;
   }
 
   .font-display {
@@ -78,13 +126,21 @@
   }
 
   .shadow-elevated {
-    box-shadow: 0 1px 2px hsl(222 47% 11% / 0.04),
-                0 8px 24px -8px hsl(222 47% 11% / 0.08);
+    box-shadow: 0 1px 2px hsl(224 18% 4% / 0.06),
+                0 8px 24px -8px hsl(224 18% 4% / 0.10);
   }
 
   .shadow-glow {
     box-shadow: 0 0 0 1px hsl(var(--primary) / 0.1),
                 0 10px 30px -12px hsl(var(--primary) / 0.35);
+  }
+
+  /* ── Logo edge removal in dark mode ────────────────────────────────────
+     mix-blend-mode: screen makes dark pixels in the PNG transparent,
+     so the logo blends seamlessly with the dark navbar background.
+     In light mode the image renders normally (no blend). */
+  .dark .navbar-logo {
+    mix-blend-mode: screen;
   }
 }
 
@@ -153,5 +209,19 @@ button[title="Select Animation"],
 .landing-content [role="button"],
 .landing-content .interactive {
   pointer-events: auto;
+}
+
+/* ── MagicUI Ripple Effect — applied to ALL buttons app-wide ── */
+/* Every button must clip its children so the ripple span stays inside */
+button, [role="button"], .ripple-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+@keyframes salidock-ripple {
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
 }
 

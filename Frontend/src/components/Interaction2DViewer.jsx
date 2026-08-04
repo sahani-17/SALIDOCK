@@ -277,7 +277,7 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
 
 
   return (
-    <div className="flex flex-col h-full w-full bg-white rounded-lg overflow-hidden border border-primary/10" style={{ height: '600px' }}>
+    <div className="flex flex-col h-full w-full bg-card rounded-lg overflow-hidden border border-primary/10" style={{ height: '600px' }}>
       <style>{`
         .svg-container-2d svg {
           width: 100% !important;
@@ -290,7 +290,7 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
         }
       `}</style>
       {/* ── TOOLBAR ─────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50 flex-shrink-0">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/40 flex-shrink-0">
 
         {/* Left: download + reset view + distance toggle */}
         <div className="flex items-center gap-2">
@@ -298,7 +298,7 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
           <button
             onClick={() => handleDownload(svgContent, `pose_${poseNumber}_interactions.png`)}
             disabled={!svgContent}
-            className="p-1.5 text-slate-600 hover:text-primary hover:bg-slate-200 rounded transition-colors disabled:opacity-40"
+            className="p-1.5 text-muted-foreground hover:text-primary hover:bg-muted rounded transition-colors disabled:opacity-40"
             title="Download PNG (300 DPI)"
           >
             <Download className="w-4 h-4" />
@@ -307,7 +307,7 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
           {/* Reset pan/zoom */}
           <button
             onClick={resetView}
-            className="p-1.5 rounded hover:bg-gray-200 transition-colors text-xs text-gray-600 font-medium border border-transparent hover:border-gray-300"
+            className="p-1.5 rounded hover:bg-muted transition-colors text-xs text-muted-foreground font-medium border border-transparent hover:border-border"
             title="Reset view"
           >
             Reset
@@ -320,7 +320,7 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold transition-all ${
               showDistances
                 ? "bg-primary text-primary-foreground shadow-sm"
-                : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-300"
+                : "bg-card text-foreground hover:bg-muted border border-border"
             }`}
             title="Toggle Bond Distances (Å)"
           >
@@ -339,7 +339,7 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
             className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
               isCompareMode
                 ? "bg-purple-600 text-white hover:bg-purple-700"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300"
+                : "bg-muted text-muted-foreground hover:bg-muted/80 border border-border"
             }`}
           >
             {isCompareMode ? "Exit Compare" : "Compare Poses"}
@@ -348,11 +348,11 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
           {/* Second pose dropdown — only shown when compare mode is on */}
           {isCompareMode && (
             <div className="flex items-center gap-1.5">
-              <span className="text-xs text-gray-500">vs</span>
+              <span className="text-xs text-muted-foreground">vs</span>
               <select
                 value={comparePose || ""}
                 onChange={e => setComparePose(Number(e.target.value))}
-                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                className="text-xs border border-border rounded px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 {/* Generate options for all poses except the current one */}
                 {Array.from({ length: totalPoses || 9 }, (_, i) => i + 1)
@@ -379,7 +379,7 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
                     {r}
                   </span>
                 ))
-              : <span className="text-gray-400 italic">none</span>
+              : <span className="text-muted-foreground/50 italic">none</span>
             }
           </div>
           <div className="flex items-center gap-1.5">
@@ -390,7 +390,7 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
                     {r}
                   </span>
                 ))
-              : <span className="text-gray-400 italic">none</span>
+              : <span className="text-muted-foreground/50 italic">none</span>
             }
           </div>
           <div className="flex items-center gap-1.5">
@@ -401,7 +401,7 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
                     {r}
                   </span>
                 ))
-              : <span className="text-gray-400 italic">none</span>
+              : <span className="text-muted-foreground/50 italic">none</span>
             }
           </div>
         </div>
@@ -409,7 +409,7 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
 
       {/* ── VIEWER AREA ─────────────────────────────────────────────── */}
       {/* In compare mode: two panels side by side. Normal: one panel full width. */}
-      <div className={`flex flex-1 overflow-hidden ${isCompareMode ? "divide-x divide-gray-200" : ""}`}>
+      <div className={`flex flex-1 overflow-hidden ${isCompareMode ? "divide-x divide-border" : ""}`}>
 
         {/* PRIMARY panel — always shown */}
         <div className="flex flex-col flex-1 overflow-hidden min-w-0">

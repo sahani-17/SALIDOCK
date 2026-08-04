@@ -44,22 +44,22 @@ const Register = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
-      <Navbar lightTheme />
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
+      <Navbar />
       <main className="flex-1 pt-24 pb-10 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
-        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xl shadow-slate-200/60">
-          <div className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-blue-700 mb-4">
+        <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 sm:p-8 shadow-elevated">
+          <div className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-primary mb-4">
             Join Salidock
           </div>
-          <h1 className="text-2xl font-bold mb-1 text-slate-900">Register</h1>
-          <p className="text-sm text-slate-600 mb-6">Create an account to access SALIDOCK secure pages.</p>
+          <h1 className="text-2xl font-bold mb-1 text-foreground">Register</h1>
+          <p className="text-sm text-muted-foreground mb-6">Create an account to access SALIDOCK secure pages.</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm mb-1 text-slate-700">User name</label>
+              <label className="block text-sm mb-1 font-medium text-foreground">User name</label>
               <input
                 type="text"
-                className="w-full rounded-lg bg-white border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-lg bg-background border border-border px-3 py-2 outline-none text-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
@@ -67,10 +67,10 @@ const Register = () => {
             </div>
 
             <div>
-              <label className="block text-sm mb-1 text-slate-700">Email</label>
+              <label className="block text-sm mb-1 font-medium text-foreground">Email</label>
               <input
                 type="email"
-                className="w-full rounded-lg bg-white border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-lg bg-background border border-border px-3 py-2 outline-none text-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -78,10 +78,10 @@ const Register = () => {
             </div>
 
             <div>
-              <label className="block text-sm mb-1 text-slate-700">Password</label>
+              <label className="block text-sm mb-1 font-medium text-foreground">Password</label>
               <input
                 type="password"
-                className="w-full rounded-lg bg-white border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-lg bg-background border border-border px-3 py-2 outline-none text-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -92,21 +92,21 @@ const Register = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-blue-600 text-white py-2.5 font-semibold hover:bg-blue-700 transition-colors disabled:opacity-60"
+              className="w-full rounded-lg bg-primary text-primary-foreground py-2.5 font-bold hover:brightness-110 transition-all disabled:opacity-60"
             >
               {loading ? "Creating account..." : "Register"}
             </button>
           </form>
 
-          <p className="text-sm text-slate-600 mt-4 text-center">
+          <p className="text-sm text-muted-foreground mt-4 text-center">
             Already have an account?{" "}
-            <Link to="/login" className="text-blue-600 hover:text-blue-700 hover:underline font-medium">
+            <Link to="/login" className="text-primary hover:underline font-semibold">
               Login
             </Link>
           </p>
         </div>
       </main>
-      <Footer lightTheme />
+      <Footer />
     </div>
   );
 };

@@ -1,0 +1,18 @@
+# ── Never send these into the Linux Docker build context ──────────────────────
+
+# Windows-built node_modules contain .exe shims that break inside Alpine Linux.
+# The Dockerfile runs `npm ci` to install a fresh Linux-compatible set.
+node_modules
+npm-debug.log*
+
+# Already-built output (Docker rebuilds it from source)
+dist
+
+# Local env overrides — production image uses .env only
+.env.local
+.env.*.local
+
+# Editor / OS noise
+.vscode
+.DS_Store
+Thumbs.db

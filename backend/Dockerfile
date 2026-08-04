@@ -25,16 +25,60 @@ RUN mkdir -p /app/tools && \
 ENV P2RANK_HOME=/app/tools/p2rank_2.4.2
 ENV PATH="${P2RANK_HOME}:$PATH"
 
-# ── GNINA 1.3 (CPU-only) ──────────────────────────────────────────────────
+# ── CUDA 12 runtime (required by GNINA 1.3 binary even in --no_gpu mode) ──
+# GNINA 1.3 is dynamically linked against 7 CUDA 12 shared libraries.
+# The dynamic linker loads ALL of them at process start regardless of --no_gpu,
+# so every one must be present or the binary exits immediately with code 127.
+#
+# Required libraries and the packages that provide them:
+#   libcudart.so.12      ← cuda-cudart-12-0
+#   libcusparse.so.12    ← libcusparse-12-0
+#   libcufft.so.11       ← libcufft-11-0
+#   libnvToolsExt.so.1   ← cuda-nvtx-12-0
+#   libcublas.so.12      ← libcublas-12-0
+#   libcublasLt.so.12    ← libcublas-12-0
+#   libcusolver.so.11    ← libcusolver-12-0
+#
+# We use the cuda-libraries-12-0 meta-package which installs all of the above
+# in a single apt step (no GPU driver or full toolkit needed).
 USER root
-RUN curl -fsSL https://github.com/gnina/gnina/releases/download/v1.3/gnina \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        wget gnupg2 ca-certificates && \
+    # Add official NVIDIA CUDA apt repository (keyring, avoids deprecated apt-key)
+    wget -qO /usr/share/keyrings/cuda-archive-keyring.gpg \
+        https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-archive-keyring.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/cuda-archive-keyring.gpg] https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /" \
+        > /etc/apt/sources.list.d/cuda.list && \
+    apt-get update && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        cuda-libraries-12-0 \
+        cuda-nvtx-12-0 \
+        libcublas-12-0 \
+        libcufft-12-0 && \
+    rm -rf /var/lib/apt/lists/*
+
+# ── GNINA 1.3 (CPU-only, --no_gpu enforced via env) ───────────────────────
+USER root
+RUN curl -fSL --retry 5 --retry-delay 10 --retry-max-time 300 \
+         https://github.com/gnina/gnina/releases/download/v1.3/gnina \
          -o /usr/local/bin/gnina \
     && chmod +x /usr/local/bin/gnina
 
 # ── QuickVina-W (blind docking) ───────────────────────────────────────────
-RUN curl -fsSL "https://github.com/QVina/qvina/raw/master/bin/qvina-w" \
+# The QVina repo has no GitHub Releases — the binary is committed directly
+# in the repo at bin/qvina-w. We download from the raw content URL.
+RUN curl -fSL --retry 5 --retry-delay 10 --retry-max-time 300 \
+         "https://raw.githubusercontent.com/QVina/qvina/master/bin/qvina-w" \
          -o /usr/local/bin/qvina-w \
-    && chmod +x /usr/local/bin/qvina-w
+    && chmod +x /usr/local/bin/qvina-w \
+    && (qvina-w --help > /dev/null 2>&1 || echo "WARNING: qvina-w may not be executable on this arch")
+
+# ── Pre-create session work dir with correct ownership ────────────────────
+# The named Docker volume mounts as root-owned. Create it here as root and
+# chown to MAMBA_USER so the app can create session subdirs at runtime.
+RUN mkdir -p /tmp/SALIDOCK_Database && chown -R $MAMBA_USER:$MAMBA_USER /tmp/SALIDOCK_Database
 USER $MAMBA_USER
 
 ENV GNINA_BIN=gnina

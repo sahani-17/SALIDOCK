@@ -20,7 +20,10 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     restart: always
+    env_file:
+      - ./backend/.env          # loads all docking tuning vars (GNINA_BIN, QUICKVINA_BIN, etc.)
     environment:
+      # These override anything in .env for production correctness
       - ENVIRONMENT=production
       - CLOUD_ONLY_MODE=true
       - SUPABASE_URL=${SUPABASE_URL}
@@ -29,8 +32,21 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
       - MAX_DOCKING_WORKERS=${MAX_DOCKING_WORKERS:-2}
       - PORT=8000
+      # Docking binary paths (set explicitly so they are always correct in-container)
+      - GNINA_BIN=/usr/local/bin/gnina
+      - QUICKVINA_BIN=/usr/local/bin/qvina-w
+      # CPU caps for the 2-vCPU Azure VM
+      - GNINA_CPU=1
+      - GNINA_EXHAUSTIVENESS=8
+      - GNINA_NUM_MODES=5
+      - QUICKVINA_EXHAUSTIVENESS=8
+      - QUICKVINA_TIMEOUT_SEC=600
+      # Clear the dev-machine LD_LIBRARY_PATH so it doesn't leak into the container
+      - LD_LIBRARY_PATH=
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      # Named volume keeps session files alive across container restarts / redeployments
+      - salidock_sessions:/tmp/SALIDOCK_Database
 
   frontend:
     build:
@@ -41,3 +57,5 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  # Persists session files across backend container restarts / redeployments
+  salidock_sessions:

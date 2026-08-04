@@ -289,7 +289,7 @@ function Results() {
           )}
 
           {viewMode === '2d' && (
-            <div className="rounded-xl overflow-hidden border border-border bg-white" style={{ minHeight: '600px' }}>
+            <div className="rounded-xl overflow-hidden border border-border bg-card" style={{ minHeight: '600px' }}>
               <Interaction2DViewer sessionId={sessionId} poseNumber={selectedPose} totalPoses={allPoses.length || 9} />
             </div>
           )}

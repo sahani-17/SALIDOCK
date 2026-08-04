@@ -53,11 +53,16 @@ GNINA_BIN:   str   = os.environ.get("GNINA_BIN", "gnina")
 
 # Wall-clock timeout for GNINA focused docking.
 # With exhaustiveness=4, num_modes=5, and --cpu 4, a ~500-residue protein
-# typically finishes in 30-120 s.  600 s gives ample headroom for large
+# typically finishes in 30-90 s.  600 s gives ample headroom for large
 # receptors (>1000 residues) without indefinite hangs.
-TIMEOUT_SEC: int   = 600
+TIMEOUT_SEC: int   = int(os.environ.get("GNINA_TIMEOUT_SEC", "600"))
 
-BOX_PADDING: float = 2.0          # Å added to each face of the search box (reduced from 4)
+# Performance tuning — all overridable via environment variables
+GNINA_CPU:          int   = int(os.environ.get("GNINA_CPU", "4"))           # cores per job
+GNINA_EXHAUSTIVENESS: int = int(os.environ.get("GNINA_EXHAUSTIVENESS", "4")) # sampling depth (was 8)
+GNINA_NUM_MODES:    int   = int(os.environ.get("GNINA_NUM_MODES", "5"))     # output poses (was 9)
+
+BOX_PADDING: float = 2.0          # Å added to each face of the search box
 BOX_MIN:     float = 12.0         # Å minimum side length (before padding)
 BOX_MAX:     float = 28.0         # Å maximum base side length (before padding)
 
@@ -220,10 +225,10 @@ def run_gnina(
             "--size_y",         str(size_y),
             "--size_z",         str(size_z),
             "--cnn_scoring",    "rescore",
-            "--exhaustiveness", "8",
-            "--num_modes",      "9",
+            "--exhaustiveness", str(GNINA_EXHAUSTIVENESS),
+            "--num_modes",      str(GNINA_NUM_MODES),
             "--no_gpu",                # CPU-only: mandatory on web server
-            "--cpu",            "1",   # single-core per job; 5 jobs run concurrently
+            "--cpu",            str(GNINA_CPU),
             "--out",            str(out_sdf),
         ]
 
@@ -254,6 +259,49 @@ def run_gnina(
                     f"Consider reducing exhaustiveness or box size."
                 ),
             }
+
+        # ── Detect shared-library load failure (exit code 127) ───────────────
+        # Exit code 127 means the dynamic linker could not find a required
+        # shared library (e.g. libcudart.so.12 when CUDA is unavailable).
+        if proc.returncode == 127:
+            stderr_snippet = (proc.stderr or "").strip()[:400]
+            return None, {
+                "error_code": "LIBRARY_MISSING",
+                "message": (
+                    f"GNINA could not start because a required shared library is "
+                    f"missing (exit code 127). "
+                    f"This typically means libcudart.so is absent on a CPU-only host. "
+                    f"GNINA stderr: {stderr_snippet}"
+                ),
+            }
+
+        # ── Detect CUDA version mismatch (exit code 1 with library error) ────
+        # On some hosts GNINA exits with code 1 (not 127) when the CUDA
+        # runtime library exists but has the wrong ABI version, e.g.:
+        #   libcusolver.so.11: version `libcusolver.so.11' not found
+        # Treat this as LIBRARY_MISSING so the pipeline falls back to
+        # QuickVina-W instead of retrying GNINA in a failure loop.
+        if proc.returncode == 1:
+            stderr_text = (proc.stderr or "").strip()
+            cuda_signals = (
+                "libcusolver",
+                "libcudart",
+                "libcublas",
+                "libcurand",
+                "version `libcu",
+                "version not found",
+                "not found (required by",
+            )
+            if any(sig in stderr_text for sig in cuda_signals):
+                return None, {
+                    "error_code": "LIBRARY_MISSING",
+                    "message": (
+                        f"GNINA cannot run: CUDA shared-library version mismatch "
+                        f"(exit code 1). The installed CUDA runtime does not match "
+                        f"the version GNINA was compiled against. "
+                        f"GNINA stderr: {stderr_text[:400]}"
+                    ),
+                }
 
         # ── Detect malformed input from GNINA's stderr ────────────────────────
         if proc.returncode != 0:

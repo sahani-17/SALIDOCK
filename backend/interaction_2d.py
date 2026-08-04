@@ -1066,6 +1066,13 @@ def _depict_ligand(molblock: str, ligand_center: Tuple[float, float]):
         except Exception:
             pass
 
+    # Remove all explicit H atoms — they cause "HH" labels and disconnected
+    # fragments in the RDKit 2D layout.
+    try:
+        mol = Chem.RemoveHs(mol, implicitOnly=False, sanitize=False)
+    except Exception:
+        pass
+
     if _HAS_COORDGEN:
         try:
             rdCoordGen.AddCoords(mol)
@@ -1493,7 +1500,37 @@ def render_svg_new(
             except Exception:
                 pass
 
-        # 3. Raw residue grouping
+        # Guarantee pure 2D layout: Strip all existing conformers (3D or 2D) parsed from the molblock
+        # so CoordGen generates a 100% fresh 2D coordinate system from scratch.
+        mol.RemoveAllConformers()
+
+        # ── Strip all explicit H atoms before drawing ─────────────────────────
+        # Even if the upstream render_svg() called RemoveHs, it can silently fail
+        # when sanitization is incomplete (common with PDBQT-derived mols).
+        # Explicit H atoms cause RDKit to draw "HH" labels and produce disconnected
+        # fragments in the 2D layout.  We strip them here as the authoritative guard.
+        try:
+            mol = Chem.RemoveHs(mol, implicitOnly=False, updateExplicitCount=True, sanitize=False)
+        except Exception:
+            try:
+                # Fallback: remove H atoms manually by rebuilding the mol without them
+                em_noH = Chem.RWMol()
+                em_noH.BeginBatchEdit()
+                atom_map = {}
+                for atom in mol.GetAtoms():
+                    if atom.GetAtomicNum() != 1:  # 1 = Hydrogen
+                        new_idx = em_noH.AddAtom(Chem.Atom(atom.GetAtomicNum()))
+                        atom_map[atom.GetIdx()] = new_idx
+                for bond in mol.GetBonds():
+                    i, j = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
+                    if i in atom_map and j in atom_map:
+                        em_noH.AddBond(atom_map[i], atom_map[j], bond.GetBondType())
+                em_noH.CommitBatchEdit()
+                mol = em_noH.GetMol()
+            except Exception:
+                pass  # Keep original mol if all H-removal attempts fail
+
+
         groups = _group_by_residue_raw(filtered)
 
         # 4. Construct augmented molecule with dummy atoms and zero-order bonds
@@ -1846,6 +1883,25 @@ def render_svg(
         Chem.SanitizeMol(lig_mol)
     except Exception:
         pass
+
+    # ── Always generate fresh 2D coordinates ─────────────────────────────────
+    # If the uploaded SDF was 3D (docked pose or 3D structure), the ligand mol
+    # retains those 3D coordinates. Passing them to render_svg_new() causes the
+    # ligand to appear as a squashed 3D shape in the 2D diagram.
+    # Fix: strip any existing conformer and compute a proper 2D layout every time.
+    try:
+        lig_mol.RemoveAllConformers()
+        if _HAS_COORDGEN:
+            rdCoordGen.AddCoords(lig_mol)
+        else:
+            rdDepictor.Compute2DCoords(lig_mol)
+    except Exception as _e_2d:
+        _log.warning(f"2D coord generation for ligand mol failed: {_e_2d}; trying AllChem fallback")
+        try:
+            lig_mol.RemoveAllConformers()
+            AllChem.Compute2DCoords(lig_mol)
+        except Exception:
+            pass  # render_svg_new will attempt its own coord generation
 
     molblock = Chem.MolToMolBlock(lig_mol)
     return render_svg_new(interactions, molblock, binding_affinity=affinity)

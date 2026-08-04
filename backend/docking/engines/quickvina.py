@@ -47,7 +47,7 @@ import numpy as np
 # ---------------------------------------------------------------------------
 
 QUICKVINA_BIN: str   = os.environ.get("QUICKVINA_BIN", "qvina-w")
-TIMEOUT_SEC:   int   = 120          # Hard wall-clock limit (per specification)
+TIMEOUT_SEC:   int   = int(os.environ.get("QUICKVINA_TIMEOUT_SEC", "600"))  # Read from env, default 600 s
 BOX_PADDING:   float = 8.0          # Å added to each bounding-box face
 
 # ---------------------------------------------------------------------------
@@ -327,7 +327,7 @@ def run_quickvina(
             "--size_x",         str(box_size[0]),
             "--size_y",         str(box_size[1]),
             "--size_z",         str(box_size[2]),
-            "--exhaustiveness", "8",
+            "--exhaustiveness", str(int(os.environ.get("QUICKVINA_EXHAUSTIVENESS", "4"))),  # 4 is faster for blind docking
             "--num_modes",      "9",
             "--out",            str(out_pdbqt),
         ]

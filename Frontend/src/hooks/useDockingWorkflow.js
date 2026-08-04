@@ -56,7 +56,7 @@ export function useDockingWorkflow({ isBlind = false } = {}) {
             } catch (err) {
                 console.warn('Backend session creation delayed/failed, using fallback session ID:', err);
                 if (isMounted) {
-                    const fallbackId = 'session_' + Math.random().toString(36).substring(2, 11);
+                    const fallbackId = crypto.randomUUID(); // must be UUID — backend validates with uuid.UUID()
                     setSessionId(fallbackId);
                 }
             }

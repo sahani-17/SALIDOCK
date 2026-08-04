@@ -2136,9 +2136,9 @@ async def run_docking_endpoint(
             cavity_results = []
             cavity_results_map = {}
             
-            max_workers = int(os.getenv("MAX_DOCKING_WORKERS", 5))
+            max_workers = int(os.getenv("MAX_DOCKING_WORKERS", 2))  # Default 2 for 2-vCPU servers
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                # Submit all cavity docking jobs concurrently (5 jobs × 1 CPU thread each)
+                # Submit cavity docking jobs with controlled concurrency
                 futures = [executor.submit(dock_single_cavity, cav) for cav in cavities]
                 
                 # Retrieve results as they complete
@@ -2156,7 +2156,9 @@ async def run_docking_endpoint(
                         
                         # Prep log file
                         log_file = session_dir / f"docking_out_cavity_{cav_id}.log"
-                        log_file.write_text(f"Engine: {result.engine_used.value}\nRouting Reason: {result.routing_reason}\nStatus: Success\n", encoding="utf-8")
+                        log_content = f"Engine: {result.engine_used.value}\nRouting Reason: {result.routing_reason}\nStatus: Success\n"
+                        log_file.write_text(log_content, encoding="utf-8")
+                        cloud_save_text(session_id, log_file.name, log_content)  # Upload log to Supabase
                         
                         cavity_results.append((str(log_file), out_pdbqt, cav_id, cav))
                         cavity_results_map[cav_id] = result
@@ -2166,21 +2168,44 @@ async def run_docking_endpoint(
             if not cavity_results:
                 raise HTTPException(status_code=500, detail="Docking failed for all requested cavities")
                 
-            # Aggregate results from all cavities
-            all_poses = results.aggregate_multi_cavity_results(cavity_results)
-            
-            # Inject cnn details, engine, and reason
-            for pose in all_poses:
-                cav_id = pose.get('cavity_id')
+            # ── Build all_poses directly from DockingResult objects ──────────
+            # Bypass aggregate_multi_cavity_results (which calls parse_vina_output
+            # and needs REMARK VINA RESULT: lines that the obabel converter may
+            # fail to inject correctly).  We already have all the data we need.
+            all_poses = []
+            global_rank = 1
+            for log_file, out_pdbqt, cav_id, cav in cavity_results:
                 res = cavity_results_map.get(cav_id)
-                if res:
-                    pose['cnn_score'] = res.cnn_score
-                    pose['cnn_affinity'] = res.cnn_affinity
-                    pose['engine_used'] = res.engine_used.value
-                    pose['routing_reason'] = res.routing_reason
+                if res is None:
+                    continue
+                pose = {
+                    "mode": 1,
+                    "affinity": res.vina_affinity,
+                    "rmsd_lb": 0.0,
+                    "rmsd_ub": 0.0,
+                    "cavity_id": cav_id,
+                    "cavity_rank": cav.get("rank", cav_id),
+                    "cavity_volume": cav.get("volume", 0.0),
+                    "cavity_druggability": cav.get("druggability_score", 0.0),
+                    "cavity_center": cav.get("center", [0, 0, 0]),
+                    "cavity_size": cav.get("size", [0, 0, 0]),
+                    "cavity_confidence": cav.get("confidence", "UNKNOWN"),
+                    "pdbqt_file": str(out_pdbqt),
+                    "log_file": str(log_file),
+                    "cnn_score": res.cnn_score,
+                    "cnn_affinity": res.cnn_affinity,
+                    "engine_used": res.engine_used.value,
+                    "routing_reason": res.routing_reason,
+                }
+                all_poses.append(pose)
 
-            # Get best pose per cavity
-            best_per_cavity = results.get_best_pose_per_cavity(all_poses)
+            # Sort by affinity (most negative = best binding)
+            all_poses.sort(key=lambda p: p["affinity"])
+            for rank, pose in enumerate(all_poses, 1):
+                pose["global_rank"] = rank
+
+            # Get best pose per cavity (already 1 pose each, so this is a passthrough)
+            best_per_cavity = all_poses[:]
             
             # Save aggregated results to main output file for compatibility
             if all_poses:
@@ -2303,7 +2328,9 @@ async def run_docking_endpoint(
             
             # Mock log path
             log_file = session_dir / "docking_out.log"
-            log_file.write_text(f"Engine: {result.engine_used.value}\nRouting Reason: {result.routing_reason}\nStatus: Success\n", encoding="utf-8")
+            log_content = f"Engine: {result.engine_used.value}\nRouting Reason: {result.routing_reason}\nStatus: Success\n"
+            log_file.write_text(log_content, encoding="utf-8")
+            cloud_save_text(session_id, log_file.name, log_content)  # Upload log to Supabase
             
             # Parse results
             parsed = results.parse_vina_output(str(out_pdbqt))
@@ -2563,7 +2590,7 @@ async def prepare_batch_ligands_endpoint(session_id: str):
     import threading
     try:
         session_dir = get_session_dir(session_id)
-        batch_meta_file = session_dir / "batch_ligands.json"
+        batch_meta_file = ensure_session_file(session_id, "batch_ligands.json")
         
         if not batch_meta_file.exists():
             raise HTTPException(status_code=404, detail="No batch ligands uploaded yet")
@@ -2708,13 +2735,15 @@ async def run_batch_docking(
     import concurrent.futures
     try:
         session_dir = get_session_dir(session_id)
-        receptor = session_dir / "protein_prepared.pdbqt"
-        batch_meta_file = session_dir / "batch_ligands.json"
-        
+
+        # Recover files from Supabase Storage if /tmp was wiped by a container restart
+        receptor = ensure_session_file(session_id, "protein_prepared.pdbqt")
+        batch_meta_file = ensure_session_file(session_id, "batch_ligands.json")
+
         if not receptor.exists():
-            raise HTTPException(status_code=404, detail="Prepared protein not found")
+            raise HTTPException(status_code=404, detail="Prepared protein not found (not on disk or in Supabase Storage)")
         if not batch_meta_file.exists():
-            raise HTTPException(status_code=404, detail="Batch ligands not found")
+            raise HTTPException(status_code=404, detail="Batch ligands not found (not on disk or in Supabase Storage)")
             
         with open(batch_meta_file, 'r') as f:
             meta_data = json.load(f)
@@ -2766,12 +2795,27 @@ async def run_batch_docking(
             raise HTTPException(status_code=400, detail=f"Invalid docking mode: {docking_mode}")
             
         status_file = session_dir / "batch_dock_status.json"
+
+        # Determine the original protein name for ZIP naming
+        # Look for the uploaded protein file (not the prepared copies)
+        original_protein_stem = "protein"
+        for p_file in session_dir.glob("protein_*.*"):
+            if p_file.name not in ["protein_prepared.pdbqt", "protein_prepared.pdb"]:
+                stem = Path(p_file.name).stem           # e.g. "protein_1abc"
+                if stem.startswith("protein_"):
+                    stem = stem[8:]                      # strip "protein_" prefix → "1abc"
+                stem = re.sub(r'[^a-zA-Z0-9_-]', '_', stem).strip('_')
+                if stem:
+                    original_protein_stem = stem
+                break
+
         status_data = {
             "status": "running",
             "total": len(ligands),
             "completed": 0,
             "failed": 0,
             "results": [],
+            "protein_file": original_protein_stem,      # used by ZIP download for filename
             "docking_parameters": {
                 "docking_mode": docking_mode,
                 "target_cavity_id": cavity_id if docking_mode == "cavity" else None,
@@ -2792,10 +2836,11 @@ async def run_batch_docking(
                 
                 if not prepared_name:
                     return idx, {"index": idx, "name": name, "safe_name": safe_name, "status": "failed", "error": "Ligand was not prepared"}
-                    
-                ligand_path = session_dir / prepared_name
+
+                # Recover file from Supabase Storage if /tmp was wiped by a container restart
+                ligand_path = ensure_session_file(session_id, prepared_name)
                 if not ligand_path.exists():
-                    return idx, {"index": idx, "name": name, "safe_name": safe_name, "status": "failed", "error": f"Prepared file {prepared_name} missing"}
+                    return idx, {"index": idx, "name": name, "safe_name": safe_name, "status": "failed", "error": f"Prepared file {prepared_name} missing (not found locally or in Supabase Storage)"}
                     
                 try:
                     result = run_docking(str(receptor), str(ligand_path), cavity_meta, size=size)
@@ -3020,21 +3065,22 @@ async def download_batch_results_zip(session_id: str):
             
         results = report_data.get("results", [])
         
-        # Extract inputted protein name for ZIP naming and receptor file naming
-        protein_name = "protein"
-        raw_protein = report_data.get("protein_name") or report_data.get("protein_file") or report_data.get("protein_id")
-        if not raw_protein:
+        # Extract protein name for ZIP filename.
+        # Primary: read from batch_dock_status.json (set when docking started).
+        # Fallback: scan session dir for original uploaded protein file.
+        protein_name = report_data.get("protein_file") or ""
+        if not protein_name:
             for p_file in session_dir.glob("protein_*.*"):
                 if p_file.name not in ["protein_prepared.pdbqt", "protein_prepared.pdb"]:
-                    raw_protein = p_file.stem
+                    stem = Path(p_file.name).stem
+                    if stem.startswith("protein_"):
+                        stem = stem[8:]
+                    stem = re.sub(r'[^a-zA-Z0-9_-]', '_', stem).strip('_')
+                    if stem:
+                        protein_name = stem
                     break
-        if raw_protein:
-            p_stem = Path(raw_protein).stem
-            if p_stem.startswith("protein_"):
-                p_stem = p_stem[8:]
-            p_clean = re.sub(r'[^a-zA-Z0-9_-]', '_', p_stem).strip('_')
-            if p_clean:
-                protein_name = p_clean
+        if not protein_name:
+            protein_name = "protein"
 
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
@@ -3092,7 +3138,7 @@ async def download_batch_results_zip(session_id: str):
         return StreamingResponse(
             zip_buffer,
             media_type="application/x-zip-compressed",
-            headers={"Content-Disposition": f"attachment; filename={protein_name}_docking_results.zip"}
+            headers={"Content-Disposition": f"attachment; filename={protein_name}_batchdock.zip"}
         )
     except Exception as e:
         logger.error(f"Failed to build results ZIP: {e}", exc_info=True)

@@ -853,7 +853,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
         {!minimal && (
           <button
             onClick={handleResetCamera}
-            className="absolute top-4 right-16 z-10 p-2.5 rounded-full bg-white/90 hover:bg-white text-slate-700 hover:text-primary shadow-elevated border border-border/80 backdrop-blur-sm transition-all hover:scale-105 active:scale-95 flex items-center justify-center"
+            className="absolute top-4 right-16 z-10 p-2.5 rounded-full bg-card/90 hover:bg-card text-muted-foreground hover:text-primary shadow-elevated border border-border/80 backdrop-blur-sm transition-all hover:scale-105 active:scale-95 flex items-center justify-center"
             title="Reset Zoom"
           >
             <RefreshCw size={18} />
@@ -864,7 +864,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
         {!minimal && (
           <button
             onClick={handleDownloadUltraHD}
-            className="absolute top-4 right-4 z-10 p-2.5 rounded-full bg-white/90 hover:bg-white text-slate-700 hover:text-primary shadow-elevated border border-border/80 backdrop-blur-sm transition-all hover:scale-105 active:scale-95 flex items-center justify-center"
+            className="absolute top-4 right-4 z-10 p-2.5 rounded-full bg-card/90 hover:bg-card text-muted-foreground hover:text-primary shadow-elevated border border-border/80 backdrop-blur-sm transition-all hover:scale-105 active:scale-95 flex items-center justify-center"
             title="Download UltraHD Image"
           >
             <Camera size={18} />

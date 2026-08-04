@@ -40,4 +40,6 @@ results/
 temp_*/
 *.tmp
 
-
+# Local Docker testing overrides (never deploy to production)
+docker-compose.local.yml
+Caddyfile.local
