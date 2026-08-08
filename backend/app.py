@@ -45,23 +45,31 @@ logger = logging.getLogger(__name__)
 
 import tempfile
 
-BASE_DIR = Path(__file__).parent
+def get_writable_dir(dir_name: str) -> Path:
+    """Find and return a directory that the current process has full write access to."""
+    candidates = [
+        Path(tempfile.gettempdir()) / dir_name,
+        Path.home() / f".{dir_name.lower()}",
+        Path("/tmp") / f"user_{dir_name.lower()}",
+    ]
+    for target in candidates:
+        try:
+            target.mkdir(exist_ok=True, parents=True)
+            test_file = target / f".write_test_{os.getpid()}"
+            test_file.touch()
+            test_file.unlink()
+            return target
+        except Exception:
+            continue
+    cwd_dir = Path.cwd() / dir_name
+    cwd_dir.mkdir(exist_ok=True, parents=True)
+    return cwd_dir
 
-# Work directory for sessions (with fallback if /tmp is root-owned)
-WORK_DIR = Path(tempfile.gettempdir()) / "SALIDOCK_Database"
-try:
-    WORK_DIR.mkdir(exist_ok=True, parents=True)
-except PermissionError:
-    WORK_DIR = Path.home() / ".salidock_work"
-    WORK_DIR.mkdir(exist_ok=True, parents=True)
+# Work directory for sessions (guaranteed writable)
+WORK_DIR = get_writable_dir("SALIDOCK_Database")
 
-# User-facing results directory (SwissDock-style organized output)
-RESULTS_DIR = Path(tempfile.gettempdir()) / "SALIDOCK_results"
-try:
-    RESULTS_DIR.mkdir(exist_ok=True, parents=True)
-except PermissionError:
-    RESULTS_DIR = Path.home() / ".salidock_results"
-    RESULTS_DIR.mkdir(exist_ok=True, parents=True)
+# User-facing results directory (guaranteed writable)
+RESULTS_DIR = get_writable_dir("SALIDOCK_results")
 
 app = FastAPI(title="Docking Tool API - Session Based")
 
