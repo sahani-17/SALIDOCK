@@ -1,3 +1,4 @@
+// Build v2.1 — clean relative API pathing
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import '@fontsource/inter/400.css'
