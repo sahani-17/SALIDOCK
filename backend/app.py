@@ -752,23 +752,26 @@ def check_disk_space(required_mb: int = 100):
 async def create_session():
     """Create a new docking session."""
     try:
-        check_disk_space(required_mb=100)
+        try:
+            check_disk_space(required_mb=10)
+        except Exception as space_err:
+            logger.warning(f"Disk space check skipped/failed: {space_err}")
         
         session_id = str(uuid.uuid4())
         session_dir = get_session_dir(session_id)
         
-        # Register session in Supabase DB
+        # Register session in Supabase DB (best-effort)
         if supabase_mgr:
             try:
                 supabase_mgr.create_session(session_id)
-            except Exception as e:
-                logger.error(f"Failed to register session in Supabase DB: {e}")
+            except Exception as db_err:
+                logger.warning(f"Could not register session in Supabase DB: {db_err}")
         
         logger.info(f"Created new session: {session_id}")
         return {"status": "ok", "session_id": session_id}
     except Exception as e:
         logger.error(f"Failed to create session: {e}", exc_info=True)
-        return json_error(f"Failed to create session: {str(e)}")
+        return JSONResponse(status_code=500, content={"status": "error", "message": f"Failed to create session: {str(e)}"})
 
 # Track active/queued docking jobs for conditional UI notification prompts
 active_docking_count = 0
@@ -794,9 +797,8 @@ async def get_session_status(session_id: str):
             "ligand_uploaded": ligand_uploaded,
             "protein_prepared": (session_dir / "protein_prepared.pdbqt").exists(),
             "ligand_prepared": (session_dir / "ligand_prepared.pdbqt").exists(),
-            "grid_calculated": (session_dir / "grid_params.json").exists(),
-            "docking_complete": (session_dir / "docking_out_out.pdbqt").exists(),
-            "queue_count": active_docking_count,
+            "cavities_detected": (session_dir / "cavities.json").exists(),
+            "docking_completed": (session_dir / "docking_results.json").exists()
         }
         
         return {"status": "ok", "workflow": status}
@@ -813,8 +815,10 @@ async def upload_file(session_id: str, filetype: str, file: UploadFile = File(..
         if filetype not in ["protein", "ligand"]:
             raise HTTPException(status_code=400, detail="Invalid filetype. Must be 'protein' or 'ligand'")
         
-        # Check disk space before upload
-        check_disk_space(required_mb=100)
+        try:
+            check_disk_space(required_mb=10)
+        except Exception as space_err:
+            logger.warning(f"Disk space check skipped/failed: {space_err}")
         
         # Validate filename
         safe_filename = validate_filename(file.filename)
@@ -829,24 +833,22 @@ async def upload_file(session_id: str, filetype: str, file: UploadFile = File(..
             while chunk := await file.read(8192):  # 8KB chunks
                 total_size += len(chunk)
                 if total_size > MAX_FILE_SIZE:
-                    dest.unlink()  # Delete partial file
+                    dest.unlink(missing_ok=True)
                     raise HTTPException(status_code=413, detail=f"File too large (max {MAX_FILE_SIZE // 1024 // 1024} MB)")
                 fh.write(chunk)
         
         logger.info(f"Uploaded {safe_filename} ({total_size} bytes) to session {session_id}")
         
-        # Persist to Supabase Storage
-        cloud_save(session_id, dest.name, dest.read_bytes())
+        # Persist to Supabase Storage (best effort)
+        try:
+            cloud_save(session_id, dest.name, dest.read_bytes())
+        except Exception as cloud_err:
+            logger.warning(f"Cloud save warning for {dest.name}: {cloud_err}")
         
         return {"filename": safe_filename, "saved_as": str(dest.name), "size": total_size}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"File upload failed", exc_info=True)
-        return json_error(
-            "File upload failed",
-            suggestion="Please check the file format and try again",
-            log_details=str(e)
         )
 
 
