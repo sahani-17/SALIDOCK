@@ -3,11 +3,11 @@
     admin off
 }
 
-# ── salidock.com (Production — Azure VM) ────────────────────────────────
+# ── salidock-v2.salixirax.com (Production — Azure VM) ────────────────────
 # Caddy automatically provisions a free HTTPS certificate via Let's Encrypt.
 # This file is used ONLY in production via docker-compose on the Azure VM.
 # For local development, use `npm run dev` + `uvicorn app:app` directly.
-salidock.com {
+salidock-v2.salixirax.com {
 
     # Reverse proxy backend API calls
     handle /api/* {
