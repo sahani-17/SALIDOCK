@@ -51,7 +51,7 @@ RUN apt-get update && \
         cuda-cudart-12-0 \
         cuda-nvtx-12-0 \
         libcublas-12-0 \
-        libcufft-11-0 \
+        libcufft-12-0 \
         libcusparse-12-0 \
         libcusolver-12-0 && \
     rm -rf /var/lib/apt/lists/* /tmp/*
