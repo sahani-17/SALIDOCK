@@ -27,8 +27,8 @@ ENV PATH="${P2RANK_HOME}:$PATH"
 
 # ── CUDA 12 runtime (required by GNINA 1.3 binary even in --no_gpu mode) ──
 # GNINA 1.3 is dynamically linked against 7 CUDA 12 shared libraries.
-# The dynamic linker loads ALL of them at process start regardless of --no_gpu,
-# so every one must be present or the binary exits immediately with code 127.
+# We install ONLY the specific packages needed (NOT cuda-libraries-12-0
+# which is a 1.5GB meta-package pulling in NPP, nvJPEG, cuRAND etc.)
 #
 # Required libraries and the packages that provide them:
 #   libcudart.so.12      ← cuda-cudart-12-0
@@ -38,26 +38,23 @@ ENV PATH="${P2RANK_HOME}:$PATH"
 #   libcublas.so.12      ← libcublas-12-0
 #   libcublasLt.so.12    ← libcublas-12-0
 #   libcusolver.so.11    ← libcusolver-12-0
-#
-# We use the cuda-libraries-12-0 meta-package which installs all of the above
-# in a single apt step (no GPU driver or full toolkit needed).
 USER root
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         wget gnupg2 ca-certificates && \
-    # Add official NVIDIA CUDA apt repository (keyring, avoids deprecated apt-key)
     wget -qO /usr/share/keyrings/cuda-archive-keyring.gpg \
         https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-archive-keyring.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/cuda-archive-keyring.gpg] https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /" \
         > /etc/apt/sources.list.d/cuda.list && \
     apt-get update && \
-    apt-get update && \
     apt-get install -y --no-install-recommends \
-        cuda-libraries-12-0 \
+        cuda-cudart-12-0 \
         cuda-nvtx-12-0 \
         libcublas-12-0 \
-        libcufft-12-0 && \
-    rm -rf /var/lib/apt/lists/*
+        libcufft-11-0 \
+        libcusparse-12-0 \
+        libcusolver-12-0 && \
+    rm -rf /var/lib/apt/lists/* /tmp/*
 
 # ── GNINA 1.3 (CPU-only, --no_gpu enforced via env) ───────────────────────
 USER root
