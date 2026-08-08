@@ -1,8 +1,5 @@
-const rawApiUrl = (import.meta.env.VITE_API_BASE_URL || '').trim();
-// Ensure production app running on a live domain (like salidock-v2.salixirax.com) always uses relative path (/api/...)
-export const API_BASE_URL = (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && rawApiUrl.includes('localhost'))
-  ? ''
-  : rawApiUrl;
+// Hardcoded to relative paths so all frontend API calls use /api/... directly on current origin
+export const API_BASE_URL = '';
 
 /**
  * Centralized fetch wrapper. Unwraps backend error payloads (`detail`, `message`,
