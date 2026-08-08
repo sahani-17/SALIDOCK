@@ -26,11 +26,6 @@ services:
       # These override anything in .env for production correctness
       - ENVIRONMENT=production
       - CLOUD_ONLY_MODE=true
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_KEY=${SUPABASE_KEY}
-      - SUPABASE_STORAGE_BUCKET=${SUPABASE_STORAGE_BUCKET:-docking-results}
-      - CORS_ORIGINS=${CORS_ORIGINS:-*}
-      - MAX_DOCKING_WORKERS=${MAX_DOCKING_WORKERS:-2}
       - PORT=8000
       # Docking binary paths (set explicitly so they are always correct in-container)
       - GNINA_BIN=/usr/local/bin/gnina
