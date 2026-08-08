@@ -46,12 +46,22 @@ logger = logging.getLogger(__name__)
 import tempfile
 
 BASE_DIR = Path(__file__).parent
+
+# Work directory for sessions (with fallback if /tmp is root-owned)
 WORK_DIR = Path(tempfile.gettempdir()) / "SALIDOCK_Database"
-WORK_DIR.mkdir(exist_ok=True, parents=True)
+try:
+    WORK_DIR.mkdir(exist_ok=True, parents=True)
+except PermissionError:
+    WORK_DIR = Path.home() / ".salidock_work"
+    WORK_DIR.mkdir(exist_ok=True, parents=True)
 
 # User-facing results directory (SwissDock-style organized output)
 RESULTS_DIR = Path(tempfile.gettempdir()) / "SALIDOCK_results"
-RESULTS_DIR.mkdir(exist_ok=True, parents=True)
+try:
+    RESULTS_DIR.mkdir(exist_ok=True, parents=True)
+except PermissionError:
+    RESULTS_DIR = Path.home() / ".salidock_results"
+    RESULTS_DIR.mkdir(exist_ok=True, parents=True)
 
 app = FastAPI(title="Docking Tool API - Session Based")
 
@@ -491,15 +501,13 @@ def get_session_dir(session_id: str) -> Path:
     session_id = validate_session_id(session_id)
     
     session_dir = WORK_DIR / session_id
-    session_dir.mkdir(exist_ok=True, parents=True)
-    
-    # Ensure resolved path is within WORK_DIR (prevent path traversal)
     try:
-        if not session_dir.resolve().is_relative_to(WORK_DIR.resolve()):
-            raise HTTPException(status_code=403, detail="Access denied")
-    except ValueError:
-        # is_relative_to can raise ValueError on Windows with different drives
-        raise HTTPException(status_code=403, detail="Access denied")
+        session_dir.mkdir(exist_ok=True, parents=True)
+    except PermissionError:
+        fallback_work = Path.home() / ".salidock_work"
+        fallback_work.mkdir(exist_ok=True, parents=True)
+        session_dir = fallback_work / session_id
+        session_dir.mkdir(exist_ok=True, parents=True)
     
     return session_dir
 
@@ -735,22 +743,24 @@ def check_disk_space(required_mb: int = 100):
 @app.post("/api/session/create")
 async def create_session():
     """Create a new docking session."""
-    # Check disk space before creating session
-    check_disk_space(required_mb=100)
-    
-    session_id = str(uuid.uuid4())
-    session_dir = WORK_DIR / session_id
-    session_dir.mkdir(exist_ok=True)
-    
-    # Register session in Supabase DB
-    if supabase_mgr:
-        try:
-            supabase_mgr.create_session(session_id)
-        except Exception as e:
-            logger.error(f"Failed to register session in Supabase DB: {e}")
-    
-    logger.info(f"Created new session: {session_id}")
-    return {"status": "ok", "session_id": session_id}
+    try:
+        check_disk_space(required_mb=100)
+        
+        session_id = str(uuid.uuid4())
+        session_dir = get_session_dir(session_id)
+        
+        # Register session in Supabase DB
+        if supabase_mgr:
+            try:
+                supabase_mgr.create_session(session_id)
+            except Exception as e:
+                logger.error(f"Failed to register session in Supabase DB: {e}")
+        
+        logger.info(f"Created new session: {session_id}")
+        return {"status": "ok", "session_id": session_id}
+    except Exception as e:
+        logger.error(f"Failed to create session: {e}", exc_info=True)
+        return json_error(f"Failed to create session: {str(e)}")
 
 # Track active/queued docking jobs for conditional UI notification prompts
 active_docking_count = 0
