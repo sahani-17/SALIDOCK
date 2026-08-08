@@ -55,13 +55,14 @@ RESULTS_DIR.mkdir(exist_ok=True, parents=True)
 
 app = FastAPI(title="Docking Tool API - Session Based")
 
-# CORS configuration - FIXED: Use environment variable instead of wildcard
-CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,http://localhost:8501").split(",")
+# CORS configuration - FIXED: Allow all methods (including OPTIONS preflights) and clean origin strings
+raw_cors = os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,http://localhost:8501,https://salidock-v2.salixirax.com,https://salidock.com")
+CORS_ORIGINS = [o.strip() for o in raw_cors.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,  # FIXED: Use actual origins, not wildcard
-    allow_methods=["GET", "POST", "DELETE"],  # FIXED: Specific methods only
+    allow_origins=CORS_ORIGINS,
+    allow_methods=["*"],  # Must include OPTIONS for browser preflight checks
     allow_headers=["*"],
     allow_credentials=True,
 )
@@ -484,14 +485,13 @@ async def check_tools():
 def get_session_dir(session_id: str) -> Path:
     """
     Get session directory with security validation.
-    
-    Raises:
-        HTTPException: If session ID is invalid or session not found
+    Auto-creates directory on demand if missing (e.g. client fallback UUID).
     """
     # Validate session ID format
     session_id = validate_session_id(session_id)
     
     session_dir = WORK_DIR / session_id
+    session_dir.mkdir(exist_ok=True, parents=True)
     
     # Ensure resolved path is within WORK_DIR (prevent path traversal)
     try:
@@ -500,9 +500,6 @@ def get_session_dir(session_id: str) -> Path:
     except ValueError:
         # is_relative_to can raise ValueError on Windows with different drives
         raise HTTPException(status_code=403, detail="Access denied")
-    
-    if not session_dir.exists():
-        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
     
     return session_dir
 
@@ -2251,8 +2248,27 @@ async def run_docking_endpoint(
             
             if notify_email:
                 try:
+                    # Try to extract protein / ligand names from session files
+                    _pname, _lname = "Protein", "Ligand"
+                    try:
+                        _pfiles = list(session_dir.glob("protein_*.pdb")) + list(session_dir.glob("protein_*.pdbqt"))
+                        if _pfiles:
+                            _pname = _pfiles[0].stem.replace("protein_", "").replace("_prepared", "") or "Protein"
+                        _lfiles = list(session_dir.glob("ligand_*.sdf")) + list(session_dir.glob("ligand_*.pdbqt"))
+                        if _lfiles:
+                            _lname = _lfiles[0].stem.replace("ligand_", "").replace("_prepared", "") or "Ligand"
+                        _meta = session_dir / "ligand_metadata.json"
+                        if _meta.exists():
+                            import json as _json
+                            _lname = _json.loads(_meta.read_text()).get("ligand_name", _lname)
+                    except Exception:
+                        pass
                     top_aff = f"{all_poses[0].get('cnn_affinity', all_poses[0].get('affinity'))} kcal/mol" if all_poses else None
-                    send_docking_completion_email(notify_email, session_id, top_score=top_aff)
+                    send_docking_completion_email(
+                        notify_email, session_id,
+                        protein_name=_pname, ligand_name=_lname,
+                        top_score=top_aff
+                    )
                 except Exception as email_err:
                     logger.error(f"Notification email dispatch failed: {email_err}")
 
@@ -2374,8 +2390,26 @@ async def run_docking_endpoint(
             
             if notify_email:
                 try:
+                    _pname, _lname = "Protein", "Ligand"
+                    try:
+                        _pfiles = list(session_dir.glob("protein_*.pdb")) + list(session_dir.glob("protein_*.pdbqt"))
+                        if _pfiles:
+                            _pname = _pfiles[0].stem.replace("protein_", "").replace("_prepared", "") or "Protein"
+                        _lfiles = list(session_dir.glob("ligand_*.sdf")) + list(session_dir.glob("ligand_*.pdbqt"))
+                        if _lfiles:
+                            _lname = _lfiles[0].stem.replace("ligand_", "").replace("_prepared", "") or "Ligand"
+                        _meta = session_dir / "ligand_metadata.json"
+                        if _meta.exists():
+                            import json as _json
+                            _lname = _json.loads(_meta.read_text()).get("ligand_name", _lname)
+                    except Exception:
+                        pass
                     top_aff = f"{parsed[0].get('affinity')} kcal/mol" if parsed else None
-                    send_docking_completion_email(notify_email, session_id, top_score=top_aff)
+                    send_docking_completion_email(
+                        notify_email, session_id,
+                        protein_name=_pname, ligand_name=_lname,
+                        top_score=top_aff
+                    )
                 except Exception as email_err:
                     logger.error(f"Notification email dispatch failed: {email_err}")
 
@@ -2939,6 +2973,24 @@ async def run_batch_docking(
                     supabase_mgr.update_session_status(session_id, "completed")
                 except Exception as db_err:
                     logger.error(f"Supabase DB save failed: {db_err}")
+
+            # ── Send completion email notification ──────────────────────────
+            if notify_email:
+                try:
+                    best_score = f"{completed_results[0]['affinity']} kcal/mol" if completed_results else None
+                    best_binder = completed_results[0]['name'] if completed_results else None
+                    protein_label = original_protein_stem or "Protein"
+                    ligand_label = f"{len(completed_results)}/{len(ligands)} ligands" + (f" — best: {best_binder}" if best_binder else "")
+                    send_docking_completion_email(
+                        notify_email,
+                        session_id,
+                        protein_name=protein_label,
+                        ligand_name=ligand_label,
+                        top_score=best_score,
+                        is_batch=True,
+                    )
+                except Exception as email_err:
+                    logger.error(f"Batch completion email failed: {email_err}")
             
         def run_docking_background():
             global active_docking_count
