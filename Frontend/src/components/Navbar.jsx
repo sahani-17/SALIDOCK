@@ -139,13 +139,13 @@ export const Navbar = () => {
                 style={{ height: '180%' }}
               />
             </div>
-            {/* Text part */}
+            {/* Text part — exactly as written in the logo */}
             <div className="flex flex-col leading-none">
               <span className="text-lg font-extrabold tracking-tight" style={{ color: '#1a3a7a', fontFamily: "'DM Sans', system-ui, sans-serif" }}>
                 Sali<span style={{ color: '#2563eb' }}>Dock</span>
               </span>
-              <span className="text-[9px] font-medium tracking-widest uppercase" style={{ color: '#64748b', letterSpacing: '0.05em' }}>
-                Drug Discovery
+              <span className="text-[8px] font-medium tracking-wider uppercase" style={{ color: '#64748b' }}>
+                (Structure-Affinity-Ligand Interaction)
               </span>
             </div>
           </Link>
