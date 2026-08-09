@@ -139,13 +139,19 @@ export const Navbar = () => {
                 style={{ height: '180%' }}
               />
             </div>
-            {/* Text part — exactly as written in the logo */}
-            <div className="flex flex-col leading-none">
-              <span className="text-lg font-extrabold tracking-tight" style={{ color: '#1a3a7a', fontFamily: "'DM Sans', system-ui, sans-serif" }}>
-                Sali<span style={{ color: '#2563eb' }}>Dock</span>
+            {/* Text part — Rajdhani Bold matches the logo's font */}
+            <div className="flex flex-col leading-none gap-0.5">
+              <span
+                className="font-bold tracking-wide"
+                style={{ fontFamily: "'Rajdhani', 'DM Sans', system-ui, sans-serif", fontSize: '1.25rem', lineHeight: 1 }}
+              >
+                <span style={{ color: '#0f2d6e' }}>Sali</span><span style={{ color: '#2563eb' }}>Dock</span>
               </span>
-              <span className="text-[8px] font-medium tracking-wider uppercase" style={{ color: '#64748b' }}>
-                (Structure-Affinity-Ligand Interaction)
+              <span
+                className="tracking-widest uppercase"
+                style={{ fontFamily: "'DM Sans', system-ui, sans-serif", fontSize: '7px', color: '#64748b', letterSpacing: '0.08em' }}
+              >
+                (Structure·Affinity·Ligand Interaction)
               </span>
             </div>
           </Link>
