@@ -189,13 +189,19 @@ def _find_p2rank(p2rank_path: Optional[str] = None) -> Optional[str]:
     if p2rank_path and Path(p2rank_path).exists():
         return p2rank_path
 
-    # Try common locations relative to the backend directory
-    backend_dir = Path(__file__).resolve().parent.parent.parent / "backend"
+    # Try common locations — Docker image installs P2Rank to /app/tools/
     candidates = [
+        Path("/app/tools/p2rank_2.4.2/prank"),
+        Path("/app/tools/p2rank_2.4.2/prank.sh"),
+        Path("/usr/local/bin/prank"),
+    ]
+    # Also try relative to backend dir (local dev)
+    backend_dir = Path(__file__).resolve().parent.parent.parent / "backend"
+    candidates += [
         backend_dir / "p2rank_2.4.2" / "prank",
         backend_dir / "p2rank_2.4.2" / "prank.sh",
         backend_dir / "p2rank_2.4.2" / "prank.bat",
-        Path("/usr/local/bin/prank"),
+        Path("/app/tools/p2rank_2.4.2/prank.sh"),
     ]
     for c in candidates:
         if c.exists():

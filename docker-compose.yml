@@ -20,6 +20,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     restart: always
+    user: root
     env_file:
       - ./backend/.env          # loads all docking tuning vars (GNINA_BIN, QUICKVINA_BIN, etc.)
     environment:

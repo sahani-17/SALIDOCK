@@ -12,6 +12,9 @@ if python_bin_dir and python_bin_dir not in os.environ.get("PATH", ""):
 # Add project root to path so 'salidock' can be imported
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# BASE_DIR = directory containing this file (backend/)
+BASE_DIR = Path(__file__).resolve().parent
+
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Body
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
