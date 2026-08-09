@@ -1,12 +1,15 @@
 """
-notifications.py — Email notification service for SaliDock completion alerts.
-Supports Resend API (default, 3,000 free emails/mo) or direct SMTP.
+notifications.py — Email notification service for SaliDock.
+Uses the Resend SDK (3,000 free emails/month on the free plan).
+
+Triggers:
+  • Docking job completion  → send_docking_completion_email()
+    - Single docking: shown when server queue > 10
+    - Batch docking:  always available
 """
 
 import os
 import logging
-import urllib.request
-import json
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -14,6 +17,17 @@ logger = logging.getLogger(__name__)
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 SENDER_EMAIL = os.getenv("NOTIFY_SENDER_EMAIL", "SaliDock <onboarding@resend.dev>")
 SITE_URL = os.getenv("SITE_URL", "http://localhost:5173")
+
+
+# Lazily import resend so that the module loads even if the package is missing
+def _get_resend():
+    try:
+        import resend as _resend
+        _resend.api_key = RESEND_API_KEY
+        return _resend
+    except ImportError:
+        logger.warning("resend package not installed — run: pip install resend")
+        return None
 
 
 def send_docking_completion_email(
@@ -26,14 +40,26 @@ def send_docking_completion_email(
 ) -> bool:
     """
     Sends a completion notification email to the user via Resend API or logs fallback.
+
+    Used by:
+      - /api/dock/run/{session_id}  (single docking, when queue > 10)
+      - /api/batch/dock/run/{session_id}  (batch docking, always available)
     """
     if not to_email or "@" not in to_email:
         logger.debug(f"Invalid notification email provided: {to_email}")
         return False
 
-    results_url = f"{SITE_URL}/results?session_id={session_id}" if not is_batch else f"{SITE_URL}/batch-results?session_id={session_id}"
+    results_url = (
+        f"{SITE_URL}/results?session_id={session_id}"
+        if not is_batch
+        else f"{SITE_URL}/batch-results?session_id={session_id}"
+    )
 
-    subject = f"✅ SaliDock Finished: {protein_name} + {ligand_name}" if not is_batch else f"✅ SaliDock Batch Completed for Session {session_id[:8]}"
+    subject = (
+        f"✅ SaliDock Finished: {protein_name} + {ligand_name}"
+        if not is_batch
+        else f"✅ SaliDock Batch Completed for Session {session_id[:8]}"
+    )
 
     html_content = f"""
     <!DOCTYPE html>
@@ -62,8 +88,8 @@ def send_docking_completion_email(
         <br>
         <div class="badge">DOCKING COMPLETED</div>
         <h2>Your Docking Job is Ready!</h2>
-        <p>The 3-method consensus cavity detection & GNINA scoring engine have finished processing your complex.</p>
-        
+        <p>The 3-method consensus cavity detection &amp; GNINA scoring engine have finished processing your complex.</p>
+
         <div class="stats">
           <div class="stat-item">
             <span class="stat-label">Target Protein</span>
@@ -80,7 +106,7 @@ def send_docking_completion_email(
           </div>
         </div>
 
-        <a href="{results_url}" class="btn" target="_blank">View 3D Poses & 2D Interactions →</a>
+        <a href="{results_url}" class="btn" target="_blank">View 3D Poses &amp; 2D Interactions →</a>
 
         <div class="footer">
           SaliDock — Consensus-Driven Drug Discovery Platform<br>
@@ -92,38 +118,26 @@ def send_docking_completion_email(
     """
 
     if RESEND_API_KEY:
+        resend = _get_resend()
         senders_to_try = [SENDER_EMAIL]
+        # Always include the free Resend sandbox as a last-resort fallback
         if "onboarding@resend.dev" not in SENDER_EMAIL:
             senders_to_try.append("SaliDock <onboarding@resend.dev>")
 
-        for sender in senders_to_try:
-            try:
-                req = urllib.request.Request(
-                    "https://api.resend.com/emails",
-                    data=json.dumps({
+        if resend:
+            for sender in senders_to_try:
+                try:
+                    resp = resend.Emails.send({
                         "from": sender,
                         "to": [to_email],
                         "subject": subject,
-                        "html": html_content
-                    }).encode("utf-8"),
-                    headers={
-                        "Authorization": f"Bearer {RESEND_API_KEY}",
-                        "Content-Type": "application/json",
-                        "User-Agent": "SaliDock/1.0"
-                    },
-                    method="POST"
-                )
-                with urllib.request.urlopen(req) as resp:
-                    if resp.status in (200, 201):
-                        logger.info(f"✅ Notification email sent to {to_email} via Resend (from {sender})")
-                        return True
-            except Exception as e:
-                logger.warning(f"Failed to send email via Resend API from {sender}: {e}")
+                        "html": html_content,
+                    })
+                    logger.info(f"✅ Docking completion email sent to {to_email} (id={resp.get('id')})")
+                    return True
+                except Exception as e:
+                    logger.warning(f"Resend send failed (from={sender}): {e}")
 
-    # Fallback log output for development or when API key is unconfigured
-    logger.info(f"📩 [MOCK EMAIL NOTIFICATION] To: {to_email} | Subject: {subject} | Link: {results_url}")
-    return True
-
-    # Fallback log output for development or when API key is unconfigured
-    logger.info(f"📩 [MOCK EMAIL NOTIFICATION] To: {to_email} | Subject: {subject} | Link: {results_url}")
+    # Fallback: log only (no API key configured or all sends failed)
+    logger.info(f"📩 [MOCK EMAIL] To: {to_email} | Subject: {subject} | Link: {results_url}")
     return True

@@ -3,7 +3,7 @@ const Footer = () => (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                    <img src="/salidock-logo.png" alt="Salidock" className="h-7 md:h-8 w-auto object-contain opacity-90" aria-hidden="true" />
+                    <img src="/salidock-logo.png" alt="Salidock" className="h-8 md:h-10 w-auto object-contain opacity-90" aria-hidden="true" />
                     <p className="text-xs text-muted-foreground">© 2026 Salidock. All rights reserved.</p>
                 </div>
                 <div className="flex items-center gap-5 text-xs text-muted-foreground">

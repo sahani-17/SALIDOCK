@@ -29,14 +29,14 @@ RUN mkdir -p /work
 # ── Step 1: Embed residue files into the puresnet package ─────────────────────
 #    NOTE: 'sparseconv' env does NOT exist — puresnet is in the base conda env.
 #    All scripts use dynamic path discovery via `import puresnet; puresnet.__file__`
-COPY puresnet_residues/ /tmp/puresnet_residues/
-COPY install_puresnet_residues.py /tmp/install_puresnet_residues.py
+COPY backend/puresnet_residues/ /tmp/puresnet_residues/
+COPY backend/install_puresnet_residues.py /tmp/install_puresnet_residues.py
 RUN python /tmp/install_puresnet_residues.py
 
 # ── Step 2: Patch model.py + residue_h.py for CPU checkpoint loading ──────────
-COPY patch_puresnet_model.py /tmp/patch_puresnet_model.py
+COPY backend/patch_puresnet_model.py /tmp/patch_puresnet_model.py
 RUN python /tmp/patch_puresnet_model.py
 
 # ── Step 3: Self-test — build fails if anything is wrong ──────────────────────
-COPY verify_puresnet.py /tmp/verify_puresnet.py
+COPY backend/verify_puresnet.py /tmp/verify_puresnet.py
 RUN python /tmp/verify_puresnet.py

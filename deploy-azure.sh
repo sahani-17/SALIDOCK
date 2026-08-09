@@ -35,11 +35,27 @@ if [ -f "backend/puresnet_cpu.Dockerfile" ]; then
     sudo docker build -f backend/puresnet_cpu.Dockerfile -t salidock-puresnet-cpu:latest .
 fi
 
-# 4. Check for .env file
+# 4. Check for required .env files
 if [ ! -f ".env" ]; then
-    echo "⚠️  No .env file found! Copying .env.example..."
+    echo "⚠️  No root .env file found! Copying .env.example as a starting point..."
     cp .env.example .env
-    echo "👉 Please edit .env with your real SUPABASE_URL and SUPABASE_KEY before running docker compose."
+    echo "👉 Please edit .env with your real SUPABASE_URL and SUPABASE_KEY before re-running."
+    exit 1
+fi
+
+# backend/.env is gitignored — it must be manually placed on the VM.
+if [ ! -f "backend/.env" ]; then
+    echo ""
+    echo "❌  DEPLOYMENT BLOCKED: backend/.env is missing!"
+    echo "   This file is NOT tracked by git and must be placed manually on the VM."
+    echo ""
+    echo "   Steps to fix:"
+    echo "     1. On your dev machine:  scp backend/.env <user>@<vm-ip>:~/salidock/backend/.env"
+    echo "     OR"
+    echo "     1. On the VM:            nano ~/salidock/backend/.env"
+    echo "        (paste your production secrets from the .env.example template)"
+    echo ""
+    exit 1
 fi
 
 # 5. Launch SaliDock via Docker Compose

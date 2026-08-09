@@ -119,7 +119,7 @@ export const Navbar = () => {
       <header className="fixed top-0 inset-x-0 z-50 h-16 flex px-0">
 
         {/* Left Side Bar — Logo lives here, full h-16 to match notch height */}
-        <div className="flex-1 h-16 bg-background z-20 relative min-w-0 flex items-center pl-5">
+        <div className="w-60 shrink-0 h-16 bg-background z-20 relative flex items-center pl-5">
           <svg className="absolute bottom-0 left-0 w-full h-10 pointer-events-none" preserveAspectRatio="none">
             <line x1="0" y1="39.5" x2="100%" y2="39.5" stroke="currentColor" strokeOpacity={0.08} strokeWidth={0.5} className="text-foreground" />
             <line x1="0" y1="36.5" x2="100%" y2="36.5" stroke="currentColor" strokeOpacity={0.04} strokeWidth={0.5} className="text-foreground" />
@@ -132,7 +132,7 @@ export const Navbar = () => {
             <img
               src="/salidock-logo.png"
               alt="Salidock"
-              className="h-9 w-auto object-contain hover:scale-105 transition-transform navbar-logo"
+              className="h-11 w-auto object-contain hover:scale-105 transition-transform navbar-logo"
             />
           </Link>
         </div>

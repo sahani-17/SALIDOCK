@@ -30,6 +30,7 @@ function BatchDock() {
     const [gridSize, setGridSize] = useState({ x: 20, y: 20, z: 20 });
     const [autoDetectDone, setAutoDetectDone] = useState(false);
     const [notifyEmail, setNotifyEmail] = useState('');
+    const [emailConfirmed, setEmailConfirmed] = useState(false);
     const [stepIndex, setStepIndex] = useState(0);
 
     // Batch docking status polling
@@ -723,21 +724,49 @@ function BatchDock() {
 
                         <div className="mt-6 border-t border-border pt-5 space-y-4">
                             {!dockingRunning && !dockingStatus && (
-                                <div className="border border-border bg-card/60 p-4 rounded-xl space-y-2">
+                                <div className="border border-border bg-card/60 p-4 rounded-xl space-y-3">
                                     <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                                         <span>📩 Get Email Notification On Completion</span>
                                         <span className="text-[10px] text-muted-foreground font-normal">(Optional)</span>
                                     </label>
-                                    <input
-                                        type="email"
-                                        placeholder="name@example.com"
-                                        value={notifyEmail}
-                                        onChange={(e) => setNotifyEmail(e.target.value)}
-                                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-muted-foreground/60"
-                                        disabled={workflow.loading}
-                                    />
-                                    <p className="text-[11px] text-muted-foreground">Receive a direct batch results link & summary once all ligands complete docking.</p>
+
+                                    {emailConfirmed ? (
+                                        <div className="flex items-center justify-between p-2.5 bg-primary/8 border border-primary/30 rounded-lg">
+                                            <div className="flex items-center gap-2">
+                                                <CheckCircle2 size={15} className="text-primary shrink-0" />
+                                                <span className="text-xs font-semibold text-primary">{notifyEmail}</span>
+                                            </div>
+                                            <button
+                                                onClick={() => { setEmailConfirmed(false); }}
+                                                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+                                            >
+                                                Change
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="email"
+                                                placeholder="name@example.com"
+                                                value={notifyEmail}
+                                                onChange={(e) => { setNotifyEmail(e.target.value); setEmailConfirmed(false); }}
+                                                onKeyDown={(e) => { if (e.key === 'Enter' && notifyEmail.includes('@')) setEmailConfirmed(true); }}
+                                                className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-muted-foreground/60"
+                                                disabled={workflow.loading}
+                                            />
+                                            <button
+                                                onClick={() => setEmailConfirmed(true)}
+                                                disabled={!notifyEmail.includes('@') || workflow.loading}
+                                                className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:brightness-110 active:scale-95 transition-all disabled:opacity-40 whitespace-nowrap"
+                                            >
+                                                Confirm
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    <p className="text-[11px] text-muted-foreground">Receive a direct batch results link &amp; summary once all ligands complete docking.</p>
                                 </div>
+
                             )}
 
                             {!dockingRunning && !dockingStatus ? (
