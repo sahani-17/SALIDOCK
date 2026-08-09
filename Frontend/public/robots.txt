@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://salidock-v2.salixirax.com/sitemap.xml
