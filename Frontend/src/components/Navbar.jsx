@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
+import salidockLogo from "../assets/logo.png";
 import {
   Home,
   Info,
@@ -119,7 +120,7 @@ export const Navbar = () => {
       <header className="fixed top-0 inset-x-0 z-50 h-16 flex px-0">
 
         {/* Left Side Bar — Logo lives here, full h-16 to match notch height */}
-        <div className="w-60 shrink-0 h-16 bg-background z-20 relative flex items-center pl-5">
+        <div className="w-72 shrink-0 h-16 bg-background z-20 relative flex items-center pl-4">
           <svg className="absolute bottom-0 left-0 w-full h-10 pointer-events-none" preserveAspectRatio="none">
             <line x1="0" y1="39.5" x2="100%" y2="39.5" stroke="currentColor" strokeOpacity={0.08} strokeWidth={0.5} className="text-foreground" />
             <line x1="0" y1="36.5" x2="100%" y2="36.5" stroke="currentColor" strokeOpacity={0.04} strokeWidth={0.5} className="text-foreground" />
@@ -127,12 +128,13 @@ export const Navbar = () => {
           {/* Logo — left of the notch, vertically centred */}
           <Link
             to="/"
-            className="relative z-10 flex items-center shrink-0 hover:opacity-80 transition-opacity"
+            className="relative z-10 flex items-center shrink-0 hover:opacity-90 transition-opacity"
           >
             <img
-              src="/salidock-logo.png"
-              alt="Salidock"
-              className="h-11 w-auto object-contain hover:scale-105 transition-transform navbar-logo"
+              src={salidockLogo}
+              alt="SALIDOCK"
+              className="h-14 w-auto object-contain hover:scale-105 transition-transform"
+              style={{ maxWidth: "260px", filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.15))" }}
             />
           </Link>
         </div>
