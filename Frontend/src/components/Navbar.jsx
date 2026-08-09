@@ -120,24 +120,37 @@ export const Navbar = () => {
       <header className="fixed top-0 inset-x-0 z-50 h-16 flex px-0">
 
         {/* Left Side Bar — Logo lives here, full h-16 to match notch height */}
-        <div className="w-72 shrink-0 h-16 bg-background z-20 relative flex items-center pl-4">
+        <div className="w-56 shrink-0 h-16 bg-background z-20 relative flex items-center pl-3">
           <svg className="absolute bottom-0 left-0 w-full h-10 pointer-events-none" preserveAspectRatio="none">
             <line x1="0" y1="39.5" x2="100%" y2="39.5" stroke="currentColor" strokeOpacity={0.08} strokeWidth={0.5} className="text-foreground" />
             <line x1="0" y1="36.5" x2="100%" y2="36.5" stroke="currentColor" strokeOpacity={0.04} strokeWidth={0.5} className="text-foreground" />
           </svg>
-          {/* Logo — left of the notch, vertically centred */}
+          {/* Logo — icon + text side by side like CB-DOCK2 */}
           <Link
             to="/"
-            className="relative z-10 flex items-center shrink-0 hover:opacity-90 transition-opacity"
+            className="relative z-10 flex items-center gap-2 shrink-0 hover:opacity-90 transition-opacity"
           >
-            <img
-              src={salidockLogo}
-              alt="SALIDOCK"
-              className="h-14 w-auto object-contain hover:scale-105 transition-transform"
-              style={{ maxWidth: "260px", filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.15))" }}
-            />
+            {/* Just the icon part — cropped to top 60% of the square logo */}
+            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-sm" style={{ position: 'relative' }}>
+              <img
+                src="/salidock-logo.png"
+                alt=""
+                className="absolute top-0 left-0 w-full object-cover object-top"
+                style={{ height: '180%' }}
+              />
+            </div>
+            {/* Text part */}
+            <div className="flex flex-col leading-none">
+              <span className="text-lg font-extrabold tracking-tight" style={{ color: '#1a3a7a', fontFamily: "'DM Sans', system-ui, sans-serif" }}>
+                Sali<span style={{ color: '#2563eb' }}>Dock</span>
+              </span>
+              <span className="text-[9px] font-medium tracking-widest uppercase" style={{ color: '#64748b', letterSpacing: '0.05em' }}>
+                Drug Discovery
+              </span>
+            </div>
           </Link>
         </div>
+
 
         {/* Notch Container */}
         <div className="flex h-16 relative z-10 shrink-0 -ml-px">
