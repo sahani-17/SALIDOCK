@@ -849,7 +849,8 @@ async def upload_file(session_id: str, filetype: str, file: UploadFile = File(..
     except HTTPException:
         raise
     except Exception as e:
-        )
+        logger.error(f"Upload error for session {session_id}: {e}")
+        return json_error(str(e))
 
 
 from pydantic import BaseModel
