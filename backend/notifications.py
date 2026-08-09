@@ -50,9 +50,9 @@ def send_docking_completion_email(
         return False
 
     results_url = (
-        f"{SITE_URL}/results?session_id={session_id}"
+        f"{SITE_URL}/results?session={session_id}"
         if not is_batch
-        else f"{SITE_URL}/batch-results?session_id={session_id}"
+        else f"{SITE_URL}/batch-results?session={session_id}"
     )
 
     subject = (
