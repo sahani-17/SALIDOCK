@@ -1508,27 +1508,42 @@ def render_svg_new(
         # Even if the upstream render_svg() called RemoveHs, it can silently fail
         # when sanitization is incomplete (common with PDBQT-derived mols).
         # Explicit H atoms cause RDKit to draw "HH" labels and produce disconnected
-        # fragments in the 2D layout.  We strip them here as the authoritative guard.
+        # fragments in the 2D layout. We strip here as the authoritative guard.
         try:
             mol = Chem.RemoveHs(mol, implicitOnly=False, updateExplicitCount=True, sanitize=False)
         except Exception:
+            pass
+
+        # Nuclear H strip — runs ALWAYS after RemoveHs in case it silently failed
+        # (RemoveHs returns the original mol unchanged when sanitization is broken)
+        def _nuclear_strip_h(m):
+            """Rebuild molecule keeping only non-hydrogen atoms."""
+            rw = Chem.RWMol()
+            amap = {}
+            for atom in m.GetAtoms():
+                if atom.GetAtomicNum() != 1:
+                    ni = rw.AddAtom(Chem.Atom(atom.GetAtomicNum()))
+                    rw.GetAtomWithIdx(ni).SetFormalCharge(atom.GetFormalCharge())
+                    rw.GetAtomWithIdx(ni).SetNoImplicit(False)
+                    amap[atom.GetIdx()] = ni
+            for bond in m.GetBonds():
+                i, j = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
+                if i in amap and j in amap:
+                    rw.AddBond(amap[i], amap[j], bond.GetBondType())
             try:
-                # Fallback: remove H atoms manually by rebuilding the mol without them
-                em_noH = Chem.RWMol()
-                em_noH.BeginBatchEdit()
-                atom_map = {}
-                for atom in mol.GetAtoms():
-                    if atom.GetAtomicNum() != 1:  # 1 = Hydrogen
-                        new_idx = em_noH.AddAtom(Chem.Atom(atom.GetAtomicNum()))
-                        atom_map[atom.GetIdx()] = new_idx
-                for bond in mol.GetBonds():
-                    i, j = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
-                    if i in atom_map and j in atom_map:
-                        em_noH.AddBond(atom_map[i], atom_map[j], bond.GetBondType())
-                em_noH.CommitBatchEdit()
-                mol = em_noH.GetMol()
+                Chem.SanitizeMol(rw)
             except Exception:
-                pass  # Keep original mol if all H-removal attempts fail
+                pass
+            return rw.GetMol()
+
+        residual_h = sum(1 for a in mol.GetAtoms() if a.GetAtomicNum() == 1)
+        if residual_h > 0:
+            _log.warning(f"render_svg_new: {residual_h} H atoms remain after RemoveHs — applying nuclear strip")
+            try:
+                mol = _nuclear_strip_h(mol)
+                _log.info(f"Nuclear strip done: {mol.GetNumAtoms()} heavy atoms remain")
+            except Exception as _e_ns:
+                _log.warning(f"Nuclear H strip in render_svg_new failed: {_e_ns}")
 
 
         groups = _group_by_residue_raw(filtered)
@@ -1878,11 +1893,42 @@ def render_svg(
     except Exception:
         pass
 
+    # ── Strip hydrogens — guaranteed nuclear fallback ─────────────────────────
+    # RemoveHs silently fails when the molecule is not fully sanitized
+    # (common for PDBQT-derived mols). The nuclear fallback manually
+    # rebuilds the mol excluding any atom with atomic number 1 (H).
     try:
-        lig_mol = Chem.RemoveHs(lig_mol)
+        lig_mol = Chem.RemoveHs(lig_mol, implicitOnly=False, updateExplicitCount=True, sanitize=False)
         Chem.SanitizeMol(lig_mol)
     except Exception:
         pass
+
+    # Nuclear H stripping: count residual H atoms and strip them manually
+    h_count = sum(1 for a in lig_mol.GetAtoms() if a.GetAtomicNum() == 1)
+    if h_count > 0:
+        _log.warning(f"RemoveHs left {h_count} H atoms — applying nuclear strip")
+        try:
+            em_noH = Chem.RWMol()
+            atom_map = {}
+            for atom in lig_mol.GetAtoms():
+                if atom.GetAtomicNum() != 1:
+                    new_idx = em_noH.AddAtom(Chem.Atom(atom.GetAtomicNum()))
+                    new_atom = em_noH.GetAtomWithIdx(new_idx)
+                    new_atom.SetFormalCharge(atom.GetFormalCharge())
+                    new_atom.SetNoImplicit(False)
+                    atom_map[atom.GetIdx()] = new_idx
+            for bond in lig_mol.GetBonds():
+                i, j = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
+                if i in atom_map and j in atom_map:
+                    em_noH.AddBond(atom_map[i], atom_map[j], bond.GetBondType())
+            try:
+                Chem.SanitizeMol(em_noH)
+            except Exception:
+                pass
+            lig_mol = em_noH.GetMol()
+            _log.info(f"Nuclear H strip: {h_count} H atoms removed, {lig_mol.GetNumAtoms()} heavy atoms remain")
+        except Exception as _e_nuclear:
+            _log.warning(f"Nuclear H strip failed: {_e_nuclear}")
 
     # ── Always generate fresh 2D coordinates ─────────────────────────────────
     # If the uploaded SDF was 3D (docked pose or 3D structure), the ligand mol
