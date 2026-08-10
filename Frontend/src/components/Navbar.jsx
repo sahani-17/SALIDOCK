@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
-import salidockLogo from "../assets/logo.png";
+import { animate, motion, AnimatePresence } from "framer-motion";
 import {
   Home,
   Info,
@@ -12,20 +12,17 @@ import {
   LogIn,
   UserPlus,
   LogOut,
-  User,
   Menu,
   X,
   Sun,
   Moon,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 
 // ─── Theme Toggle ────────────────────────────────────────────────────────────
 const ThemeToggle = () => {
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    // Read from localStorage or system preference on mount
     const stored = localStorage.getItem("theme");
     if (stored === "dark") {
       setIsDark(true);
@@ -34,7 +31,6 @@ const ThemeToggle = () => {
       setIsDark(false);
       document.documentElement.classList.remove("dark");
     } else {
-      // system preference
       const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
       setIsDark(prefersDark);
       document.documentElement.classList.toggle("dark", prefersDark);
@@ -59,31 +55,12 @@ const ThemeToggle = () => {
   );
 };
 
-// ─── NavLink ─────────────────────────────────────────────────────────────────
-const NavLink = ({ to, icon: Icon, label, active }) => (
-  <Link
-    to={to}
-    style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}
-    className={`group flex items-center gap-1.5 text-xs font-bold tracking-wide transition-colors whitespace-nowrap ${
-      active
-        ? "text-primary"
-        : "text-muted-foreground hover:text-foreground"
-    }`}
-  >
-    <Icon
-      className={`w-3.5 h-3.5 transition-opacity ${
-        active ? "opacity-100" : "opacity-70 group-hover:opacity-100"
-      }`}
-    />
-    <span>{label}</span>
-  </Link>
-);
-
-// ─── Main Navbar ──────────────────────────────────────────────────────────────
+// ─── Main Spotlight Navbar ───────────────────────────────────────────────────
 export const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { user, signOut } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const displayName =
     user?.user_metadata?.username ||
@@ -101,195 +78,254 @@ export const Navbar = () => {
     setIsMobileMenuOpen(false);
   };
 
-  const navItemsLeft = [
-    { label: "Home",          to: "/",         icon: Home },
-    { label: "About",         to: "/about",    icon: Info },
-    { label: "Documentation", to: "/docs",     icon: FileText },
+  const items = [
+    { label: "Home", href: "/", icon: Home },
+    { label: "About", href: "/about", icon: Info },
+    { label: "Documentation", href: "/docs", icon: FileText },
+    { label: "Single Dock", href: "/dock", icon: FlaskConical },
+    { label: "Batch Dock", href: "/batch-dock", icon: LayoutGrid },
   ];
 
-  const navItemsRight = [
-    { label: "Single Dock", to: "/dock",       icon: FlaskConical },
-    { label: "Batch Dock",  to: "/batch-dock", icon: LayoutGrid },
-  ];
+  // Find active index based on current URL path
+  const activeIndex = Math.max(
+    0,
+    items.findIndex((item) => item.href === location.pathname)
+  );
 
-  const allNavItems = [...navItemsLeft, ...navItemsRight];
+  const navRef = useRef(null);
+  const [hoverX, setHoverX] = useState(null);
+
+  // Refs for light positions to animate imperatively
+  const spotlightX = useRef(0);
+  const ambienceX = useRef(0);
+
+  // Handle MouseMove & MouseLeave for dynamic spotlight
+  useEffect(() => {
+    if (!navRef.current) return;
+    const nav = navRef.current;
+
+    const handleMouseMove = (e) => {
+      const rect = nav.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      setHoverX(x);
+      spotlightX.current = x;
+      nav.style.setProperty("--spotlight-x", `${x}px`);
+    };
+
+    const handleMouseLeave = () => {
+      setHoverX(null);
+      const activeItem = nav.querySelector(`[data-index="${activeIndex}"]`);
+      if (activeItem) {
+        const navRect = nav.getBoundingClientRect();
+        const itemRect = activeItem.getBoundingClientRect();
+        const targetX = itemRect.left - navRect.left + itemRect.width / 2;
+
+        animate(spotlightX.current, targetX, {
+          type: "spring",
+          stiffness: 200,
+          damping: 20,
+          onUpdate: (v) => {
+            spotlightX.current = v;
+            nav.style.setProperty("--spotlight-x", `${v}px`);
+          },
+        });
+      }
+    };
+
+    nav.addEventListener("mousemove", handleMouseMove);
+    nav.addEventListener("mouseleave", handleMouseLeave);
+
+    return () => {
+      nav.removeEventListener("mousemove", handleMouseMove);
+      nav.removeEventListener("mouseleave", handleMouseLeave);
+    };
+  }, [activeIndex]);
+
+  // Handle Active Item Ambience Movement
+  useEffect(() => {
+    if (!navRef.current) return;
+    const nav = navRef.current;
+    const activeItem = nav.querySelector(`[data-index="${activeIndex}"]`);
+
+    if (activeItem) {
+      const navRect = nav.getBoundingClientRect();
+      const itemRect = activeItem.getBoundingClientRect();
+      const targetX = itemRect.left - navRect.left + itemRect.width / 2;
+
+      animate(ambienceX.current, targetX, {
+        type: "spring",
+        stiffness: 200,
+        damping: 20,
+        onUpdate: (v) => {
+          ambienceX.current = v;
+          nav.style.setProperty("--ambience-x", `${v}px`);
+        },
+      });
+    }
+  }, [activeIndex]);
 
   return (
     <>
-      {/* ── Fixed Notch Header ── */}
-      <header className="fixed top-0 inset-x-0 z-50 h-16 flex px-0">
+      <header className="fixed top-0 inset-x-0 z-50 h-16 flex items-center justify-between px-4 md:px-8 bg-background/80 backdrop-blur-md border-b border-border/50">
+        
+        {/* Left Side: Brand Logo */}
+        <Link
+          to="/"
+          className="flex items-center gap-2.5 shrink-0 hover:opacity-90 transition-opacity"
+        >
+          <div className="h-11 w-11 shrink-0 overflow-hidden rounded-sm relative">
+            <img
+              src="/salidock-logo.png"
+              alt="SaliDock Logo"
+              className="absolute top-0 left-0 w-full object-cover object-top"
+              style={{ height: "180%" }}
+            />
+          </div>
+          <div className="flex flex-col leading-none gap-0.5">
+            <span
+              className="font-bold tracking-wide"
+              style={{
+                fontFamily: "'Rajdhani', 'DM Sans', system-ui, sans-serif",
+                fontSize: "1.25rem",
+                lineHeight: 1,
+              }}
+            >
+              <span className="text-foreground dark:text-white">Sali</span>
+              <span className="text-primary">Dock</span>
+            </span>
+            <span
+              className="tracking-widest uppercase text-muted-foreground"
+              style={{
+                fontFamily: "'DM Sans', system-ui, sans-serif",
+                fontSize: "7px",
+                letterSpacing: "0.08em",
+              }}
+            >
+              (Structure·Affinity·Ligand Interaction)
+            </span>
+          </div>
+        </Link>
 
-        {/* Left Side Bar — Logo lives here, full h-16 to match notch height */}
-        <div className="w-56 shrink-0 h-16 bg-background z-20 relative flex items-center pl-3">
-          <svg className="absolute bottom-0 left-0 w-full h-10 pointer-events-none" preserveAspectRatio="none">
-            <line x1="0" y1="39.5" x2="100%" y2="39.5" stroke="currentColor" strokeOpacity={0.08} strokeWidth={0.5} className="text-foreground" />
-            <line x1="0" y1="36.5" x2="100%" y2="36.5" stroke="currentColor" strokeOpacity={0.04} strokeWidth={0.5} className="text-foreground" />
-          </svg>
-          {/* Logo — icon + text side by side like CB-DOCK2 */}
-          <Link
-            to="/"
-            className="relative z-10 flex items-center gap-2 shrink-0 hover:opacity-90 transition-opacity"
+        {/* Center: Desktop Spotlight Navbar */}
+        <div className="hidden md:flex items-center justify-center">
+          <nav
+            ref={navRef}
+            className="spotlight-nav relative h-11 rounded-full transition-all duration-300 overflow-hidden border border-border/60 bg-card/60 backdrop-blur-lg shadow-sm"
           >
-            {/* Just the icon part — cropped to top 60% of the square logo */}
-            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-sm" style={{ position: 'relative' }}>
-              <img
-                src="/salidock-logo.png"
-                alt=""
-                className="absolute top-0 left-0 w-full object-cover object-top"
-                style={{ height: '180%' }}
-              />
-            </div>
-            {/* Text part — Rajdhani Bold matches the logo's font */}
-            <div className="flex flex-col leading-none gap-0.5">
-              <span
-                className="font-bold tracking-wide"
-                style={{ fontFamily: "'Rajdhani', 'DM Sans', system-ui, sans-serif", fontSize: '1.25rem', lineHeight: 1 }}
-              >
-                <span style={{ color: '#0f2d6e' }}>Sali</span><span style={{ color: '#2563eb' }}>Dock</span>
-              </span>
-              <span
-                className="tracking-widest uppercase"
-                style={{ fontFamily: "'DM Sans', system-ui, sans-serif", fontSize: '7px', color: '#64748b', letterSpacing: '0.08em' }}
-              >
-                (Structure·Affinity·Ligand Interaction)
-              </span>
-            </div>
-          </Link>
+            {/* Nav Items List */}
+            <ul className="relative flex items-center h-full px-2 gap-1 z-[10]">
+              {items.map((item, idx) => {
+                const Icon = item.icon;
+                const isActive = activeIndex === idx;
+                return (
+                  <li key={idx} className="relative h-full flex items-center justify-center">
+                    <Link
+                      to={item.href}
+                      data-index={idx}
+                      className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold tracking-wide transition-colors duration-200 rounded-full ${
+                        isActive
+                          ? "text-primary dark:text-white font-bold"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <Icon className={`w-3.5 h-3.5 ${isActive ? "opacity-100" : "opacity-70"}`} />
+                      <span>{item.label}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {/* Moving Spotlight (Mouse Follower) */}
+            <div
+              className="pointer-events-none absolute bottom-0 left-0 w-full h-full z-[1] opacity-0 transition-opacity duration-300"
+              style={{
+                opacity: hoverX !== null ? 1 : 0,
+                background: `
+                  radial-gradient(
+                    120px circle at var(--spotlight-x, 0px) 100%, 
+                    var(--spotlight-color, rgba(0,0,0,0.08)) 0%, 
+                    transparent 50%
+                  )
+                `,
+              }}
+            />
+
+            {/* Active Item Ambience (Stays on Active) */}
+            <div
+              className="pointer-events-none absolute bottom-0 left-0 w-full h-[2px] z-[2]"
+              style={{
+                background: `
+                  radial-gradient(
+                    60px circle at var(--ambience-x, 0px) 0%, 
+                    var(--ambience-color, rgba(99,102,241,1)) 0%, 
+                    transparent 100%
+                  )
+                `,
+              }}
+            />
+          </nav>
         </div>
 
+        {/* Right Side: Theme Toggle & User Auth */}
+        <div className="hidden md:flex items-center gap-3">
+          <ThemeToggle />
 
-        {/* Notch Container */}
-        <div className="flex h-16 relative z-10 shrink-0 -ml-px">
-
-          {/* Left Corner */}
-          <div className="w-[50px] h-full relative shrink-0">
-            <div
-              className="absolute inset-0 bg-card border-b border-border"
-              style={{ clipPath: "path('M0 0 H50 V64 C25 64 25 40 0 40 Z')" }}
-            />
-            <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 50 64">
-              <path d="M0 39.5 C25 39.5 25 63.5 50 63.5" fill="none" stroke="currentColor" strokeOpacity={0.25} strokeWidth={1} className="text-foreground" />
-            </svg>
-          </div>
-
-          {/* Center Content */}
-          <div className="flex-1 h-full relative min-w-0 -ml-px">
-            {/* Background */}
-            <div className="absolute inset-0 bg-card border-b border-border">
-              <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
-                <line x1="0" y1="63.5" x2="100%" y2="63.5" stroke="currentColor" strokeOpacity={0.25} strokeWidth={1} className="text-foreground" />
-              </svg>
-            </div>
-
-            {/* Content */}
-            <div className="relative w-full h-full flex items-center justify-between px-4 md:px-8">
-
-              {/* Desktop Left Nav */}
-              <nav className="hidden md:flex gap-6 shrink-0">
-                {navItemsLeft.map((item) => (
-                  <NavLink
-                    key={item.label}
-                    {...item}
-                    active={location.pathname === item.to}
-                  />
-                ))}
-              </nav>
-
-              {/* Mobile: Hamburger */}
-              <button
-                className="md:hidden p-1 text-muted-foreground hover:text-foreground transition-colors"
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                aria-label="Toggle menu"
+          {!user ? (
+            <div className="flex items-center gap-2">
+              <Link
+                to="/login"
+                className="text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5"
               >
-                {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-              </button>
-
-
-
-              {/* Desktop Right Nav + Auth */}
-              <nav className="hidden md:flex gap-6 items-center shrink-0">
-                <div className="w-px h-4 bg-border/60 mx-1 shrink-0" aria-hidden="true" />
-                {navItemsRight.map((item) => (
-                  <NavLink
-                    key={item.label}
-                    {...item}
-                    active={location.pathname === item.to}
-                  />
-                ))}
-
-                <div className="flex gap-3 pl-4 border-l border-border/60 shrink-0 items-center" style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
-                  <ThemeToggle />
-
-                  {!user ? (
-                    <>
-                      <Link
-                        to="/login"
-                        className="text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
-                      >
-                        Login
-                      </Link>
-                      <Link
-                        to="/register"
-                        className="px-3 py-1.5 text-xs font-bold text-primary-foreground bg-primary rounded-full hover:brightness-110 active:scale-95 transition-all shadow-sm whitespace-nowrap"
-                      >
-                        Register
-                      </Link>
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-xs font-bold uppercase">
-                          {displayName.charAt(0)}
-                        </div>
-                        <span className="text-xs font-semibold max-w-28 truncate text-foreground" title={displayName}>
-                          {displayName}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleLogout}
-                        className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-primary/50 transition-all"
-                      >
-                        <LogOut className="w-3.5 h-3.5" />
-                        Logout
-                      </button>
-                    </>
-                  )}
+                Login
+              </Link>
+              <Link
+                to="/register"
+                className="px-3.5 py-1.5 text-xs font-bold text-primary-foreground bg-primary rounded-full hover:brightness-110 active:scale-95 transition-all shadow-sm"
+              >
+                Register
+              </Link>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-xs font-bold uppercase">
+                  {displayName.charAt(0)}
                 </div>
-              </nav>
-
-              {/* Mobile Right: Theme Toggle */}
-              <div className="md:hidden flex items-center gap-2">
-                <ThemeToggle />
+                <span
+                  className="text-xs font-semibold max-w-28 truncate text-foreground"
+                  title={displayName}
+                >
+                  {displayName}
+                </span>
               </div>
-
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-primary/50 transition-all"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                Logout
+              </button>
             </div>
-          </div>
-
-          {/* Right Corner */}
-          <div className="w-[50px] h-full relative shrink-0 -ml-px">
-            <div
-              className="absolute inset-0 bg-card border-b border-border"
-              style={{ clipPath: "path('M0 0 H50 V40 C25 40 25 64 0 64 Z')" }}
-            />
-            <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 50 64">
-              <path d="M0 63.5 C25 63.5 25 39.5 50 39.5" fill="none" stroke="currentColor" strokeOpacity={0.25} strokeWidth={1} className="text-foreground" />
-            </svg>
-          </div>
-
+          )}
         </div>
 
-        {/* Right Side Bar */}
-        <div className="flex-1 h-10 bg-background z-20 relative min-w-0 -ml-px">
-          <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
-            <line x1="0" y1="39.5" x2="100%" y2="39.5" stroke="currentColor" strokeOpacity={0.08} strokeWidth={0.5} className="text-foreground" />
-            <line x1="0" y1="36.5" x2="100%" y2="36.5" stroke="currentColor" strokeOpacity={0.04} strokeWidth={0.5} className="text-foreground" />
-          </svg>
+        {/* Mobile Hamburger & Controls */}
+        <div className="md:hidden flex items-center gap-2">
+          <ThemeToggle />
+          <button
+            className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            aria-label="Toggle menu"
+          >
+            {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
         </div>
 
       </header>
 
-      {/* ── Mobile Menu Overlay ── */}
+      {/* Mobile Menu Overlay */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div
@@ -300,12 +336,13 @@ export const Navbar = () => {
             className="fixed inset-x-0 top-16 z-40 bg-card/95 backdrop-blur-md border-b border-border/60 p-4 md:hidden shadow-lg"
           >
             <nav className="flex flex-col gap-1">
-              {allNavItems.map((item) => {
-                const active = location.pathname === item.to;
+              {items.map((item) => {
+                const Icon = item.icon;
+                const active = location.pathname === item.href;
                 return (
                   <Link
                     key={item.label}
-                    to={item.to}
+                    to={item.href}
                     onClick={() => setIsMobileMenuOpen(false)}
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${
                       active
@@ -313,7 +350,7 @@ export const Navbar = () => {
                         : "text-foreground/80 hover:bg-muted/60"
                     }`}
                   >
-                    <item.icon className="w-4 h-4 opacity-80" />
+                    <Icon className="w-4 h-4 opacity-80" />
                     <span className="text-sm font-medium">{item.label}</span>
                   </Link>
                 );
@@ -346,7 +383,9 @@ export const Navbar = () => {
                     <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-sm font-bold uppercase">
                       {displayName.charAt(0)}
                     </div>
-                    <span className="text-sm font-semibold text-foreground truncate">{displayName}</span>
+                    <span className="text-sm font-semibold text-foreground truncate">
+                      {displayName}
+                    </span>
                   </div>
                   <button
                     onClick={handleLogout}
@@ -361,6 +400,18 @@ export const Navbar = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Spotlight Dynamic Styling */}
+      <style>{`
+        .spotlight-nav {
+          --spotlight-color: rgba(0, 0, 0, 0.08);
+          --ambience-color: rgba(99, 102, 241, 0.9);
+        }
+        .dark .spotlight-nav {
+          --spotlight-color: rgba(255, 255, 255, 0.15);
+          --ambience-color: rgba(255, 255, 255, 1);
+        }
+      `}</style>
     </>
   );
 };
