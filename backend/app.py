@@ -1314,6 +1314,27 @@ async def create_ligand_from_smiles(
             optimize=optimize
         )
         
+        # ── Save ligand_ref.sdf from SMILES (needed for 2D interaction diagram) ────
+        # Without this, render_svg falls back to parsing the docked PDB which
+        # lacks element columns → RDKit "Cannot determine element for PDB atom #1".
+        sdf_ref_path = session_dir / "ligand_ref.sdf"
+        try:
+            from rdkit import Chem
+            from rdkit.Chem import AllChem
+            _smi_mol = Chem.MolFromSmiles(smiles)
+            if _smi_mol is not None:
+                _smi_mol = Chem.AddHs(_smi_mol)
+                AllChem.EmbedMolecule(_smi_mol, AllChem.ETKDG())
+                _smi_mol = Chem.RemoveHs(_smi_mol)
+                try:
+                    Chem.Kekulize(_smi_mol, clearAromaticFlags=True)
+                except Exception:
+                    pass
+                Chem.MolToMolFile(_smi_mol, str(sdf_ref_path))
+                logger.info(f"Saved ligand_ref.sdf from SMILES: {sdf_ref_path}")
+        except Exception as _sdf_err:
+            logger.warning(f"Could not create ligand_ref.sdf from SMILES: {_sdf_err}")
+        
         # Copy to standard ligand_prepared.pdbqt for workflow compatibility
         shutil.copy(output_pdbqt, prepared_pdbqt)
         
@@ -1335,6 +1356,8 @@ async def create_ligand_from_smiles(
             cloud_save(session_id, output_pdbqt.name, output_pdbqt.read_bytes())
         if prepared_pdbqt.exists():
             cloud_save(session_id, prepared_pdbqt.name, prepared_pdbqt.read_bytes())
+        if sdf_ref_path.exists():
+            cloud_save(session_id, sdf_ref_path.name, sdf_ref_path.read_bytes())
         cloud_save_text(session_id, metadata_file.name, json.dumps(metadata, indent=2))
         
         return {
