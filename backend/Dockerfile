@@ -53,7 +53,8 @@ RUN apt-get update && \
         libcublas-12-0 \
         libcufft-12-0 \
         libcusparse-12-0 \
-        libcusolver-12-0 && \
+        libcusolver-12-0 \
+        libnvjitlink-12-0 && \
     rm -rf /var/lib/apt/lists/* /tmp/*
 
 # ── GNINA 1.3 (CPU-only, --no_gpu enforced via env) ───────────────────────

@@ -29,10 +29,7 @@ services:
       - CLOUD_ONLY_MODE=true
       - PORT=8000
       # Docking binary paths (set explicitly so they are always correct in-container)
-      # NOTE: GNINA_BIN is intentionally empty — the Azure VM is CPU-only and GNINA
-      # requires CUDA (libnvJitLink.so.12). Setting it to "" makes the engine router
-      # skip GNINA immediately and route all jobs to QuickVina-W with zero delay.
-      - GNINA_BIN=
+      - GNINA_BIN=/usr/local/bin/gnina
       - QUICKVINA_BIN=/usr/local/bin/qvina-w
       # CPU caps for the 2-vCPU Azure VM
       - GNINA_CPU=1
