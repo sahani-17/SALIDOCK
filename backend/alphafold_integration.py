@@ -567,22 +567,29 @@ def predict_structure_esmfold(
         
         avg_plddt = sum(plddt_scores) / len(plddt_scores)
         
-        if avg_plddt > 90:
+        # ESMFold returns pLDDT as fractions (0.0–1.0) in the B-factor column,
+        # unlike AlphaFold which uses the 0–100 scale. Normalise to 0–100.
+        if avg_plddt <= 1.0:
+            avg_plddt_display = avg_plddt * 100
+        else:
+            avg_plddt_display = avg_plddt
+        
+        if avg_plddt_display > 90:
             confidence = "very_high"
-        elif avg_plddt > 70:
+        elif avg_plddt_display > 70:
             confidence = "high"
-        elif avg_plddt > 50:
+        elif avg_plddt_display > 50:
             confidence = "low"
         else:
             confidence = "very_low"
         
         print(f"[SUCCESS] Structure prediction complete")
-        print(f"   Average pLDDT score: {avg_plddt:.2f} ({confidence} confidence)")
+        print(f"   Average pLDDT score: {avg_plddt_display:.1f}/100 ({confidence} confidence)")
         
         result = {
             "source": "esmfold",
             "sequence_length": len(sequence),
-            "avg_plddt": round(avg_plddt, 2),
+            "avg_plddt": round(avg_plddt_display, 2),
             "confidence": confidence,
             "num_residues": len(plddt_scores)
         }

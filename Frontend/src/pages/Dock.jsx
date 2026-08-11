@@ -40,7 +40,11 @@ function Dock() {
             .catch(() => {});
     }, []);
 
-    const inputDone = workflow.uploadProgress?.protein && workflow.uploadProgress?.ligand;
+    // Protein done = can proceed to Step 2 (prepare)
+    // Ligand done = required to actually run docking (Step 3)
+    const proteinDone = !!workflow.uploadProgress?.protein;
+    const ligandDone  = !!workflow.uploadProgress?.ligand;
+    const inputDone   = proteinDone && ligandDone;  // both needed for docking
     const configureDone = dockingMode === 'auto' ? true : autoDetectDone;
 
     const completed = useMemo(() => ({
@@ -51,8 +55,8 @@ function Dock() {
 
     // Auto-advance stepper as gates open (but don't rewind if user manually navigated)
     React.useEffect(() => {
-        if (inputDone && stepIndex < 1) setStepIndex(1);
-    }, [inputDone]); // eslint-disable-line react-hooks/exhaustive-deps
+        if (proteinDone && stepIndex < 1) setStepIndex(1);
+    }, [proteinDone]); // eslint-disable-line react-hooks/exhaustive-deps
     React.useEffect(() => {
         if (workflow.proteinPrepared && stepIndex < 2) setStepIndex(2);
     }, [workflow.proteinPrepared]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -191,7 +195,7 @@ function Dock() {
                         <div className="flex justify-end">
                             <button
                                 onClick={() => setStepIndex(1)}
-                                disabled={!inputDone}
+                                disabled={!proteinDone}
                                 className="px-6 py-2.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 inline-flex items-center gap-1.5"
                             >
                                 Continue <ArrowRight size={16} aria-hidden="true" />
