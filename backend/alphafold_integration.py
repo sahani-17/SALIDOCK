@@ -504,6 +504,21 @@ def predict_structure_esmfold(
         }
         
         response = requests.post(url, data=sequence, headers=headers, timeout=adaptive_timeout)
+        
+        # Catch non-2xx responses with a user-friendly message
+        if response.status_code == 400:
+            raise AlphaFoldError(
+                f"The ESMFold public API rejected the request (HTTP 400). "
+                f"This may be due to API rate-limiting, server-side throttling, or "
+                f"a temporary API issue at api.esmatlas.com. "
+                f"Please try again in a few minutes, or use a UniProt ID instead if the protein is in the database."
+            )
+        if response.status_code == 503 or response.status_code == 502:
+            raise AlphaFoldError(
+                f"The ESMFold API is currently unavailable (HTTP {response.status_code}). "
+                f"This is a temporary outage at Meta's ESMFold service. "
+                f"Please try again later or use a UniProt ID instead."
+            )
         response.raise_for_status()
         
         # Validate file size before writing (prevent disk exhaustion)
@@ -586,10 +601,19 @@ def predict_structure_esmfold(
         
     except requests.exceptions.Timeout:
         raise AlphaFoldError(
-            f"Structure prediction timed out after {adaptive_timeout} seconds. "
+            f"Structure prediction timed out after {adaptive_timeout:.0f} seconds. "
             f"Sequence length: {len(sequence)} residues. "
-            "Try with a shorter sequence or use a UniProt ID if available."
+            f"The ESMFold public API (api.esmatlas.com) may be under high load. "
+            "Try again in a few minutes, or use a UniProt ID if available (much faster)."
         )
+    except requests.exceptions.ConnectionError:
+        raise AlphaFoldError(
+            "Cannot reach the ESMFold API (api.esmatlas.com). "
+            "The server may be temporarily offline. "
+            "Please try again later, or use a UniProt ID to fetch from AlphaFold DB instead."
+        )
+    except AlphaFoldError:
+        raise  # re-raise our own errors unchanged
     except requests.exceptions.RequestException as e:
         raise AlphaFoldError(f"ESMFold prediction failed: {str(e)}")
 
