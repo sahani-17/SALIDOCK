@@ -56,6 +56,7 @@ VDW_CUTOFF              = 4.5    # context shell — any heavy atom pair within 
 UNFAVORABLE_CUTOFF      = 4.5    # same-sign charged proximity
 PI_SIGMA_CUTOFF         = 4.5    # ring centroid to sp3 C above ring plane
 PI_SULFUR_CUTOFF        = 6.0    # ring centroid to MET SD / CYS SG
+PI_ANION_CUTOFF         = 5.0    # ring centroid to ASP/GLU carboxylate oxygen
 # C–H···O/N bond geometric criteria (Desiraju & Steiner 1999)
 CH_BOND_CUTOFF_HA       = 3.8    # H···acceptor heavy-atom distance
 CH_BOND_CUTOFF_CA       = 4.0    # C···acceptor distance
@@ -78,6 +79,7 @@ DISTANCE_CUTOFFS = {
     "pi_stacking":       PI_STACK_CUTOFF,
     "pi_tshaped":        PI_STACK_CUTOFF,
     "pi_cation":         PI_CATION_CUTOFF,
+    "pi_anion":          PI_ANION_CUTOFF,
     "pi_alkyl":          PI_ALKYL_CUTOFF,
     "pi_sigma":          PI_SIGMA_CUTOFF,
     "pi_sulfur":         PI_SULFUR_CUTOFF,
@@ -134,6 +136,7 @@ TYPE_ALIASES = {
     "pi_tshaped": "pi_tshaped", "pi_t_shaped": "pi_tshaped",
     "picat": "pi_cation", "pi_cation": "pi_cation", "pi-cation": "pi_cation",
     "pication": "pi_cation", "cation_pi": "pi_cation",
+    "pianion": "pi_anion", "pi_anion": "pi_anion", "pi-anion": "pi_anion",
     "pialkyl": "pi_alkyl", "pi_alkyl": "pi_alkyl", "pi-alkyl": "pi_alkyl",
     "pi_sigma": "pi_sigma", "pisigma": "pi_sigma",
     "pi_sulfur": "pi_sulfur", "pisulfur": "pi_sulfur",
@@ -157,6 +160,7 @@ TYPE_PRIORITY = [
     "pi_stacking",      # face-to-face π-π (2–3 kcal/mol)
     "pi_tshaped",       # edge-to-face π-π (1–2 kcal/mol)
     "pi_cation",        # cation-π (2–5 kcal/mol)
+    "pi_anion",         # anion-π
     "pi_sigma",         # CH-π / σ-π (0.5–1.5 kcal/mol)
     "pi_sulfur",        # S-π (1–2 kcal/mol)
     "pi_alkyl",         # alkyl-π
@@ -175,6 +179,7 @@ TYPE_LABELS = {
     "pi_stacking":       "Pi-Pi Stacked",
     "pi_tshaped":        "Pi-Pi T-shaped",
     "pi_cation":         "Pi-Cation",
+    "pi_anion":          "Pi-Anion",
     "pi_sigma":          "Pi-Sigma",
     "pi_sulfur":         "Pi-Sulfur",
     "pi_alkyl":          "Pi-Alkyl",
@@ -194,6 +199,7 @@ NODE_COLORS = {
     "pi_stacking":       {"fill": "#9B59B6", "stroke": "#6C3483", "text": "#33163E"},
     "pi_tshaped":        {"fill": "#7E57C2", "stroke": "#512DA8", "text": "#FFFFFF"},
     "pi_cation":         {"fill": "#F39C12", "stroke": "#B7770D", "text": "#4A2E00"},
+    "pi_anion":          {"fill": "#E57373", "stroke": "#C62828", "text": "#FFFFFF"},
     "pi_sigma":          {"fill": "#AB47BC", "stroke": "#7B1FA2", "text": "#FFFFFF"},
     "pi_sulfur":         {"fill": "#C0CA33", "stroke": "#9E9D24", "text": "#33331A"},
     "pi_alkyl":          {"fill": "#F48FB1", "stroke": "#C2185B", "text": "#5C0A28"},
@@ -876,6 +882,20 @@ def detect(
                     key=lambda i: math.sqrt((ligand_atoms[i]["x"] - lpos[0])**2 + (ligand_atoms[i]["y"] - lpos[1])**2 + (ligand_atoms[i]["z"] - lpos[2])**2)
                 ) if ligand_atoms else 0
                 _update(label, "pication", resname, resid, chain, d, closest_idx)
+
+        # π-anion (ASP / GLU carboxylate oxygens near aromatic ring centroid)
+        if resname in NEG_CHARGED_RESIDUES:
+            for pa in atoms:
+                if pa["aname"] in NEG_CHARGE_ATOMS.get(resname, set()):
+                    for lig_c in lig_ring_centroids:
+                        d = math.sqrt((pa["x"] - lig_c[0])**2 + (pa["y"] - lig_c[1])**2 + (pa["z"] - lig_c[2])**2)
+                        if d <= PI_ANION_CUTOFF:
+                            closest_idx = min(
+                                range(len(ligand_atoms)),
+                                key=lambda i: math.sqrt((ligand_atoms[i]["x"] - lig_c[0])**2 + (ligand_atoms[i]["y"] - lig_c[1])**2 + (ligand_atoms[i]["z"] - lig_c[2])**2)
+                            ) if ligand_atoms else 0
+                            _update(label, "pi_anion", resname, resid, chain, d, closest_idx)
+
 
     # ── π-sulfur (ring centroid to MET SD / CYS SG) ──
     sulfur_atoms = {
