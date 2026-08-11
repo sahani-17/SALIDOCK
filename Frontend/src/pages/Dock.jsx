@@ -54,9 +54,10 @@ function Dock() {
     }), [inputDone, workflow.proteinPrepared, configureDone]);
 
     // Auto-advance stepper as gates open (but don't rewind if user manually navigated)
+    // Only auto-jump when BOTH protein AND ligand are ready — don't jump on protein alone
     React.useEffect(() => {
-        if (proteinDone && stepIndex < 1) setStepIndex(1);
-    }, [proteinDone]); // eslint-disable-line react-hooks/exhaustive-deps
+        if (inputDone && stepIndex < 1) setStepIndex(1);
+    }, [inputDone]); // eslint-disable-line react-hooks/exhaustive-deps
     React.useEffect(() => {
         if (workflow.proteinPrepared && stepIndex < 2) setStepIndex(2);
     }, [workflow.proteinPrepared]); // eslint-disable-line react-hooks/exhaustive-deps
