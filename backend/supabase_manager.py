@@ -56,9 +56,9 @@ class SupabaseManager:
 
     # ========== FILE STORAGE (Supabase Storage) ==========
 
-    def upload_result_file(self, session_id: str, filename: str, file_content: bytes) -> str:
-        """Upload result file to Supabase Storage"""
-        storage_path = f"{session_id}/{filename}"
+    def upload_result_file(self, session_id: str, filename: str, file_content: bytes, subdir: str = "") -> str:
+        """Upload result file to Supabase Storage. Use subdir='intermediate' for intermediate files."""
+        storage_path = f"{session_id}/{subdir}/{filename}".replace('//', '/').strip('/')
 
         try:
             self.client.storage.from_(self.storage_bucket).upload(
@@ -72,9 +72,9 @@ class SupabaseManager:
             logger.error(f"Failed to upload {storage_path}: {str(e)}")
             raise
 
-    def download_result_file(self, session_id: str, filename: str) -> bytes:
-        """Download result file from Supabase Storage"""
-        storage_path = f"{session_id}/{filename}"
+    def download_result_file(self, session_id: str, filename: str, subdir: str = "") -> bytes:
+        """Download result file from Supabase Storage. Use subdir='intermediate' for intermediate files."""
+        storage_path = f"{session_id}/{subdir}/{filename}".replace('//', '/').strip('/')
 
         try:
             response = self.client.storage.from_(self.storage_bucket).download(
@@ -85,6 +85,7 @@ class SupabaseManager:
         except Exception as e:
             logger.error(f"Failed to download {storage_path}: {str(e)}")
             raise
+
 
     def get_file_url(self, session_id: str, filename: str) -> str:
         """Get public URL for result file"""
@@ -179,66 +180,17 @@ class SupabaseManager:
     # ========== CLOUD-ONLY INTERMEDIATE FILE STORAGE ==========
 
     def upload_intermediate_file(self, session_id: str, file_subpath: str, file_content: bytes) -> str:
-        """Upload intermediate docking file (cavity detection, grid params, etc) to Supabase Storage
-        
-        Used in CLOUD_ONLY_MODE to store intermediate results that would normally go to local disk.
-        Files are stored under session_id/intermediate/ namespace.
-        
-        Args:
-            session_id: Unique session identifier
-            file_subpath: Relative path within session (e.g., 'cavities.json', 'grid/params.json')
-            file_content: Binary content to upload
-            
-        Returns:
-            Cloud storage path
-        """
-        storage_path = f"{session_id}/intermediate/{file_subpath}"
-        
-        try:
-            self.client.storage.from_(self.storage_bucket).upload(
-                path=storage_path,
-                file=file_content,
-                file_options={"content-type": "application/octet-stream", "upsert": "true"}
-            )
-            logger.info(f"✅ Uploaded intermediate file to Supabase: {storage_path}")
-            return storage_path
-        except Exception as e:
-            logger.error(f"Failed to upload intermediate file {storage_path}: {str(e)}")
-            raise
+        """Upload intermediate docking file to Supabase Storage (intermediate/ namespace)."""
+        return self.upload_result_file(session_id, file_subpath, file_content, subdir="intermediate")
 
     def download_intermediate_file(self, session_id: str, file_subpath: str) -> bytes:
-        """Download intermediate docking file from Supabase Storage
-        
-        Used in CLOUD_ONLY_MODE to retrieve intermediate results for continued processing.
-        
-        Args:
-            session_id: Unique session identifier
-            file_subpath: Relative path within session (e.g., 'cavities.json')
-            
-        Returns:
-            Binary content of the file
-        """
-        storage_path = f"{session_id}/intermediate/{file_subpath}"
-        
-        try:
-            response = self.client.storage.from_(self.storage_bucket).download(
-                path=storage_path
-            )
-            logger.info(f"✅ Downloaded intermediate file from Supabase: {storage_path}")
-            return response
-        except Exception as e:
-            logger.error(f"Failed to download intermediate file {storage_path}: {str(e)}")
-            raise
+        """Download intermediate docking file from Supabase Storage."""
+        return self.download_result_file(session_id, file_subpath, subdir="intermediate")
 
     def list_intermediate_files(self, session_id: str) -> list:
-        """List all intermediate files for a session"""
-        path = f"{session_id}/intermediate"
-        try:
-            files = self.client.storage.from_(self.storage_bucket).list(path=path)
-            return files if files else []
-        except Exception as e:
-            logger.error(f"Failed to list intermediate files for {session_id}: {str(e)}")
-            return []
+        """List all intermediate files for a session."""
+        return self.list_result_files(session_id, subpath="intermediate")
+
 
     # ========== UTILITY METHODS ==========
 

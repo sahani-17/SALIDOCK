@@ -78,13 +78,7 @@ def cavity_results_to_legacy(
     """
     # Pre-parse Cα coordinates from the PDB once (shared across cavities)
     residue_coords = _parse_ca_coords(Path(pdb_path))
-
-    legacy: list[dict] = []
-    for res in results:
-        d = _convert_one(res, residue_coords, margin, min_grid, max_base)
-        legacy.append(d)
-
-    return legacy
+    return [_convert_one(res, residue_coords, margin, min_grid, max_base) for res in results]
 
 
 # ---------------------------------------------------------------------------

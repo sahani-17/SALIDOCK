@@ -5,6 +5,29 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import Hero3D from "../components/Hero3D";
 import PerspectiveGrid from "../components/PerspectiveGrid";
+import AnimatedRays from "../components/AnimatedRays";
+
+const HeroBackground = () => {
+    const [isDark, setIsDark] = React.useState(false);
+
+    React.useEffect(() => {
+        const checkDark = () => document.documentElement.classList.contains("dark");
+        setIsDark(checkDark());
+
+        const observer = new MutationObserver(() => setIsDark(checkDark()));
+        observer.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ["class"],
+        });
+        return () => observer.disconnect();
+    }, []);
+
+    if (isDark) {
+        return <AnimatedRays className="w-full h-full" />;
+    }
+
+    return <PerspectiveGrid gridSize={40} showOverlay={true} fadeRadius={80} />;
+};
 
 const Feature = ({ icon, title, desc }) => {
     const Icon = icon;
@@ -30,10 +53,10 @@ const HowStep = ({ n, title, desc }) => (
 );
 
 const Landing = () => (
-    <div className="min-h-screen bg-background relative overflow-hidden font-sans z-0 flex flex-col">
-            {/* Perspective Grid Background – z-0 so tiles receive hover */}
+    <div className="landing-page min-h-screen bg-background relative overflow-hidden font-sans z-0 flex flex-col">
+            {/* Background – AnimatedRays for dark theme, PerspectiveGrid for light theme */}
             <div className="absolute inset-0 z-0">
-                <PerspectiveGrid gridSize={40} showOverlay={true} fadeRadius={80} />
+                <HeroBackground />
             </div>
 
             {/* Content layer – pointer-events:none lets hover pass to grid; interactive children re-enable it via CSS */}
@@ -84,18 +107,15 @@ const Landing = () => (
 
                         <div className="lg:pl-8 xl:pl-12 w-full mt-4 lg:mt-0">
                             <div className="relative w-full max-w-[720px] mx-auto lg:ml-auto">
-                                <div className="interactive bg-card p-3 shadow-elevated rounded-2xl border border-border relative">
-                                    <div className="absolute -top-3.5 left-6 bg-card border border-border shadow-sm px-3 py-1.5 flex items-center gap-2 z-10 rounded-full">
+                                <div className="interactive bg-card p-3 shadow-elevated rounded-2xl relative">
+                                    <div className="absolute -top-3.5 left-6 bg-card shadow-sm px-3 py-1.5 flex items-center gap-2 z-10 rounded-full">
                                         <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                                        <span className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">Live · PDB 1STP</span>
+                                        <span className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">Live · PDB 6LU7</span>
                                     </div>
                                     <div className="relative aspect-[16/10] rounded-xl overflow-hidden bg-card">
-                                        <Hero3D pdbId="1STP" />
+                                        <Hero3D pdbId="6LU7" />
                                     </div>
                                 </div>
-                                <p className="mt-4 text-xs text-muted-foreground text-center">
-                                    Streptavidin bound to biotin — interactable 3D structure viewer.
-                                </p>
                             </div>
                         </div>
                     </div>

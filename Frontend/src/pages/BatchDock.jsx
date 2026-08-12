@@ -390,16 +390,6 @@ function BatchDock() {
                                 </div>
                             </div>
                         </section>
-
-                        <div className="flex justify-end">
-                            <button
-                                onClick={() => setStepIndex(1)}
-                                disabled={!inputDone}
-                                className="px-6 py-2.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 inline-flex items-center gap-1.5"
-                            >
-                                Continue <ArrowRight size={16} aria-hidden="true" />
-                            </button>
-                        </div>
                     </div>
                 )}
 
@@ -560,15 +550,8 @@ function BatchDock() {
                             </div>
                         </section>
 
-                        <div className="flex justify-between">
+                        <div className="flex justify-start">
                             <button onClick={() => setStepIndex(0)} className="px-5 py-2.5 rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-primary/40 font-semibold text-sm transition-all">Back</button>
-                            <button
-                                onClick={() => setStepIndex(2)}
-                                disabled={!prepareDone}
-                                className="px-6 py-2.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 inline-flex items-center gap-1.5"
-                            >
-                                Continue <ArrowRight size={16} aria-hidden="true" />
-                            </button>
                         </div>
                     </div>
                 )}

@@ -598,12 +598,108 @@ def load_cavity_metadata(metadata_file: Path) -> list[dict]:
         raise FileNotFoundError(f"Cavity metadata file not found: {metadata_file}")
     return json.loads(metadata_file.read_text())
 
+# ---------------------------------------------------------------------------
+# Helper: generate PDB CONECT records for ligand atoms
+# ---------------------------------------------------------------------------
+def _generate_ligand_conect_records(
+    ligand_lines: list,
+    sdf_path: str | None = None,
+) -> list:
+    """
+    Generate CONECT records for the ligand HETATM atoms so that external
+    programs (Discovery Studio, PyMOL strict mode, etc.) render bonds.
+
+    Strategy:
+        1.  If sdf_path is provided, use RDKit to read bond topology from the
+            reference SDF and map bond pairs onto the serial numbers of the
+            generated HETATM lines (position-matched, heavy atoms only).
+        2.  If no SDF is available, fall back to reading BRANCH/ENDBRANCH
+            rotatable-bond records from the PDBQT (gives partial connectivity)
+            — this is a best-effort fallback only.
+        3.  If both strategies fail, return an empty list (no CONECT records)
+            so the rest of the PDB is still valid.
+
+    Args:
+        ligand_lines: The HETATM lines already written for the ligand (in order).
+        sdf_path:     Absolute path to the reference SDF file, or None.
+
+    Returns:
+        List of CONECT record strings (may be empty).
+    """
+    if not ligand_lines:
+        return []
+
+    # Collect serial numbers in output order
+    serials = []
+    for line in ligand_lines:
+        try:
+            serial = int(line[6:11].strip())
+            serials.append(serial)
+        except (ValueError, IndexError):
+            continue
+
+    if not serials:
+        return []
+
+    n = len(serials)
+
+    # ── Strategy 1: RDKit bond table from reference SDF ─────────────────────
+    if sdf_path:
+        try:
+            from rdkit import Chem
+            mol = Chem.MolFromMolFile(sdf_path, sanitize=False, removeHs=True)
+            if mol is None:
+                # Try SDF supplier for multi-molecule files
+                sup = Chem.SDMolSupplier(sdf_path, sanitize=False, removeHs=True)
+                mol = next((m for m in sup if m is not None), None)
+            if mol is not None and mol.GetNumAtoms() == n:
+                # Build adjacency: bond_pairs as (0-based atom indices)
+                bond_pairs = [
+                    (bond.GetBeginAtomIdx(), bond.GetEndAtomIdx())
+                    for bond in mol.GetBonds()
+                ]
+                # Build CONECT lines grouped by atom
+                adjacency: dict[int, list[int]] = {i: [] for i in range(n)}
+                for i, j in bond_pairs:
+                    adjacency[i].append(j)
+                    adjacency[j].append(i)
+
+                conect_lines = []
+                for atom_idx in range(n):
+                    nbrs = adjacency.get(atom_idx, [])
+                    if not nbrs:
+                        continue
+                    src_serial = serials[atom_idx]
+                    # PDB CONECT record: up to 4 partners per line
+                    for chunk_start in range(0, len(nbrs), 4):
+                        chunk = nbrs[chunk_start:chunk_start + 4]
+                        partner_serials = [serials[nb] for nb in chunk]
+                        record = f"CONECT{src_serial:5d}" + "".join(f"{s:5d}" for s in partner_serials)
+                        conect_lines.append(record)
+
+                if conect_lines:
+                    logger.debug(
+                        "[CONECT] Generated %d CONECT records from SDF (%s)",
+                        len(conect_lines), sdf_path,
+                    )
+                    return conect_lines
+        except Exception as _e:
+            logger.warning("[CONECT] RDKit strategy failed: %s", _e)
+
+    # ── Strategy 2: atom-count distance heuristic (fallback) ────────────────
+    # When there is no SDF reference we cannot know true bond topology, so we
+    # skip emitting partial CONECT records to avoid misleading downstream tools.
+    logger.debug("[CONECT] No SDF reference available — CONECT records omitted.")
+    return []
+
+
 # Helper to create protein-ligand complex
 def create_protein_ligand_complex(
     protein_pdbqt: Path,
     ligand_pdbqt: Path,
     pose_number: int = 1,
-    include_remarks: bool = True
+    include_remarks: bool = True,
+    original_sdf_path: str | None = None,
 ) -> str:
     """
     Create a protein-ligand complex in PDB format by merging protein and ligand structures.
@@ -617,16 +713,21 @@ def create_protein_ligand_complex(
         ligand_pdbqt: Path to docking output PDBQT file (contains multiple poses)
         pose_number: Which ligand pose to extract (1-based index)
         include_remarks: Include metadata in REMARK lines
+        original_sdf_path: Optional path to the reference SDF file that carries
+            correct bond orders/topology. When provided, CONECT records are
+            appended to the output PDB so Discovery Studio and PyMOL render
+            ligand bonds correctly.
     
     Returns:
-        Combined PDB format string with protein and ligand
+        Combined PDB format string with protein and ligand (+ CONECT records)
     
     Algorithm:
         1. Read prepared protein PDBQT
         2. Extract specific ligand pose from docking output
         3. Convert both to clean PDB format (remove docking-specific columns)
         4. Merge with TER separator
-        5. Add metadata in REMARK lines
+        5. Append CONECT records derived from SDF bond topology
+        6. Add metadata in REMARK lines
     
     Note:
         Vina outputs ligand atoms as ATOM records with residue name 'UNL',
@@ -636,6 +737,13 @@ def create_protein_ligand_complex(
         raise FileNotFoundError(f"Protein file not found: {protein_pdbqt}")
     if not ligand_pdbqt.exists():
         raise FileNotFoundError(f"Ligand file not found: {ligand_pdbqt}")
+
+    # Auto-discover ligand_ref.sdf from the session directory when not supplied
+    if original_sdf_path is None:
+        candidate_sdf = protein_pdbqt.parent / "ligand_ref.sdf"
+        if candidate_sdf.exists():
+            original_sdf_path = str(candidate_sdf)
+            logger.debug("[complex] Auto-resolved SDF: %s", original_sdf_path)
     
     header_lines = []
     protein_lines = []
@@ -736,8 +844,12 @@ def create_protein_ligand_complex(
                 header_lines.append(line)
     
     print(f"[DEBUG] Ligand atoms added: {ligand_atom_count}")
-    all_lines = header_lines + protein_lines + ["TER"] + ligand_lines + ["END"]
-    print(f"[DEBUG] Total PDB lines: {len(all_lines)}")
+
+    # ── Generate CONECT records so Discovery Studio renders ligand bonds ──────
+    conect_lines = _generate_ligand_conect_records(ligand_lines, sdf_path=original_sdf_path)
+
+    all_lines = header_lines + protein_lines + ["TER"] + ligand_lines + conect_lines + ["END"]
+    print(f"[DEBUG] Total PDB lines: {len(all_lines)} (incl. {len(conect_lines)} CONECT records)")
     
     return '\n'.join(all_lines)
 

@@ -106,7 +106,7 @@ function Results() {
     try {
       let text;
       if (isDemo) {
-        const res = await fetch('/1STP.pdb');
+        const res = await fetch('/6LU7.pdb');
         text = await res.text();
       } else {
         const blob = await api.downloadComplex(sessionId, poseNumber);

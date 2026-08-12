@@ -1,11 +1,8 @@
 import React from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import Landing from "./pages/Landing";
-import Docking from "./pages/Docking";
 import Results from "./pages/Results";
-import Cavity from "./pages/Cavity";
-import Active from "./pages/Active";
 import Dock from "./pages/Dock";
 import BatchDock from "./pages/BatchDock";
 import BatchResults from "./pages/BatchResults";
@@ -42,7 +39,10 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="/docking" element={<Docking />} />
+          {/* Legacy redirect routes */}
+          <Route path="/docking" element={<Navigate to="/dock" replace />} />
+          <Route path="/active" element={<Navigate to="/dock?mode=active" replace />} />
+          <Route path="/cavity" element={<Navigate to="/dock?mode=blind" replace />} />
           <Route path="/results" element={<Results />} />
           <Route path="/batch-results" element={<BatchResults />} />
           <Route
@@ -50,22 +50,6 @@ function App() {
             element={
               <ProtectedRoute>
                 <Feedback />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/cavity"
-            element={
-              <ProtectedRoute>
-                <Cavity />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/active"
-            element={
-              <ProtectedRoute>
-                <Active />
               </ProtectedRoute>
             }
           />

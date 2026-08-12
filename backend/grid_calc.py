@@ -122,10 +122,10 @@ def calculate_manual_grid(
 def validate_grid_size(size: Tuple[float, float, float]) -> Dict:
     """
     Validate grid dimensions and return warnings.
-    
+
     Args:
         size: Grid dimensions (sx, sy, sz) in Angstroms
-    
+
     Returns:
         Dictionary with validation results:
         {
@@ -134,71 +134,42 @@ def validate_grid_size(size: Tuple[float, float, float]) -> Dict:
             'volume': float,  # in Å³ (cubic Angstroms)
             'recommendations': List[str]
         }
-    
+
     Raises:
         ValueError: If size tuple is invalid
-    
+
     Example:
         >>> result = validate_grid_size((10.0, 10.0, 10.0))
         >>> result['warnings']
         ['Grid dimension X (10.0 Å) is smaller than recommended minimum (15 Å)', ...]
     """
-    # Validate input
     size_validated = _validate_tuple_3d(size, 'size', require_positive=True)
-    
+
     warnings = []
     recommendations = []
     valid = True
-    
-    sx, sy, sz = size_validated
-    
-    # Check minimum size (15 Å recommended)
-    if sx < 15.0:
-        warnings.append(f"Grid dimension X ({sx} Å) is smaller than recommended minimum (15 Å)")
-        recommendations.append("Consider increasing X dimension to at least 15 Å")
-        valid = False
-    
-    if sy < 15.0:
-        warnings.append(f"Grid dimension Y ({sy} Å) is smaller than recommended minimum (15 Å)")
-        recommendations.append("Consider increasing Y dimension to at least 15 Å")
-        valid = False
-    
-    if sz < 15.0:
-        warnings.append(f"Grid dimension Z ({sz} Å) is smaller than recommended minimum (15 Å)")
-        recommendations.append("Consider increasing Z dimension to at least 15 Å")
-        valid = False
-    
-    # Check maximum size (40 Å recommended)
-    if sx > 40.0:
-        warnings.append(f"Grid dimension X ({sx} Å) is larger than recommended maximum (40 Å)")
-        recommendations.append("Large grids increase computation time without improving accuracy")
-        valid = False
-    
-    if sy > 40.0:
-        warnings.append(f"Grid dimension Y ({sy} Å) is larger than recommended maximum (40 Å)")
-        recommendations.append("Large grids increase computation time without improving accuracy")
-        valid = False
-    
-    if sz > 40.0:
-        warnings.append(f"Grid dimension Z ({sz} Å) is larger than recommended maximum (40 Å)")
-        recommendations.append("Large grids increase computation time without improving accuracy")
-        valid = False
-    
-    # Calculate volume
-    volume = sx * sy * sz
-    
-    # Check if grid is excessively large
+
+    for axis, val in zip(('X', 'Y', 'Z'), size_validated):
+        if val < 15.0:
+            warnings.append(f"Grid dimension {axis} ({val} Å) is smaller than recommended minimum (15 Å)")
+            recommendations.append(f"Consider increasing {axis} dimension to at least 15 Å")
+            valid = False
+        elif val > 40.0:
+            warnings.append(f"Grid dimension {axis} ({val} Å) is larger than recommended maximum (40 Å)")
+            recommendations.append("Large grids increase computation time without improving accuracy")
+            valid = False
+
+    volume = size_validated[0] * size_validated[1] * size_validated[2]
+
     if volume > 64000:  # 40^3
         warnings.append(f"Grid volume ({volume:.0f} Å³) is excessively large")
         recommendations.append("Consider reducing grid dimensions for faster docking")
-        valid = False  # Consistent with dimension checks
-    
-    # Check if grid is too small
-    if volume < 3375:  # 15^3
+        valid = False
+    elif volume < 3375:  # 15^3
         warnings.append(f"Grid volume ({volume:.0f} ų) is very small")
         recommendations.append("Small grids may miss binding poses")
         valid = False
-    
+
     return {
         'valid': valid,
         'warnings': warnings,
@@ -302,23 +273,20 @@ def get_grid_info(
 ) -> Dict:
     """
     Get comprehensive grid information for display.
-    
+
     Args:
         center: Grid center coordinates
         size: Grid dimensions
-    
+
     Returns:
         Dictionary with grid information
-    
+
     Raises:
         ValueError: If center or size tuples are invalid
     """
-    # Validate inputs
-    center_validated = _validate_tuple_3d(center, 'center')
-    size_validated = _validate_tuple_3d(size, 'size', require_positive=True)
+    center_validated, size_validated = calculate_manual_grid(center, size)
     volume = size_validated[0] * size_validated[1] * size_validated[2]
-    
-    # Calculate grid bounds
+
     bounds = {
         'x_min': round(center_validated[0] - size_validated[0] / 2, 3),
         'x_max': round(center_validated[0] + size_validated[0] / 2, 3),
@@ -327,7 +295,7 @@ def get_grid_info(
         'z_min': round(center_validated[2] - size_validated[2] / 2, 3),
         'z_max': round(center_validated[2] + size_validated[2] / 2, 3)
     }
-    
+
     return {
         'center': center_validated,
         'size': size_validated,

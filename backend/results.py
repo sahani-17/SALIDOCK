@@ -1,8 +1,10 @@
 # results.py - parsing of Vina output and PDBQT pose extraction
 from pathlib import Path
 from typing import List, Dict, Tuple
+import math
 import re
 import warnings
+
 
 
 def _validate_file_exists(file_path: str, file_description: str = "File") -> Path:
@@ -164,18 +166,11 @@ def aggregate_multi_cavity_results(
         
         all_poses.extend(poses)
     
-    # Filter out poses with invalid affinities (None, NaN, inf)
-    valid_poses = []
-    for pose in all_poses:
-        affinity = pose.get('affinity')
-        # Check for None, NaN, or infinity
-        if affinity is None:
-            warnings.warn(f"Skipping pose with None affinity from cavity {pose.get('cavity_id')}")
-            continue
-        if isinstance(affinity, float) and (affinity != affinity or abs(affinity) == float('inf')):
-            warnings.warn(f"Skipping pose with invalid affinity {affinity} from cavity {pose.get('cavity_id')}")
-            continue
-        valid_poses.append(pose)
+    valid_poses = [
+        p for p in all_poses
+        if p.get('affinity') is not None and math.isfinite(p['affinity'])
+    ]
+
     
     if not valid_poses:
         raise ValueError("No poses with valid affinity values found in results")

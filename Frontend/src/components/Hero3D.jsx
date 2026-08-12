@@ -3,10 +3,10 @@ import MolecularViewer from "./MolecularViewer";
 import { AnimatedCircularProgressBar } from "./ui/animated-circular-progress-bar";
 
 /**
- * Hero3D — Loads demo protein-ligand complex (PDB 1STP: streptavidin + biotin)
- * Renders a STILL 3D protein & ligand viewer without auto-rotation.
+ * Hero3D — Loads demo protein-ligand complex (PDB 6LU7 / 6LUS: SARS-CoV-2 main protease + N3 inhibitor)
+ * Renders an animated 3D protein & ligand viewer with N-to-C rainbow gradient and subtle auto-rotation.
  */
-const Hero3D = ({ pdbId = "1STP" }) => {
+const Hero3D = ({ pdbId = "6LU7" }) => {
     const viewerRef = useRef(null);
     const [pdbData, setPdbData] = useState(null);
     const [error, setError] = useState(null);
@@ -51,12 +51,12 @@ const Hero3D = ({ pdbId = "1STP" }) => {
                     poseNumber={1}
                     proteinRepr="cartoon"
                     ligandRepr="ball-and-stick"
-                    colorScheme="chain-id"
+                    colorScheme="sequence-id"
                     showPocketResidues={false}
                     showPocketLabels={false}
                     showPocketSurface={false}
                     showInteractions={false}
-                    spin={false}
+                    spin={true}
                     showProtein
                     minimal
                 />

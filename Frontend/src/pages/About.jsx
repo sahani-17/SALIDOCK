@@ -17,6 +17,8 @@ import {
   BookOpen
 } from "lucide-react";
 
+import AppSidebar from "../components/AppSidebar";
+
 /* ─── Scroll Section Wrapper ─── */
 const AnimatedSection = ({ children, className = "", delay = 0 }) => {
   const { ref, isVisible } = useScrollAnimation(0.1);
@@ -152,40 +154,37 @@ const About = () => {
     el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const aboutSidebarGroups = [
+    {
+      label: "About SaliDock",
+      items: [
+        { id: "mission", title: "Our Mission", icon: Target },
+        { id: "story", title: "Our Story", icon: History },
+        { id: "what-we-do", title: "What We Do", icon: Microscope },
+      ],
+    },
+    {
+      label: "Architecture & Impact",
+      items: [
+        { id: "technology", title: "Technology Stack", icon: Zap },
+        { id: "who-we-serve", title: "Who We Serve", icon: ClipboardList },
+      ],
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-background text-foreground font-sans">
       <Navbar lightTheme />
 
-      <aside className="hidden xl:flex fixed left-0 top-0 h-screen w-64 flex-col bg-card z-40 pt-24 border-r border-border">
-        <div className="w-full mt-6 pl-2">
-          <h3 className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase mb-4 pl-6">
-            ON THIS PAGE
-          </h3>
-          <nav className="flex flex-col gap-1">
-            {sections.map((s) => {
-              const Icon = s.icon;
-              const isActive = activeSection === s.id;
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => scrollToSection(s.id)}
-                  className={`relative flex items-center gap-4 w-full pl-6 py-4 text-[13px] font-bold uppercase tracking-wider transition-colors ${
-                    isActive
-                    ? "text-primary bg-muted"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                  }`}
-                >
-                  {isActive && (
-                    <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-primary" />
-                  )}
-                  <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className={isActive ? "text-primary" : "text-muted-foreground"} />
-                  {s.label}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-      </aside>
+      <div className="hidden xl:block">
+        <AppSidebar
+          groups={aboutSidebarGroups}
+          activeSection={activeSection}
+          onSectionClick={scrollToSection}
+          headerTitle="About SaliDock"
+          headerSubtitle="Consensus Platform"
+        />
+      </div>
 
       <div className="xl:pl-64">
         <main className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-24 flex flex-col gap-32">

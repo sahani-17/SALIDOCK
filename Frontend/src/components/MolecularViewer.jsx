@@ -268,7 +268,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
             colorTheme = 'entity-id';
           } else if (colorScheme === 'residue-name') {
             colorTheme = 'residue-name';
-          } else if (colorScheme === 'sequence-id') {
+          } else if (colorScheme === 'sequence-id' || colorScheme === 'rainbow' || colorScheme === 'polymer-index') {
             colorTheme = 'sequence-id';
           } else if (colorScheme === 'uniform') {
             colorTheme = 'uniform';
@@ -465,6 +465,16 @@ const MolecularViewer = forwardRef(function MolecularViewer({
             }
           );
         }
+      }
+
+      if (plugin.canvas3d) {
+        plugin.canvas3d.setProps({
+          trackball: {
+            animate: spin
+              ? { name: 'spin', params: { speed: 0.8 } }
+              : { name: 'off', params: {} }
+          }
+        });
       }
 
     } catch (err) {

@@ -22,6 +22,8 @@ import {
   Network,
 } from "lucide-react";
 
+import AppSidebar from "../components/AppSidebar";
+
 /* ─── Scroll Section Wrapper ─── */
 const AnimatedSection = ({ children, className = "", delay = 0 }) => {
   const { ref, isVisible } = useScrollAnimation(0.1);
@@ -130,12 +132,12 @@ const StepBadge = ({ n, label }) => (
 const ScreenshotFrame = ({ src, alt, caption, className = "" }) => (
   <div className={`flex flex-col w-full h-full ${className}`}>
     <TiltCard className="h-full">
-      <div className="w-full h-full rounded-2xl border border-border/80 bg-card shadow-2xl overflow-hidden flex flex-col group transition-all duration-300 hover:border-primary/40">
-        <div className="h-7 bg-muted/60 border-b border-border/80 px-3.5 flex items-center justify-between shrink-0">
+      <div className="w-full h-full rounded-2xl bg-card shadow-2xl overflow-hidden flex flex-col group transition-all duration-300">
+        <div className="h-7 bg-muted/60 px-3.5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-[#FF5F56]/80 border border-[#E0443E]/40" />
-            <div className="w-2.5 h-2.5 rounded-full bg-[#FFBD2E]/80 border border-[#DEA123]/40" />
-            <div className="w-2.5 h-2.5 rounded-full bg-[#27C93F]/80 border border-[#1AAB29]/40" />
+            <div className="w-2.5 h-2.5 rounded-full bg-[#FF5F56]/80" />
+            <div className="w-2.5 h-2.5 rounded-full bg-[#FFBD2E]/80" />
+            <div className="w-2.5 h-2.5 rounded-full bg-[#27C93F]/80" />
           </div>
           <span className="text-[10px] font-mono tracking-wider text-muted-foreground/70 uppercase truncate px-2">
             salidock-interface // preview
@@ -402,72 +404,79 @@ const Documentation = () => {
     el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const docsSidebarGroups = [
+    {
+      label: "Getting Started",
+      items: [
+        { id: "docs-hero", title: "Overview", icon: BookOpen },
+      ],
+    },
+    {
+      label: "Pipeline Steps",
+      items: [
+        { id: "input", title: "Step 1 — Input", icon: FlaskConical },
+        { id: "prepare", title: "Step 2 — Prepare", icon: Layers },
+      ],
+    },
+    {
+      label: "Docking Modes",
+      items: [
+        {
+          id: "auto-blind",
+          title: "Single Docking",
+          icon: Compass,
+          subItems: [
+            { id: "auto-blind", title: "Auto-Blind Cavity" },
+            { id: "active-site", title: "Active-Site Pocket" },
+          ],
+        },
+        { id: "batch-dock", title: "Batch Screening", icon: Network },
+      ],
+    },
+    {
+      label: "Analysis & Post-Processing",
+      items: [
+        { id: "results-3d", title: "3D Pose Viewer", icon: LayoutDashboard },
+        { id: "results-2d", title: "2D Interaction Diagrams", icon: Activity },
+      ],
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-background text-foreground font-sans">
       <Navbar lightTheme />
 
-      {/* ─── Left Sidebar ─── */}
-      <aside className="hidden xl:flex fixed left-0 top-0 h-screen w-64 flex-col justify-between bg-card z-40 pt-24 border-r border-border">
-        <div className="w-full mt-6 pl-2">
-          <h3 className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase mb-4 pl-6">
-            ON THIS PAGE
-          </h3>
-          <nav className="flex flex-col gap-1">
-            {sections.map((s) => {
-              const Icon = s.icon;
-              const isActive = activeSection === s.id;
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => scrollToSection(s.id)}
-                  className={`relative flex items-center gap-4 w-full pl-6 py-4 text-[13px] font-bold uppercase tracking-wider transition-colors ${
-                    isActive
-                      ? "text-primary bg-muted"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                  }`}
-                >
-                  {isActive && (
-                    <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-primary" />
-                  )}
-                  <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className={isActive ? "text-primary" : "text-muted-foreground"} />
-                  <span className="text-left">{s.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        <div className="w-full p-6 mt-auto border-t border-border bg-muted/30">
-          <Button
-            type="button"
-            variant="primary"
-            size="md"
-            className="w-full"
-            onClick={() => setShowDockingOptions((prev) => !prev)}
-          >
-            Start Docking
-          </Button>
-
-          {showDockingOptions && (
-            <div className="mt-3 overflow-hidden rounded-xl border border-border bg-card shadow-elevated flex flex-col">
-              <Link
-                to="/dock"
-                onClick={() => setShowDockingOptions(false)}
-                className="px-4 py-3 text-[12px] font-bold text-foreground hover:bg-muted hover:text-primary transition-colors border-b border-border"
-              >
-                Auto-Blind Docking
-              </Link>
-              <Link
-                to="/dock?mode=active"
-                onClick={() => setShowDockingOptions(false)}
-                className="px-4 py-3 text-[12px] font-bold text-foreground hover:bg-muted hover:text-primary transition-colors"
-              >
-                Active-Site Docking
-              </Link>
-            </div>
-          )}
-        </div>
-      </aside>
+      <div className="hidden xl:block relative z-50">
+        <AppSidebar
+          groups={docsSidebarGroups}
+          activeSection={activeSection}
+          onSectionClick={scrollToSection}
+          headerTitle="Documentation"
+          headerSubtitle="User & Workflow Guide"
+          actionButton={{
+            label: "Start Docking",
+            onClick: () => setShowDockingOptions((prev) => !prev),
+          }}
+        />
+        {showDockingOptions && (
+          <div className="fixed left-4 bottom-16 w-56 z-50 overflow-hidden rounded-xl border border-border bg-card shadow-2xl flex flex-col p-1 animate-fade-in-up">
+            <Link
+              to="/dock"
+              onClick={() => setShowDockingOptions(false)}
+              className="px-4 py-2.5 text-[12px] font-bold text-foreground hover:bg-muted hover:text-primary transition-colors border-b border-border/60 rounded-t-lg"
+            >
+              Single Docking
+            </Link>
+            <Link
+              to="/batch-dock"
+              onClick={() => setShowDockingOptions(false)}
+              className="px-4 py-2.5 text-[12px] font-bold text-foreground hover:bg-muted hover:text-primary transition-colors rounded-b-lg"
+            >
+              Batch Screening
+            </Link>
+          </div>
+        )}
+      </div>
 
       <div className="xl:pl-64">
 

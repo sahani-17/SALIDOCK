@@ -44,6 +44,8 @@
     --input: 215 16% 88%;
     --ring: 213 62% 15%;
 
+    --stripe-color: rgba(0, 0, 0, 0.05);
+
     --radius: 0.75rem;
   }
 
@@ -87,6 +89,7 @@
     --border: 224 10% 17%;
     --input: 224 10% 17%;
     --ring: 213 82% 68%;
+    --stripe-color: rgba(255, 255, 255, 0.12);
   }
 }
 
@@ -101,6 +104,221 @@
   }
 
   html { scroll-behavior: smooth; }
+
+  /* ── Light Theme Scientific Background (Applied to all pages EXCEPT landing page) ── */
+  html:not(.dark) body {
+    background-image: url('/light-bg.png');
+    background-size: cover;
+    background-position: center center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+  }
+
+  /* Exempt landing page so it renders its Hero background */
+  html:not(.dark) body:has(.landing-page),
+  html:not(.dark) .landing-page {
+    background-image: none !important;
+    background-color: hsl(var(--background)) !important;
+  }
+
+  /* Make non-landing page root containers transparent in Light Theme so light-bg is visible */
+  html:not(.dark) .min-h-screen:not(.landing-page) {
+    background-color: transparent !important;
+  }
+
+  /* ── Dark Theme Futuristic Scientific Background (Applied to all pages EXCEPT landing page) ── */
+  .dark body {
+    background-image: url('/dark-bg.png');
+    background-size: cover;
+    background-position: center center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+  }
+
+  /* Exempt landing page so it renders its Hero background */
+  .dark body:has(.landing-page),
+  .dark .landing-page {
+    background-image: none !important;
+  }
+
+  /* Make non-landing page root containers transparent so dark-bg is visible */
+  .dark .min-h-screen:not(.landing-page) {
+    background-color: transparent !important;
+  }
+
+  /* ── Universal Unblurred Crystal-Clear Glass System for All Cards & Boxes ── */
+
+  /* Light Theme Glassmorphism Cards (Higher Translucency, Crisp & Unblurred) */
+  html:not(.dark) .bg-card,
+  html:not(.dark) .bg-card\/50,
+  html:not(.dark) .bg-card\/80,
+  html:not(.dark) .bg-card\/90,
+  html:not(.dark) [class*="bg-card"] {
+    background-color: rgba(255, 255, 255, 0.45) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-color: rgba(15, 37, 64, 0.14) !important;
+    box-shadow: inset 0 1.5px 0 0 rgba(255, 255, 255, 0.95),
+                0 12px 36px -10px rgba(15, 37, 64, 0.08) !important;
+  }
+
+  /* Light Theme Inner sub-boxes, steppers, tabs, dropzones (Ultra-translucent) */
+  html:not(.dark) .bg-background:not(.landing-page),
+  html:not(.dark) .bg-muted,
+  html:not(.dark) .bg-muted\/50,
+  html:not(.dark) .bg-muted\/60,
+  html:not(.dark) .bg-primary\/5,
+  html:not(.dark) .bg-primary\/10 {
+    background-color: rgba(255, 255, 255, 0.30) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-color: rgba(15, 37, 64, 0.10) !important;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.8) !important;
+  }
+
+  /* Light Theme Dashed upload dropzone boxes */
+  html:not(.dark) .border-dashed {
+    background-color: rgba(255, 255, 255, 0.20) !important;
+    border-color: rgba(15, 37, 64, 0.22) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    transition: all 0.3s ease;
+  }
+  html:not(.dark) .border-dashed:hover {
+    background-color: rgba(15, 37, 64, 0.06) !important;
+    border-color: rgba(15, 37, 64, 0.5) !important;
+    box-shadow: 0 0 25px -5px rgba(15, 37, 64, 0.15) !important;
+  }
+
+  /* Light Theme Form Inputs */
+  html:not(.dark) input,
+  html:not(.dark) textarea,
+  html:not(.dark) select {
+    background-color: rgba(255, 255, 255, 0.50) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-color: rgba(15, 37, 64, 0.16) !important;
+  }
+  html:not(.dark) input:focus,
+  html:not(.dark) textarea:focus,
+  html:not(.dark) select:focus {
+    background-color: rgba(255, 255, 255, 0.70) !important;
+    border-color: rgba(15, 37, 64, 0.4) !important;
+  }
+
+  /* Light Theme Tables */
+  html:not(.dark) table {
+    background-color: rgba(255, 255, 255, 0.25) !important;
+  }
+  html:not(.dark) th {
+    background-color: rgba(255, 255, 255, 0.50) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-bottom: 1px solid rgba(15, 37, 64, 0.12) !important;
+  }
+  html:not(.dark) td {
+    border-bottom: 1px solid rgba(15, 37, 64, 0.08) !important;
+  }
+  html:not(.dark) tr:hover td {
+    background-color: rgba(15, 37, 64, 0.03) !important;
+  }
+
+  /* Dark Theme Unblurred Translucent Cards for Sharp Background Imagery */
+  .dark .bg-card,
+  .dark .bg-card\/50,
+  .dark .bg-card\/80,
+  .dark .bg-card\/90,
+  .dark [class*="bg-card"] {
+    background-color: rgba(15, 23, 42, 0.65) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.18),
+                0 20px 40px -15px rgba(0, 0, 0, 0.6) !important;
+  }
+
+  /* Inner sub-boxes, stepper containers, tabs, and dropzones in Dark Theme */
+  .dark .bg-background:not(.landing-page),
+  .dark .bg-muted,
+  .dark .bg-muted\/50,
+  .dark .bg-muted\/60,
+  .dark .bg-primary\/5,
+  .dark .bg-primary\/10 {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.10) !important;
+  }
+
+  /* Dashed upload dropzone boxes in Dark Theme */
+  .dark .border-dashed {
+    background-color: rgba(255, 255, 255, 0.03) !important;
+    border-color: rgba(255, 255, 255, 0.20) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    transition: all 0.3s ease;
+  }
+  .dark .border-dashed:hover {
+    background-color: rgba(96, 165, 250, 0.08) !important;
+    border-color: rgba(96, 165, 250, 0.5) !important;
+    box-shadow: 0 0 25px -5px rgba(96, 165, 250, 0.25) !important;
+  }
+
+  /* Stepper / Tab Glass Active & Border States */
+  .dark .border-border {
+    border-color: rgba(255, 255, 255, 0.12) !important;
+  }
+  .dark .border-primary\/40,
+  .dark .border-primary\/30 {
+    border-color: rgba(96, 165, 250, 0.45) !important;
+  }
+
+  /* Form inputs, textareas, selects in Dark Theme */
+  .dark input,
+  .dark textarea,
+  .dark select {
+    background-color: rgba(15, 23, 42, 0.55) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+    color: #f1f5f9 !important;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+  }
+  .dark input:focus,
+  .dark textarea:focus,
+  .dark select:focus {
+    border-color: rgba(96, 165, 250, 0.6) !important;
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2), inset 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  /* Tables & Poses Tables in Dark Theme */
+  .dark table {
+    background-color: rgba(15, 23, 42, 0.4) !important;
+  }
+  .dark th {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+  }
+  .dark td {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+  }
+  .dark tr:hover td {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+  }
+
+  /* Dialogs, Popovers & Floating Toolbars */
+  .dark .bg-popover,
+  .dark [role="dialog"] {
+    background-color: rgba(15, 23, 42, 0.85) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
+                0 25px 50px -12px rgba(0, 0, 0, 0.7) !important;
+  }
 
   /* Ensure DM Sans applies to ALL elements including buttons and inputs */
   button, input, select, textarea, a {
@@ -142,6 +360,16 @@
   .dark .navbar-logo {
     mix-blend-mode: screen;
   }
+}
+
+@keyframes smoothRaysBg {
+  0% { background-position: 0% 50%, 0% 50%; }
+  50% { background-position: 100% 50%, 100% 50%; }
+  100% { background-position: 0% 50%, 0% 50%; }
+}
+
+.animate-rays-moving {
+  animation: smoothRaysBg 18s ease-in-out infinite;
 }
 
 @keyframes fade-in-up {

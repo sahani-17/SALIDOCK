@@ -3,9 +3,13 @@ salidock.cavity.config — Pipeline configuration.
 """
 
 from __future__ import annotations
+import json
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -95,32 +99,23 @@ class CavityConfig:
             self.fpocket_timeout_sec = self.timeout_sec
 
         # Load weights and cascade settings dynamically if weights.json is found
-        resolved_weights_path = None
+        candidates = []
         if self.weights_json_path:
-            resolved_weights_path = Path(self.weights_json_path)
+            candidates = [Path(self.weights_json_path)]
         else:
-            # Try to auto-detect relative to project root
             try:
-                project_root = Path(__file__).resolve().parent.parent.parent
-                candidate = project_root / "backend" / "config" / "weights.json"
-                if candidate.exists():
-                    resolved_weights_path = candidate
+                candidates.append(Path(__file__).resolve().parent.parent.parent / "backend" / "config" / "weights.json")
             except Exception:
                 pass
-            
-            if not resolved_weights_path:
-                # Also check current working directory / backend / config / weights.json
-                candidate = Path.cwd() / "backend" / "config" / "weights.json"
-                if candidate.exists():
-                    resolved_weights_path = candidate
+            candidates.append(Path.cwd() / "backend" / "config" / "weights.json")
 
-        if resolved_weights_path and resolved_weights_path.exists():
+        resolved_weights_path = next((p for p in candidates if p.exists()), None)
+
+        if resolved_weights_path:
             try:
-                import json
                 with open(resolved_weights_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                
-                # Update weights
+
                 w_data = data.get("weights", {})
                 if "fpocket" in w_data:
                     self.w_fpocket = float(w_data["fpocket"])
@@ -128,8 +123,7 @@ class CavityConfig:
                     self.w_p2rank = float(w_data["p2rank"])
                 if "puresnet" in w_data:
                     self.w_puresnet = float(w_data["puresnet"])
-                
-                # Update other cascade / clustering settings
+
                 if "cascade_mode" in data:
                     self.cascade_mode = bool(data["cascade_mode"])
                 if "cascade_agreement_threshold_angstrom" in data:
@@ -138,12 +132,11 @@ class CavityConfig:
                     self.rrf_k = int(data["rrf_k"])
                 if "clustering_radius_angstrom" in data:
                     self.clustering_radius_angstrom = float(data["clustering_radius_angstrom"])
-                
-                import logging
-                logging.getLogger(__name__).info(f"Loaded config from {resolved_weights_path}")
+
+                log.info(f"Loaded config from {resolved_weights_path}")
             except Exception as e:
-                import logging
-                logging.getLogger(__name__).error(f"Failed to load config from {resolved_weights_path}: {e}")
+                log.error(f"Failed to load config from {resolved_weights_path}: {e}")
+
 
     @property
     def effective_weights(self) -> dict:
