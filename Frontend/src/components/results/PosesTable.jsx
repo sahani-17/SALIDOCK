@@ -9,7 +9,7 @@ export default function PosesTable({
   const formatTriplet = (v) => {
     if (!v) return '-';
     const arr = Array.isArray(v) ? v : [v.x ?? 0, v.y ?? 0, v.z ?? 0];
-    return arr.map((n) => (typeof n === 'number' ? n.toFixed(0) : n)).join(', ');
+    return arr.map((n) => (typeof n === 'number' ? n.toFixed(2) : n)).join(', ');
   };
 
   return (

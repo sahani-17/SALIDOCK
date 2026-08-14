@@ -56,7 +56,6 @@ VDW_CUTOFF              = 4.5    # context shell — any heavy atom pair within 
 UNFAVORABLE_CUTOFF      = 4.5    # same-sign charged proximity
 PI_SIGMA_CUTOFF         = 4.5    # ring centroid to sp3 C above ring plane
 PI_SULFUR_CUTOFF        = 6.0    # ring centroid to MET SD / CYS SG
-PI_ANION_CUTOFF         = 5.0    # ring centroid to ASP/GLU carboxylate oxygen
 # C–H···O/N bond geometric criteria (Desiraju & Steiner 1999)
 CH_BOND_CUTOFF_HA       = 3.8    # H···acceptor heavy-atom distance
 CH_BOND_CUTOFF_CA       = 4.0    # C···acceptor distance
@@ -79,7 +78,6 @@ DISTANCE_CUTOFFS = {
     "pi_stacking":       PI_STACK_CUTOFF,
     "pi_tshaped":        PI_STACK_CUTOFF,
     "pi_cation":         PI_CATION_CUTOFF,
-    "pi_anion":          PI_ANION_CUTOFF,
     "pi_alkyl":          PI_ALKYL_CUTOFF,
     "pi_sigma":          PI_SIGMA_CUTOFF,
     "pi_sulfur":         PI_SULFUR_CUTOFF,
@@ -136,7 +134,6 @@ TYPE_ALIASES = {
     "pi_tshaped": "pi_tshaped", "pi_t_shaped": "pi_tshaped",
     "picat": "pi_cation", "pi_cation": "pi_cation", "pi-cation": "pi_cation",
     "pication": "pi_cation", "cation_pi": "pi_cation",
-    "pianion": "pi_anion", "pi_anion": "pi_anion", "pi-anion": "pi_anion",
     "pialkyl": "pi_alkyl", "pi_alkyl": "pi_alkyl", "pi-alkyl": "pi_alkyl",
     "pi_sigma": "pi_sigma", "pisigma": "pi_sigma",
     "pi_sulfur": "pi_sulfur", "pisulfur": "pi_sulfur",
@@ -160,7 +157,6 @@ TYPE_PRIORITY = [
     "pi_stacking",      # face-to-face π-π (2–3 kcal/mol)
     "pi_tshaped",       # edge-to-face π-π (1–2 kcal/mol)
     "pi_cation",        # cation-π (2–5 kcal/mol)
-    "pi_anion",         # anion-π
     "pi_sigma",         # CH-π / σ-π (0.5–1.5 kcal/mol)
     "pi_sulfur",        # S-π (1–2 kcal/mol)
     "pi_alkyl",         # alkyl-π
@@ -179,7 +175,6 @@ TYPE_LABELS = {
     "pi_stacking":       "Pi-Pi Stacked",
     "pi_tshaped":        "Pi-Pi T-shaped",
     "pi_cation":         "Pi-Cation",
-    "pi_anion":          "Pi-Anion",
     "pi_sigma":          "Pi-Sigma",
     "pi_sulfur":         "Pi-Sulfur",
     "pi_alkyl":          "Pi-Alkyl",
@@ -199,7 +194,6 @@ NODE_COLORS = {
     "pi_stacking":       {"fill": "#9B59B6", "stroke": "#6C3483", "text": "#33163E"},
     "pi_tshaped":        {"fill": "#7E57C2", "stroke": "#512DA8", "text": "#FFFFFF"},
     "pi_cation":         {"fill": "#F39C12", "stroke": "#B7770D", "text": "#4A2E00"},
-    "pi_anion":          {"fill": "#E57373", "stroke": "#C62828", "text": "#FFFFFF"},
     "pi_sigma":          {"fill": "#AB47BC", "stroke": "#7B1FA2", "text": "#FFFFFF"},
     "pi_sulfur":         {"fill": "#C0CA33", "stroke": "#9E9D24", "text": "#33331A"},
     "pi_alkyl":          {"fill": "#F48FB1", "stroke": "#C2185B", "text": "#5C0A28"},
@@ -248,6 +242,11 @@ class ResidueGroup:
     interactions: list = field(default_factory=list)
     primary_type: str = "van_der_waals"
     min_dist: float = 999.0
+    # Distance (Å) of the specific interaction matching primary_type — this is
+    # what gets printed on the diagram next to the dashed line, so it must
+    # correspond to the colored/labeled interaction, not just the residue's
+    # closest contact of any type.
+    label_dist: float = 999.0
     target_x: float = 0.0
     target_y: float = 0.0
     origin_x: float = 0.0
@@ -766,7 +765,7 @@ def detect(
                     is_pi_alkyl = True
                 
                 if is_pi_alkyl and d <= PI_ALKYL_CUTOFF:
-                    _update(label, "pi-alkyl", pa["resname"], pa["resid"], pa["chain"], d, li)
+                    _update(label, "pi_alkyl", pa["resname"], pa["resid"], pa["chain"], d, li)
                 elif not is_pi_alkyl and d <= HYDROPHOBIC_CUTOFF:
                     _update(label, "alkyl", pa["resname"], pa["resid"], pa["chain"], d, li)
 
@@ -861,7 +860,7 @@ def detect(
                     key=lambda i: math.sqrt((ligand_atoms[i]["x"] - lig_c[0])**2 + (ligand_atoms[i]["y"] - lig_c[1])**2 + (ligand_atoms[i]["z"] - lig_c[2])**2)
                 ) if ligand_atoms else 0
 
-                stack_type = "pistack"  # default: parallel stacked
+                stack_type = "pi_stacking"  # default: parallel stacked
                 if res_normal is not None:
                     # Angle between the two ring normals
                     # dot product = cos(angle between normals)
@@ -870,7 +869,7 @@ def detect(
                     dot = abs(sum(a * b for a, b in zip(lig_n, res_normal)))
                     if dot < 0.5:    # angle > 60° → T-shaped / edge-to-face
                         stack_type = "pi_tshaped"
-                    # else: dot >= 0.5 → parallel / tilted-parallel → keep "pistack"
+                    # else: dot >= 0.5 → parallel / tilted-parallel → keep "pi_stacking"
                 _update(label, stack_type, resname, resid, chain, d, closest_idx)
 
         # π-cation
@@ -881,21 +880,7 @@ def detect(
                     range(len(ligand_atoms)),
                     key=lambda i: math.sqrt((ligand_atoms[i]["x"] - lpos[0])**2 + (ligand_atoms[i]["y"] - lpos[1])**2 + (ligand_atoms[i]["z"] - lpos[2])**2)
                 ) if ligand_atoms else 0
-                _update(label, "pication", resname, resid, chain, d, closest_idx)
-
-        # π-anion (ASP / GLU carboxylate oxygens near aromatic ring centroid)
-        if resname in NEG_CHARGED_RESIDUES:
-            for pa in atoms:
-                if pa["aname"] in NEG_CHARGE_ATOMS.get(resname, set()):
-                    for lig_c in lig_ring_centroids:
-                        d = math.sqrt((pa["x"] - lig_c[0])**2 + (pa["y"] - lig_c[1])**2 + (pa["z"] - lig_c[2])**2)
-                        if d <= PI_ANION_CUTOFF:
-                            closest_idx = min(
-                                range(len(ligand_atoms)),
-                                key=lambda i: math.sqrt((ligand_atoms[i]["x"] - lig_c[0])**2 + (ligand_atoms[i]["y"] - lig_c[1])**2 + (ligand_atoms[i]["z"] - lig_c[2])**2)
-                            ) if ligand_atoms else 0
-                            _update(label, "pi_anion", resname, resid, chain, d, closest_idx)
-
+                _update(label, "pi_cation", resname, resid, chain, d, closest_idx)
 
     # ── π-sulfur (ring centroid to MET SD / CYS SG) ──
     sulfur_atoms = {
@@ -1001,9 +986,9 @@ def detect(
         "metal_acceptor": 0,  "unfavorable": 1,
         "hbond": 2,           "ch_bond": 3,
         "saltbridge": 4,      "attractive_charge": 5,
-        "halogen": 6,         "pistack": 7,    "pi_tshaped": 8,
-        "pication": 9,        "pi_sigma": 10,  "pi_sulfur": 11,
-        "pi-alkyl": 12,       "alkyl": 13,     "van_der_waals": 14,
+        "halogen": 6,         "pi_stacking": 7, "pi_tshaped": 8,
+        "pi_cation": 9,       "pi_sigma": 10,  "pi_sulfur": 11,
+        "pi_alkyl": 12,       "alkyl": 13,     "van_der_waals": 14,
     }
     sorted_vals = sorted(
         best.values(),
@@ -1086,13 +1071,6 @@ def _depict_ligand(molblock: str, ligand_center: Tuple[float, float]):
         except Exception:
             pass
 
-    # Remove all explicit H atoms — they cause "HH" labels and disconnected
-    # fragments in the RDKit 2D layout.
-    try:
-        mol = Chem.RemoveHs(mol, implicitOnly=False, sanitize=False)
-    except Exception:
-        pass
-
     if _HAS_COORDGEN:
         try:
             rdCoordGen.AddCoords(mol)
@@ -1147,9 +1125,9 @@ def _depict_ligand(molblock: str, ligand_center: Tuple[float, float]):
 
     # Strip background rects (handles self-closing and paired tags across RDKit versions)
     inner_body = re.sub(
-        r"<rect\\b[^>]*style='[^']*opacity:1\\.0[^']*'[^>]*>\\s*</rect>",
+        r"<rect\b[^>]*style='[^']*opacity:1\.0[^']*'[^>]*>\s*</rect>",
         "", inner_body, flags=re.IGNORECASE | re.DOTALL)
-    inner_body = re.sub(r"<rect\\b[^>]*/>", "", inner_body, flags=re.IGNORECASE)
+    inner_body = re.sub(r"<rect\b[^>]*/>", "", inner_body, flags=re.IGNORECASE)
 
     # Build circle elements for aromatic rings
     circle_elements = []
@@ -1329,6 +1307,15 @@ def _group_by_residue_raw(interactions: list) -> list[ResidueGroup]:
         g.primary_type = min(
             {it["_type"] for it in g.interactions}, key=_priority_rank
         )
+        # Label distance must match the interaction actually being displayed
+        # (primary_type's color/priority), not just the residue's nearest
+        # contact of any kind — otherwise a printed "3.2" could belong to a
+        # van der Waals contact while the line/node is drawn as a salt bridge.
+        matching_dists = [
+            it["dist"] for it in g.interactions
+            if it["_type"] == g.primary_type and it.get("dist") is not None
+        ]
+        g.label_dist = min(matching_dists) if matching_dists else g.min_dist
         # Van der Waals context shell: show node but suppress the connecting dashed line
         # Scientific basis: vdW contacts are weak, non-directional; the node marks
         # the residue as nearby without implying a specific binding geometry.
@@ -1341,42 +1328,36 @@ def _group_by_residue_raw(interactions: list) -> list[ResidueGroup]:
 # SVG drawing
 # --------------------------------------------------------------------------
 
-def _shorten(x1: float, y1: float, x2: float, y2: float, d1: float = 0.0, d2: float = 0.0) -> Tuple[float, float, float, float]:
-    dx = x2 - x1
-    dy = y2 - y1
-    dist = math.hypot(dx, dy) or 1.0
-    ux = dx / dist
-    uy = dy / dist
-    return x1 + ux * d1, y1 + uy * d1, x2 - ux * d2, y2 - uy * d2
-
-
 def _draw_line(g: ResidueGroup, node_radius: float) -> str:
     x1, y1, x2, y2 = _shorten(g.origin_x, g.origin_y, g.node_x, g.node_y, d2=node_radius + 8.0)
-    colors = NODE_COLORS.get(g.primary_type, NODE_COLORS["van_der_waals"])
-    stroke_color = colors["stroke"]
-    
-    # Calculate perpendicular offset for distance label
-    dx = x2 - x1
-    dy = y2 - y1
-    dist_len = math.hypot(dx, dy) or 1.0
-    nx = -dy / dist_len
-    ny = dx / dist_len
-    
-    mid_x = (x1 + x2) / 2.0 + nx * 9.0
-    mid_y = (y1 + y2) / 2.0 + ny * 9.0
-    
-    dist_val = g.min_dist
-    dist_text = f"{dist_val:.2f} \u00c5" if dist_val < 900 else ""
-    
-    line_svg = f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="{stroke_color}" stroke-width="1.6" stroke-dasharray="5,3.5" fill="none"/>'
-    dist_svg = ""
-    if dist_text:
-        dist_svg = (
-            f'<text x="{mid_x:.1f}" y="{mid_y:.1f}" class="bond-distance-label" '
-            f'fill="{stroke_color}" font-family="{FONT_FAMILY}" font-size="9.5" font-weight="700" '
-            f'text-anchor="middle">{dist_text}</text>'
-        )
-    return line_svg + dist_svg
+    line_svg = f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" {LINE_STYLE}/>'
+    return line_svg + _draw_distance_label(x1, y1, x2, y2, g.label_dist)
+
+
+def _draw_distance_label(x1: float, y1: float, x2: float, y2: float, dist: float) -> str:
+    """
+    Print the interaction distance (Å) on a small white halo pill at ~55%
+    along the connecting line — the convention used by LigPlot+, Maestro's
+    Ligand Interaction Diagram, and PLIP figure output, so the diagram carries
+    its own quantitative evidence without a separate distance table.
+    """
+    if dist is None or dist >= 999.0:
+        return ""
+    t = 0.55  # slightly ligand-of-center so labels don't collide with node text
+    lx = x1 + (x2 - x1) * t
+    ly = y1 + (y2 - y1) * t
+    label = f"{dist:.2f}"
+    pill_w = 9.0 * len(label) * 0.62 + 6.0
+    pill_h = 12.0
+    return (
+        f'<g>'
+        f'<rect x="{lx - pill_w / 2:.1f}" y="{ly - pill_h / 2:.1f}" '
+        f'width="{pill_w:.1f}" height="{pill_h:.1f}" rx="3" '
+        f'fill="#FFFFFF" fill-opacity="0.88" stroke="none"/>'
+        f'<text x="{lx:.1f}" y="{ly + 3.2:.1f}" font-family="{FONT_FAMILY}" '
+        f'font-size="9" fill="#555555" text-anchor="middle">{label}</text>'
+        f'</g>'
+    )
 
 
 def _draw_node(g: ResidueGroup, node_radius: float) -> str:
@@ -1520,52 +1501,7 @@ def render_svg_new(
             except Exception:
                 pass
 
-        # Guarantee pure 2D layout: Strip all existing conformers (3D or 2D) parsed from the molblock
-        # so CoordGen generates a 100% fresh 2D coordinate system from scratch.
-        mol.RemoveAllConformers()
-
-        # ── Strip all explicit H atoms before drawing ─────────────────────────
-        # Even if the upstream render_svg() called RemoveHs, it can silently fail
-        # when sanitization is incomplete (common with PDBQT-derived mols).
-        # Explicit H atoms cause RDKit to draw "HH" labels and produce disconnected
-        # fragments in the 2D layout. We strip here as the authoritative guard.
-        try:
-            mol = Chem.RemoveHs(mol, implicitOnly=False, updateExplicitCount=True, sanitize=False)
-        except Exception:
-            pass
-
-        # Nuclear H strip — runs ALWAYS after RemoveHs in case it silently failed
-        # (RemoveHs returns the original mol unchanged when sanitization is broken)
-        def _nuclear_strip_h(m):
-            """Rebuild molecule keeping only non-hydrogen atoms."""
-            rw = Chem.RWMol()
-            amap = {}
-            for atom in m.GetAtoms():
-                if atom.GetAtomicNum() != 1:
-                    ni = rw.AddAtom(Chem.Atom(atom.GetAtomicNum()))
-                    rw.GetAtomWithIdx(ni).SetFormalCharge(atom.GetFormalCharge())
-                    rw.GetAtomWithIdx(ni).SetNoImplicit(False)
-                    amap[atom.GetIdx()] = ni
-            for bond in m.GetBonds():
-                i, j = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
-                if i in amap and j in amap:
-                    rw.AddBond(amap[i], amap[j], bond.GetBondType())
-            try:
-                Chem.SanitizeMol(rw)
-            except Exception:
-                pass
-            return rw.GetMol()
-
-        residual_h = sum(1 for a in mol.GetAtoms() if a.GetAtomicNum() == 1)
-        if residual_h > 0:
-            _log.warning(f"render_svg_new: {residual_h} H atoms remain after RemoveHs — applying nuclear strip")
-            try:
-                mol = _nuclear_strip_h(mol)
-                _log.info(f"Nuclear strip done: {mol.GetNumAtoms()} heavy atoms remain")
-            except Exception as _e_ns:
-                _log.warning(f"Nuclear H strip in render_svg_new failed: {_e_ns}")
-
-
+        # 3. Raw residue grouping
         groups = _group_by_residue_raw(filtered)
 
         # 4. Construct augmented molecule with dummy atoms and zero-order bonds
@@ -1659,7 +1595,7 @@ def render_svg_new(
         inner_body = match.group(1) if match else inner
 
         inner_body = re.sub(
-            r"<rect[^>]*\b(class=['\"]background['\"]|fill=['\"]#FFFFFF['\"]|style=['\"][^'\"]*(fill:#FFFFFF|opacity:1\.0)[^'\"]*['\"])[^>]*/?>(\s*</rect>)?",
+            r"<rect\b[^>]*(?:class=['\"]background['\"]|fill=['\"]#FFFFFF['\"]|style=['\"][^'\"]*(?:fill:#FFFFFF|opacity:1\.0)[^'\"]*['\"])[^>]*/?>(?:\s*</rect>)?",
             "", inner_body, flags=re.IGNORECASE | re.DOTALL
         )
 
@@ -1775,7 +1711,7 @@ def render_svg_new(
         footer_y = view_min_y + view_h - 14
         footer_svg = f'''
   <text x="{view_min_x + 24:.1f}" y="{footer_y:.1f}" font-size="10.5" fill="#9AA0A6">
-    Generated by SaliDock &#8226; distance cutoffs applied per interaction type &#8226; {n_res} residues shown
+    Generated by SaliDock &#8226; line labels: interaction distance in &#197; &#8226; {n_res} residues shown
   </text>
 '''
 
@@ -1913,61 +1849,11 @@ def render_svg(
     except Exception:
         pass
 
-    # ── Strip hydrogens — guaranteed nuclear fallback ─────────────────────────
-    # RemoveHs silently fails when the molecule is not fully sanitized
-    # (common for PDBQT-derived mols). The nuclear fallback manually
-    # rebuilds the mol excluding any atom with atomic number 1 (H).
     try:
-        lig_mol = Chem.RemoveHs(lig_mol, implicitOnly=False, updateExplicitCount=True, sanitize=False)
+        lig_mol = Chem.RemoveHs(lig_mol)
         Chem.SanitizeMol(lig_mol)
     except Exception:
         pass
-
-    # Nuclear H stripping: count residual H atoms and strip them manually
-    h_count = sum(1 for a in lig_mol.GetAtoms() if a.GetAtomicNum() == 1)
-    if h_count > 0:
-        _log.warning(f"RemoveHs left {h_count} H atoms — applying nuclear strip")
-        try:
-            em_noH = Chem.RWMol()
-            atom_map = {}
-            for atom in lig_mol.GetAtoms():
-                if atom.GetAtomicNum() != 1:
-                    new_idx = em_noH.AddAtom(Chem.Atom(atom.GetAtomicNum()))
-                    new_atom = em_noH.GetAtomWithIdx(new_idx)
-                    new_atom.SetFormalCharge(atom.GetFormalCharge())
-                    new_atom.SetNoImplicit(False)
-                    atom_map[atom.GetIdx()] = new_idx
-            for bond in lig_mol.GetBonds():
-                i, j = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
-                if i in atom_map and j in atom_map:
-                    em_noH.AddBond(atom_map[i], atom_map[j], bond.GetBondType())
-            try:
-                Chem.SanitizeMol(em_noH)
-            except Exception:
-                pass
-            lig_mol = em_noH.GetMol()
-            _log.info(f"Nuclear H strip: {h_count} H atoms removed, {lig_mol.GetNumAtoms()} heavy atoms remain")
-        except Exception as _e_nuclear:
-            _log.warning(f"Nuclear H strip failed: {_e_nuclear}")
-
-    # ── Always generate fresh 2D coordinates ─────────────────────────────────
-    # If the uploaded SDF was 3D (docked pose or 3D structure), the ligand mol
-    # retains those 3D coordinates. Passing them to render_svg_new() causes the
-    # ligand to appear as a squashed 3D shape in the 2D diagram.
-    # Fix: strip any existing conformer and compute a proper 2D layout every time.
-    try:
-        lig_mol.RemoveAllConformers()
-        if _HAS_COORDGEN:
-            rdCoordGen.AddCoords(lig_mol)
-        else:
-            rdDepictor.Compute2DCoords(lig_mol)
-    except Exception as _e_2d:
-        _log.warning(f"2D coord generation for ligand mol failed: {_e_2d}; trying AllChem fallback")
-        try:
-            lig_mol.RemoveAllConformers()
-            AllChem.Compute2DCoords(lig_mol)
-        except Exception:
-            pass  # render_svg_new will attempt its own coord generation
 
     molblock = Chem.MolToMolBlock(lig_mol)
     return render_svg_new(interactions, molblock, binding_affinity=affinity)

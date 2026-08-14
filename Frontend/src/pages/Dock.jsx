@@ -31,14 +31,21 @@ function Dock() {
     const [gridSize, setGridSize] = useState({ x: 20, y: 20, z: 20 });
     const [autoDetectDone, setAutoDetectDone] = useState(false);
     const [notifyEmail, setNotifyEmail] = useState('');
-    const [queueCount, setQueueCount] = useState(0);
+    const [queueStatus, setQueueStatus] = useState(null);
     const [stepIndex, setStepIndex] = useState(0);
 
-    React.useEffect(() => {
-        api.getQueueCount()
-            .then(res => setQueueCount(res.queue_count || 0))
+    // Poll queue status every 10s so the ETA label stays fresh
+    const fetchQueueStatus = React.useCallback(() => {
+        api.getQueueStatus()
+            .then(res => setQueueStatus(res))
             .catch(() => {});
     }, []);
+
+    React.useEffect(() => {
+        fetchQueueStatus();
+        const id = setInterval(fetchQueueStatus, 10000);
+        return () => clearInterval(id);
+    }, [fetchQueueStatus]);
 
     // Protein done = can proceed to Step 2 (prepare)
     // Ligand done = required to actually run docking (Step 3)
@@ -52,6 +59,18 @@ function Dock() {
         prepare: workflow.proteinPrepared,
         configure: workflow.proteinPrepared && configureDone,
     }), [inputDone, workflow.proteinPrepared, configureDone]);
+
+    // Clear error and dismiss toasts when step changes or page unmounts
+    React.useEffect(() => {
+        workflow.setError(null);
+        toast.dismiss();
+    }, [stepIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    React.useEffect(() => {
+        return () => {
+            toast.dismiss();
+        };
+    }, []);
 
     // Auto-advance stepper as gates open (but don't rewind if user manually navigated)
     // Only auto-jump when BOTH protein AND ligand are ready — don't jump on protein alone
@@ -330,10 +349,27 @@ function Dock() {
                             )}
                         </section>
 
-                        {queueCount > 9 && (
+                        {/* Queue ETA banner — always shown when server has jobs queued */}
+                        {queueStatus && queueStatus.total_queued > 0 && (
+                            <div className="mb-4 border border-amber-500/30 bg-amber-500/10 rounded-xl px-4 py-3 flex items-start gap-3">
+                                <span className="text-amber-400 text-lg leading-none mt-0.5">⏳</span>
+                                <div className="flex-1">
+                                    <p className="text-sm font-semibold text-amber-300">
+                                        Server Queue Active — {queueStatus.total_queued} job{queueStatus.total_queued > 1 ? 's' : ''} waiting
+                                    </p>
+                                    <p className="text-xs text-amber-200/70 mt-0.5">
+                                        Estimated wait for next available slot: <span className="font-bold text-amber-300">{queueStatus.eta_label || '~2 min'}</span>
+                                        {' '}· Your job will start automatically when a slot opens.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Email notification — shown when queue is high (>9) */}
+                        {queueStatus && (queueStatus.total_active + queueStatus.total_queued) > 9 && (
                             <div className="border border-border bg-card/60 p-4 rounded-xl space-y-2">
                                 <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                                    <span>📩 High Server Queue Detected ({queueCount} Jobs) — Get Email Notification On Completion</span>
+                                    <span>📩 High Server Queue Detected ({(queueStatus?.total_active || 0) + (queueStatus?.total_queued || 0)} Jobs) — Get Email Notification On Completion</span>
                                     <span className="text-[10px] text-muted-foreground font-normal">(Optional)</span>
                                 </label>
                                 <input

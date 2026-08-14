@@ -5,6 +5,7 @@ export const PROTEIN_REPRESENTATIONS = [
   { value: 'molecular-surface', label: 'Surface' },
   { value: 'gaussian-surface', label: 'Gaussian Surface' },
   { value: 'putty', label: 'Putty' },
+  { value: 'hide', label: 'Hide Receptor' },
 ];
 
 export const LIGAND_REPRESENTATIONS = [

@@ -165,7 +165,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
 
     const labelMap = {
       'pocket-residues-component': 'Cavity Residues',
-      'pocket-labels-component': 'Cavity Labels',
+      'pocket-labels-component': 'Residue Labels',
       'pocket-surface-component': 'Cavity Surface',
       'interactions-component': 'Interactions',
       'protein-component': 'Receptor',
@@ -376,7 +376,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
             structureRef.cell,
             pocketResExpression,
             'pocket-labels-component',
-            { label: 'Cavity Labels', tags: ['pocket-labels-component'] }
+            { label: 'Residue Labels', tags: ['pocket-labels-component'] }
           );
           if (pocketLabelsComp) {
             await clearNodeChildren(plugin, pocketLabelsComp.ref);

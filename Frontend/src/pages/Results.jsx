@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Eye } from 'lucide-react';
+import { toast } from 'sonner';
 import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
 import { api } from '../services/api';
 import MolecularViewer from '../components/MolecularViewer';
@@ -29,6 +30,7 @@ function Results() {
 
 
   // Viewer controls (Default: only Cavity Surface is ON, rest are OFF)
+  const [showProtein, setShowProtein] = useState(true);
   const [proteinRepr, setProteinRepr] = useState('cartoon');
   const [ligandRepr, setLigandRepr] = useState('ball-and-stick');
   const [colorScheme, setColorScheme] = useState('chain-id');
@@ -41,6 +43,12 @@ function Results() {
 
 
   const isDemo = sessionId === 'demo';
+
+  useEffect(() => {
+    return () => {
+      toast.dismiss();
+    };
+  }, []);
 
   useEffect(() => {
     if (!sessionId) { setError('No session ID provided'); setLoading(false); return; }
@@ -240,6 +248,7 @@ function Results() {
                 loadingViewer={loadingViewer}
               />
               <ViewerToggles
+                showProtein={showProtein} setShowProtein={setShowProtein}
                 showPocketResidues={showCavityResidues} setShowPocketResidues={setShowCavityResidues}
                 showPocketLabels={showCavityLabels} setShowPocketLabels={setShowCavityLabels}
                 showPocketSurface={showCavitySurface} setShowPocketSurface={setShowCavitySurface}
@@ -259,6 +268,7 @@ function Results() {
                     pdbData={pdbData}
                     poseNumber={selectedPose}
                     sessionId={sessionId}
+                    showProtein={showProtein}
                     proteinRepr={proteinRepr}
                     ligandRepr={ligandRepr}
                     colorScheme={colorScheme}

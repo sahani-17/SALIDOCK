@@ -61,6 +61,8 @@ export const api = {
 
   getQueueCount: () => json('/api/queue/count', { fallback: 'Failed to fetch queue count' }),
 
+  getQueueStatus: () => json('/api/queue/status', { fallback: 'Failed to fetch queue status' }),
+
   // File Upload
   uploadFile: (sessionId, file, filetype) => {
     const formData = new FormData();

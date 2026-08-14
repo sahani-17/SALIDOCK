@@ -20,12 +20,16 @@ export default function ViewerToggles({
   showPocketLabels, setShowPocketLabels,
   showPocketSurface, setShowPocketSurface,
   showInteractions, setShowInteractions,
+  showProtein = true, setShowProtein,
 }) {
   return (
     <div className="flex flex-wrap items-center gap-6 border border-border border-b-0 bg-muted/20 px-4 py-2 text-xs font-medium text-muted-foreground">
+      {setShowProtein && (
+        <Toggle checked={!showProtein} onChange={(checked) => setShowProtein(!checked)} label="Hide Receptor" />
+      )}
       <Toggle checked={showPocketSurface} onChange={setShowPocketSurface} label="Cavity Surface" />
       <Toggle checked={showPocketResidues} onChange={setShowPocketResidues} label="Show Cavity Residues" />
-      <Toggle checked={showPocketLabels} onChange={setShowPocketLabels} label="Cavity Labels" />
+      <Toggle checked={showPocketLabels} onChange={setShowPocketLabels} label="Residue Labels" />
       <Toggle checked={showInteractions} onChange={setShowInteractions} label="Interaction Lines" />
     </div>
   );
