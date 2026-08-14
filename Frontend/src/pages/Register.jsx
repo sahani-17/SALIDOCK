@@ -13,6 +13,7 @@ const Register = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   if (user) {
     return <Navigate to="/" replace />;
@@ -35,7 +36,7 @@ const Register = () => {
       if (error) throw error;
 
       toast.success("Registration successful. You can now log in.");
-      navigate("/login", { replace: true });
+      navigate("/login", { replace: true, state: location.state });
     } catch (error) {
       toast.error(error.message || "Failed to register");
     } finally {
@@ -100,7 +101,7 @@ const Register = () => {
 
           <p className="text-sm text-muted-foreground mt-4 text-center">
             Already have an account?{" "}
-            <Link to="/login" className="text-primary hover:underline font-semibold">
+            <Link to="/login" state={location.state} className="text-primary hover:underline font-semibold">
               Login
             </Link>
           </p>

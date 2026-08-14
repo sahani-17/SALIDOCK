@@ -1,9 +1,11 @@
 import React from "react";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { AnimatedCircularProgressBar } from "./ui/animated-circular-progress-bar";
 
 const ProtectedRoute = ({ children }) => {
-  const { loading } = useAuth();
+  const { user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -14,6 +16,10 @@ const ProtectedRoute = ({ children }) => {
         </div>
       </div>
     );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   return children;

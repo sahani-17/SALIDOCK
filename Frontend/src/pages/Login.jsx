@@ -14,7 +14,9 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const redirectPath = location.state?.from?.pathname || "/";
+  const redirectPath = location.state?.from
+    ? `${location.state.from.pathname || "/"}${location.state.from.search || ""}${location.state.from.hash || ""}`
+    : "/";
 
   if (user) {
     return <Navigate to={redirectPath} replace />;
@@ -77,7 +79,7 @@ const Login = () => {
 
           <p className="text-sm text-muted-foreground mt-4 text-center">
             Don&apos;t have an account?{" "}
-            <Link to="/register" className="text-primary hover:underline font-semibold">
+            <Link to="/register" state={location.state} className="text-primary hover:underline font-semibold">
               Register
             </Link>
           </p>

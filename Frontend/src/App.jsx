@@ -42,9 +42,22 @@ function App() {
           {/* Legacy redirect routes */}
           <Route path="/docking" element={<Navigate to="/dock" replace />} />
           <Route path="/active" element={<Navigate to="/dock?mode=active" replace />} />
-          <Route path="/cavity" element={<Navigate to="/dock?mode=blind" replace />} />
-          <Route path="/results" element={<Results />} />
-          <Route path="/batch-results" element={<BatchResults />} />
+          <Route
+            path="/results"
+            element={
+              <ProtectedRoute>
+                <Results />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/batch-results"
+            element={
+              <ProtectedRoute>
+                <BatchResults />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/feedback"
             element={
