@@ -36,21 +36,6 @@ function BatchDock() {
     // Batch docking status polling
     const [dockingStatus, setDockingStatus] = useState(null);
     const [dockingRunning, setDockingRunning] = useState(false);
-    const [queueStatus, setQueueStatus] = useState(null);
-    const [queuedInfo, setQueuedInfo] = useState(null); // set when 202 received
-
-    // Poll queue status every 10s so ETA badge stays live
-    const fetchQueueStatus = React.useCallback(() => {
-        api.getQueueStatus()
-            .then(res => setQueueStatus(res))
-            .catch(() => {});
-    }, []);
-
-    React.useEffect(() => {
-        fetchQueueStatus();
-        const id = setInterval(fetchQueueStatus, 10000);
-        return () => clearInterval(id);
-    }, [fetchQueueStatus]);
 
     const inputDone = workflow.uploadProgress.protein && workflow.uploadProgress.ligands;
     const prepareDone = workflow.proteinPrepared && workflow.ligandPrepStatus && 
@@ -93,18 +78,6 @@ function BatchDock() {
 
         return () => clearInterval(timer);
     }, [completedPercent, nextLigandPercent, dockingRunning, dockingStatus]);
-
-    // Clear error and dismiss toasts when step changes or page unmounts
-    useEffect(() => {
-        workflow.setError(null);
-        toast.dismiss();
-    }, [stepIndex]);
-
-    useEffect(() => {
-        return () => {
-            toast.dismiss();
-        };
-    }, []);
 
     useEffect(() => {
         if (inputDone && stepIndex < 1) setStepIndex(1);
@@ -153,7 +126,6 @@ function BatchDock() {
 
     const handleRunBatchDocking = async () => {
         setDockingRunning(true);
-        setQueuedInfo(null);
         try {
             const dockingData = { dockingMode };
             if (dockingMode === 'cavity') {
@@ -176,16 +148,7 @@ function BatchDock() {
                 dockingData.notify_email = notifyEmail.trim();
             }
 
-            const res = await api.runBatchDocking(workflow.sessionId, dockingData);
-
-            // HTTP 202 → queued (another batch job is already running)
-            if (res?.status === 'queued') {
-                setQueuedInfo(res);
-                setDockingRunning(false);
-                toast.info(`Queued — estimated wait: ${res.eta_label || 'unknown'}`);
-                return;
-            }
-
+            await api.runBatchDocking(workflow.sessionId, dockingData);
             toast.success('Batch docking simulation started');
             pollDockingStatus();
         } catch (err) {
@@ -669,7 +632,7 @@ function BatchDock() {
                                                                 </span>
                                                             </td>
                                                             <td className="p-3 font-mono-code">{cav.volume?.toFixed(1) || '0.0'}</td>
-                                                            <td className="p-3 font-mono-code">[{cav.center.map(n => n.toFixed(2)).join(', ')}]</td>
+                                                            <td className="p-3 font-mono-code">[{cav.center.map(n => n.toFixed(1)).join(', ')}]</td>
                                                             <td className="p-3 text-right">
                                                                 <div className={`w-4 h-4 rounded-full border flex items-center justify-center ml-auto ${selectedCavityId === cav.cavity_id ? 'border-primary bg-primary' : 'border-border'}`}>
                                                                     {selectedCavityId === cav.cavity_id && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
@@ -743,45 +706,6 @@ function BatchDock() {
                         </section>
 
                         <div className="mt-6 border-t border-border pt-5 space-y-4">
-
-                            {/* ETA banner: shown whenever server queue has jobs waiting */}
-                            {queueStatus && queueStatus.total_queued > 0 && (
-                                <div className="border border-amber-500/30 bg-amber-500/10 rounded-xl px-4 py-3 flex items-start gap-3">
-                                    <span className="text-amber-400 text-lg leading-none mt-0.5">⏳</span>
-                                    <div className="flex-1">
-                                        <p className="text-sm font-semibold text-amber-300">
-                                            Server Queue Active — {queueStatus.total_queued} job{queueStatus.total_queued > 1 ? 's' : ''} waiting
-                                        </p>
-                                        <p className="text-xs text-amber-200/70 mt-0.5">
-                                            Estimated wait: <span className="font-bold text-amber-300">{queueStatus.eta_label || '~2 min'}</span>
-                                            {' '}· Your batch will start as soon as a slot is free.
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Queued banner: this user's batch was deferred (202 response) */}
-                            {queuedInfo && (
-                                <div className="border border-blue-500/30 bg-blue-500/10 rounded-xl px-4 py-3 flex items-start gap-3">
-                                    <span className="text-blue-400 text-lg leading-none mt-0.5">🔄</span>
-                                    <div className="flex-1">
-                                        <p className="text-sm font-semibold text-blue-300">
-                                            Your batch job is queued (position #{queuedInfo.queue_position})
-                                        </p>
-                                        <p className="text-xs text-blue-200/70 mt-1">
-                                            Another batch is currently running. Estimated wait: <span className="font-bold text-blue-300">{queuedInfo.eta_label}</span>.
-                                            {' '}You can leave this page — use the email notification below to be alerted when it completes.
-                                        </p>
-                                        <button
-                                            onClick={handleRunBatchDocking}
-                                            className="mt-2 px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-300 text-xs font-semibold hover:bg-blue-500/30 transition-all border border-blue-500/30"
-                                        >
-                                            Try Starting Again
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
                             {!dockingRunning && !dockingStatus && (
                                 <div className="border border-border bg-card/60 p-4 rounded-xl space-y-3">
                                     <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">

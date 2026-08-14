@@ -25,11 +25,6 @@ import os
 import re
 import logging
 import json
-import asyncio
-import collections
-import functools
-import threading
-import time as _time
 from dotenv import load_dotenv
 load_dotenv()  # Load .env before any module reads env vars
 import tools, grid_calc, results, alphafold_integration
@@ -476,70 +471,10 @@ def check_disk_space(required_mb: int = 100):
     except Exception as e:
         logger.warning(f"Could not check disk space: {e}")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Docking Queue Infrastructure
-# ─────────────────────────────────────────────────────────────────────────────
-# Two asyncio Semaphores control concurrency (created in startup event because
-# asyncio.Semaphore must be bound to the running event loop):
-#
-#   _total_semaphore  — gates ALL docking jobs (single + batch combined)
-#   _batch_semaphore  — gates ONLY batch docking (max 1 batch at a time)
-#
-# Slot rules:
-#   Single docking: acquires _total_semaphore only
-#   Batch docking:  acquires _batch_semaphore THEN _total_semaphore
-#
-# This ensures:
-#   • A batch job never prevents a single-dock from running
-#   • Two batch jobs can never run simultaneously
-#   • ETA is always shown to any user waiting in queue
-
-_MAX_TOTAL_SLOTS: int = int(os.getenv("MAX_DOCKING_WORKERS", "2"))
-_MAX_BATCH_SLOTS: int = 1  # at most 1 batch job at a time
-
-_total_semaphore: asyncio.Semaphore | None = None
-_batch_semaphore: asyncio.Semaphore | None = None
-
-# Thread-safe queue state (accessed from both async handlers and thread-pool workers)
-_state_lock = threading.Lock()
-_queue_state = {
-    "active_single":  0,
-    "active_batch":   0,
-    "queued_single":  0,
-    "queued_batch":   0,
-}
-
-# Rolling ETA tracker — keeps last 5 completed job durations (seeded at 120 s)
-_recent_durations: collections.deque = collections.deque(
-    [120.0, 120.0, 120.0], maxlen=5
-)
-
-
-def _avg_duration() -> float:
-    """Mean of recent job durations (seconds). Used for ETA estimation."""
-    return sum(_recent_durations) / len(_recent_durations)
-
-
-def _eta_label(seconds: float) -> str:
-    """Convert seconds to a human-readable label like '~2 min 30 sec'."""
-    s = max(0, int(seconds))
-    if s < 60:
-        return f"~{s} sec"
-    m, r = divmod(s, 60)
-    return f"~{m} min" if r == 0 else f"~{m} min {r} sec"
-
-
-# Startup event: cleanup old sessions + init semaphores
+# Startup event: cleanup old sessions
 @app.on_event("startup")
 async def startup_cleanup():
-    """Run cleanup on application startup and initialise concurrency primitives."""
-    global _total_semaphore, _batch_semaphore
-    _total_semaphore = asyncio.Semaphore(_MAX_TOTAL_SLOTS)
-    _batch_semaphore = asyncio.Semaphore(_MAX_BATCH_SLOTS)
-    logger.info(
-        f"✅ Docking queue initialised: {_MAX_TOTAL_SLOTS} total slots, "
-        f"{_MAX_BATCH_SLOTS} batch slot(s)"
-    )
+    """Run cleanup on application startup."""
     logger.info("Running startup session cleanup...")
     cleanup_old_sessions()
     # Log Supabase connection status
@@ -953,67 +888,24 @@ async def create_session():
         logger.error(f"Failed to create session: {e}", exc_info=True)
         return JSONResponse(status_code=500, content={"status": "error", "message": f"Failed to create session: {str(e)}"})
 
-# ── Legacy counter (kept for backward compat — use /api/queue/status instead) ──
-@property
-def _active_docking_count_compat():
-    with _state_lock:
-        return _queue_state["active_single"] + _queue_state["active_batch"]
-
+# Track active/queued docking jobs for conditional UI notification prompts
+active_docking_count = 0
 
 @app.get("/api/queue/count")
 async def get_queue_count():
-    """Returns current number of active docking jobs (backward-compatible)."""
-    with _state_lock:
-        total = _queue_state["active_single"] + _queue_state["active_batch"]
-    return {"queue_count": total}
-
+    """Returns current number of active/queued docking jobs."""
+    return {"queue_count": active_docking_count}
 
 @app.get("/api/queue/status")
 async def get_queue_status():
-    """
-    Returns detailed queue status including ETA for waiting users.
-
-    Response fields:
-        single.active   — single-dock jobs currently running
-        single.queued   — single-dock jobs waiting for a slot
-        single.max      — max concurrent single+batch jobs
-        batch.active    — batch-dock jobs currently running
-        batch.queued    — batch-dock jobs waiting
-        batch.max       — max concurrent batch jobs
-        total_active    — total running jobs
-        total_queued    — total waiting jobs
-        eta_seconds     — estimated wait in seconds (0 if not queued)
-        eta_label       — human-readable ETA string
-    """
-    with _state_lock:
-        qs = dict(_queue_state)  # snapshot
-    avg = _avg_duration()
-    total_active  = qs["active_single"] + qs["active_batch"]
-    total_queued  = qs["queued_single"] + qs["queued_batch"]
-    # ETA = how many job-cycles a newly queued job must wait
-    # slots_in_use: how many of the total slots are occupied
-    # queued jobs drain at rate of 1/avg_duration per slot
-    if total_queued == 0:
-        eta_s = 0.0
-    else:
-        # rough: each queued job behind at least ceil(active/max) cycles
-        jobs_ahead = total_active + total_queued
-        eta_s = (jobs_ahead / max(1, _MAX_TOTAL_SLOTS)) * avg
+    """Returns detailed queue status."""
     return {
-        "single":  {
-            "active": qs["active_single"],
-            "queued": qs["queued_single"],
-            "max": _MAX_TOTAL_SLOTS,
-        },
-        "batch": {
-            "active": qs["active_batch"],
-            "queued": qs["queued_batch"],
-            "max": _MAX_BATCH_SLOTS,
-        },
-        "total_active": total_active,
-        "total_queued": total_queued,
-        "eta_seconds": round(eta_s),
-        "eta_label": _eta_label(eta_s) if total_queued > 0 else None,
+        "single": {"active": active_docking_count, "queued": 0, "max": 2},
+        "batch": {"active": 0, "queued": 0, "max": 1},
+        "total_active": active_docking_count,
+        "total_queued": 0,
+        "eta_seconds": 0,
+        "eta_label": None,
     }
 
 @app.get("/api/status/{session_id}")
@@ -2326,110 +2218,50 @@ async def run_docking_endpoint(
 ):
     """
     Run molecular docking using new engines (GNINA / QuickVina-W).
-
+    
     Modes:
         - cavity: Dock in detected cavities (default)
         - manual: Dock with user-defined grid
-
-    Queue behaviour:
-        - Single docking acquires _total_semaphore only.
-        - Waits asynchronously without blocking any other request.
+    
+    Args:
+        session_id: Session ID
+        docking_mode: "cavity" or "manual"
+        cavity_ids: Comma-separated cavity IDs (e.g., "1,2,3") or None for all cavities
+    
+    Returns:
+        Cavity mode: All poses from all cavities, ranked by affinity
+        Manual mode: Poses from single docking run
     """
-    # ── Pre-flight validation (fast, no blocking) ─────────────────────────────
-    session_dir = get_session_dir(session_id)
-    receptor = session_dir / "protein_prepared.pdbqt"
-    ligand   = session_dir / "ligand_prepared.pdbqt"
-
-    if not receptor.exists():
-        raise HTTPException(status_code=404, detail="Prepared protein not found")
-    if not ligand.exists():
-        raise HTTPException(status_code=404, detail="Prepared ligand not found")
-
-    # ── Queue accounting ───────────────────────────────────────────────────────
-    with _state_lock:
-        _queue_state["queued_single"] += 1
-
-    t_queued = _time.monotonic()
-    acquired_slot = False
+    global active_docking_count
+    active_docking_count += 1
     try:
-        # Acquire slot — async wait, does NOT block event loop
-        async with _total_semaphore:
-            acquired_slot = True
-            queue_wait = _time.monotonic() - t_queued
-            with _state_lock:
-                _queue_state["queued_single"] = max(0, _queue_state["queued_single"] - 1)
-                _queue_state["active_single"] += 1
-
-            if queue_wait > 1:
-                logger.info(
-                    f"[queue] single-dock {session_id} waited {queue_wait:.1f}s in queue"
-                )
-
-            t_start = _time.monotonic()
-            try:
-                # ── Run all blocking docking logic in thread pool ──────────────
-                # This keeps the event loop free for session/upload requests
-                # from all other users while this job executes.
-                loop = asyncio.get_event_loop()
-                response_payload = await loop.run_in_executor(
-                    None,
-                    functools.partial(
-                        _run_single_docking_sync,
-                        session_id, session_dir, receptor, ligand,
-                        docking_mode, cavity_ids, notify_email,
-                    )
-                )
-                return response_payload
-            finally:
-                elapsed = _time.monotonic() - t_start
-                with _state_lock:
-                    _queue_state["active_single"] = max(0, _queue_state["active_single"] - 1)
-                    _recent_durations.append(elapsed)
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        logger.error(f"Docking error for {session_id}: {traceback.format_exc()}")
-        return json_error(str(e))
-    finally:
-        # Safety: if we never acquired the semaphore, decrement queued counter
-        if not acquired_slot:
-            with _state_lock:
-                _queue_state["queued_single"] = max(0, _queue_state["queued_single"] - 1)
-
-
-def _run_single_docking_sync(
-    session_id: str,
-    session_dir,
-    receptor,
-    ligand,
-    docking_mode: str,
-    cavity_ids: str | None,
-    notify_email: str | None,
-):
-    """
-    Synchronous docking worker — runs in a thread-pool executor so it never
-    blocks the asyncio event loop.  Contains all the CPU/subprocess-bound logic
-    that was previously inline in the async handler.
-    """
-    import concurrent.futures
-
-    try:
+        session_dir = get_session_dir(session_id)
+        receptor = session_dir / "protein_prepared.pdbqt"
+        ligand = session_dir / "ligand_prepared.pdbqt"
+        
+        if not receptor.exists():
+            raise HTTPException(status_code=404, detail="Prepared protein not found")
+        if not ligand.exists():
+            raise HTTPException(status_code=404, detail="Prepared ligand not found")
+        
         if docking_mode == "cavity":
-            # ── Cavity mode: Multi-cavity docking ─────────────────────────────
+            # Cavity mode: Multi-cavity docking
             cavity_file = session_dir / "cavities.json"
             if not cavity_file.exists():
                 raise HTTPException(
                     status_code=404,
                     detail="No cavities detected. Please run cavity detection first."
                 )
-
+            
+            # Load cavity metadata
             cavities = load_cavity_metadata(cavity_file)
-
+            
+            # Filter by cavity_ids if specified
             if cavity_ids:
                 try:
-                    requested_ids = [int(i.strip()) for i in cavity_ids.split(',')]
+                    requested_ids = [int(id.strip()) for id in cavity_ids.split(',')]
                     cavities = [c for c in cavities if c['cavity_id'] in requested_ids]
+                    
                     if not cavities:
                         raise HTTPException(
                             status_code=404,
@@ -2440,8 +2272,12 @@ def _run_single_docking_sync(
                         status_code=400,
                         detail=f"Invalid cavity_ids format: {cavity_ids}. Use comma-separated integers."
                     )
-
-            print(f"\n[INFO] Running cavity-based docking for {len(cavities)} cavities")
+            
+            print(f"\n[INFO] Running cavity-based docking for {len(cavities)} cavities using new engines")
+            
+            # Run multi-cavity docking concurrently using ThreadPoolExecutor
+            # Limit to max 5 simultaneous runs as requested by the user
+            import concurrent.futures
 
             def dock_single_cavity(cav):
                 cav_id = cav['cavity_id']
@@ -2452,7 +2288,7 @@ def _run_single_docking_sync(
                     tier = ConfidenceTier(conf_str)
                 except ValueError:
                     tier = ConfidenceTier.LOW
-
+                
                 cavity_meta = CavityMetadata(
                     tier=tier,
                     volume_angstrom3=volume,
@@ -2757,19 +2593,22 @@ def _run_single_docking_sync(
                 "grid_center": list(center),
                 "grid_size": list(size)
             }
-
+        
         else:
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid docking_mode: {docking_mode}. Must be 'cavity' or 'manual'"
             )
-
+    
     except HTTPException:
         raise
     except Exception as e:
         import traceback
-        logger.error(f"Docking error (sync worker): {traceback.format_exc()}")
-        raise RuntimeError(str(e)) from e
+        error_details = traceback.format_exc()
+        print(f"Error in docking: {error_details}")
+        return json_error(str(e))
+    finally:
+        active_docking_count = max(0, active_docking_count - 1)
 
 
 from typing import List, Any
@@ -3095,14 +2934,9 @@ async def run_batch_docking(
 ):
     """
     Run molecular docking for all ligands in the batch.
-
-    Queue behaviour:
-        - Batch jobs acquire _batch_semaphore (max 1) before starting.
-        - If another batch is already running, returns HTTP 202 immediately
-          with queue position + ETA so the user can wait or subscribe for email.
-        - Single docking is NEVER blocked by a batch job.
-        - Actual docking runs in a background thread (event loop stays free).
+    Runs asynchronously in the background.
     """
+    import threading
     import concurrent.futures
     try:
         session_dir = get_session_dir(session_id)
@@ -3167,12 +3001,14 @@ async def run_batch_docking(
             
         status_file = session_dir / "batch_dock_status.json"
 
+        # Determine the original protein name for ZIP naming
+        # Look for the uploaded protein file (not the prepared copies)
         original_protein_stem = "protein"
         for p_file in session_dir.glob("protein_*.*"):
             if p_file.name not in ["protein_prepared.pdbqt", "protein_prepared.pdb"]:
-                stem = Path(p_file.name).stem
+                stem = Path(p_file.name).stem           # e.g. "protein_1abc"
                 if stem.startswith("protein_"):
-                    stem = stem[8:]
+                    stem = stem[8:]                      # strip "protein_" prefix → "1abc"
                 stem = re.sub(r'[^a-zA-Z0-9_-]', '_', stem).strip('_')
                 if stem:
                     original_protein_stem = stem
@@ -3184,7 +3020,7 @@ async def run_batch_docking(
             "completed": 0,
             "failed": 0,
             "results": [],
-            "protein_file": original_protein_stem,
+            "protein_file": original_protein_stem,      # used by ZIP download for filename
             "docking_parameters": {
                 "docking_mode": docking_mode,
                 "target_cavity_id": cavity_id if docking_mode == "cavity" else None,
@@ -3193,70 +3029,152 @@ async def run_batch_docking(
             }
         }
         status_file.write_text(json.dumps(status_data, indent=2))
+        
+        def run_docking_background_inner():
+            results_list = []
+            
+            def dock_single(lig):
+                idx = lig["index"]
+                name = lig["name"]
+                safe_name = lig["safe_name"]
+                prepared_name = lig.get("prepared_pdbqt")
+                
+                if not prepared_name:
+                    return idx, {"index": idx, "name": name, "safe_name": safe_name, "status": "failed", "error": "Ligand was not prepared"}
 
-        # ── Queue check: is a batch slot available? ───────────────────────────
-        with _state_lock:
-            batch_busy = _queue_state["active_batch"] >= _MAX_BATCH_SLOTS
-            if batch_busy:
-                _queue_state["queued_batch"] += 1
-
-        if batch_busy:
-            avg = _avg_duration()
-            with _state_lock:
-                qs = dict(_queue_state)
-            jobs_ahead = qs["active_single"] + qs["active_batch"] + qs["queued_batch"]
-            eta_s = (jobs_ahead / max(1, _MAX_TOTAL_SLOTS)) * avg
-            return JSONResponse(
-                status_code=202,
-                content={
-                    "status": "queued",
-                    "message": "A batch docking job is already running. Your job is queued.",
-                    "queue_position": qs["queued_batch"],
-                    "eta_seconds": round(eta_s),
-                    "eta_label": _eta_label(eta_s),
-                    "total_active": qs["active_single"] + qs["active_batch"],
-                }
-            )
-
-        with _state_lock:
-            _queue_state["active_batch"] += 1
-
-        def run_docking_background():
-            t_start = _time.monotonic()
-            try:
-                _run_batch_docking_sync(
-                    session_id=session_id,
-                    session_dir=session_dir,
-                    receptor=receptor,
-                    ligands=ligands,
-                    cavity_meta=cavity_meta,
-                    size=size,
-                    docking_mode=docking_mode,
-                    cavity_id=cavity_id,
-                    original_protein_stem=original_protein_stem,
-                    status_file=status_file,
-                    status_data=status_data,
-                    notify_email=notify_email,
-                )
-            except Exception as e:
-                logger.error(f"Batch docking background worker failed: {e}", exc_info=True)
-                status_data["status"] = "failed"
-                status_data["error"] = str(e)
+                # Recover file from Supabase Storage if /tmp was wiped by a container restart
+                ligand_path = ensure_session_file(session_id, prepared_name)
+                if not ligand_path.exists():
+                    return idx, {"index": idx, "name": name, "safe_name": safe_name, "status": "failed", "error": f"Prepared file {prepared_name} missing (not found locally or in Supabase Storage)"}
+                    
                 try:
-                    status_file.write_text(json.dumps(status_data, indent=2))
-                except Exception:
-                    pass
+                    result = run_docking(str(receptor), str(ligand_path), cavity_meta, size=size)
+                    
+                    if isinstance(result, DockingError):
+                        return idx, {"index": idx, "name": name, "safe_name": safe_name, "status": "failed", "error": result.message}
+                        
+                    out_pdbqt = session_dir / f"docking_out_ligand_{idx}_out.pdbqt"
+                    convert_sdf_to_pdbqt(result.top_pose_sdf, result.vina_affinity, out_pdbqt)
+                    
+                    log_file = session_dir / f"docking_out_ligand_{idx}.log"
+                    log_file.write_text(f"Engine: {result.engine_used.value}\nRouting Reason: {result.routing_reason}\nStatus: Success\n", encoding="utf-8")
+                    
+                    props = lig.get("properties", {})
+                    heavy_atoms = props.get("heavy_atoms", 0)
+                    ligand_efficiency = 0.0
+                    if heavy_atoms > 0:
+                        ligand_efficiency = round(result.vina_affinity / heavy_atoms, 3)
+                        
+                    cloud_save(session_id, out_pdbqt.name, out_pdbqt.read_bytes())
+                    cloud_save(session_id, log_file.name, log_file.read_bytes())
+                    
+                    return idx, {
+                        "index": idx,
+                        "name": name,
+                        "safe_name": safe_name,
+                        "status": "completed",
+                        "affinity": result.vina_affinity,
+                        "cnn_score": result.cnn_score,
+                        "cnn_affinity": result.cnn_affinity,
+                        "engine": result.engine_used.value,
+                        "routing_reason": result.routing_reason,
+                        "ligand_efficiency": ligand_efficiency,
+                        "properties": props
+                    }
+                except Exception as ex:
+                    logger.error(f"Docking failed for ligand {name}: {ex}")
+                    return idx, {"index": idx, "name": name, "safe_name": safe_name, "status": "failed", "error": str(ex)}
+            
+            completed_count = 0
+            failed_count = 0
+            
+            max_workers = int(os.getenv("MAX_DOCKING_WORKERS", 2))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = [executor.submit(dock_single, lig) for lig in ligands]
+                
+                for future in concurrent.futures.as_completed(futures):
+                    try:
+                        idx, res = future.result()
+                        results_list.append(res)
+                        
+                        if res["status"] == "completed":
+                            completed_count += 1
+                        else:
+                            failed_count += 1
+                            
+                        status_data["completed"] = completed_count
+                        status_data["failed"] = failed_count
+                        status_data["results"] = results_list
+                        status_file.write_text(json.dumps(status_data, indent=2))
+                    except Exception as e:
+                        logger.error(f"Failed to retrieve docking thread result: {e}")
+                        
+            status_data["status"] = "completed" if failed_count == 0 else "completed_with_errors"
+            status_file.write_text(json.dumps(status_data, indent=2))
+            
+            completed_results = [r for r in results_list if r["status"] == "completed"]
+            completed_results.sort(key=lambda x: x["affinity"])
+            
+            report_data = {
+                "session_id": session_id,
+                "docking_parameters": status_data["docking_parameters"],
+                "summary": {
+                    "total_ligands": len(ligands),
+                    "docked_successfully": completed_count,
+                    "failed": failed_count,
+                    "best_affinity": completed_results[0]["affinity"] if completed_results else None,
+                    "best_binder": completed_results[0]["name"] if completed_results else None
+                },
+                "results": results_list
+            }
+            report_file = session_dir / "batch_docking_report.json"
+            report_file.write_text(json.dumps(report_data, indent=2))
+            
+            cloud_save_text(session_id, "batch_docking_report.json", json.dumps(report_data, indent=2))
+            cloud_save_text(session_id, "batch_dock_status.json", json.dumps(status_data, indent=2))
+            
+            if supabase_mgr:
+                try:
+                    supabase_mgr.save_docking_result(session_id, {
+                        "best_affinity": completed_results[0]["affinity"] if completed_results else None,
+                        "num_poses": len(completed_results),
+                        "cavity_count": 1 if docking_mode == "cavity" else 0,
+                        "docking_mode": f"batch_{docking_mode}"
+                    })
+                    supabase_mgr.update_session_status(session_id, "completed")
+                except Exception as db_err:
+                    logger.error(f"Supabase DB save failed: {db_err}")
+
+            # ── Send completion email notification ──────────────────────────
+            if notify_email:
+                try:
+                    best_score = f"{completed_results[0]['affinity']} kcal/mol" if completed_results else None
+                    best_binder = completed_results[0]['name'] if completed_results else None
+                    protein_label = original_protein_stem or "Protein"
+                    ligand_label = f"{len(completed_results)}/{len(ligands)} ligands" + (f" — best: {best_binder}" if best_binder else "")
+                    send_docking_completion_email(
+                        notify_email,
+                        session_id,
+                        protein_name=protein_label,
+                        ligand_name=ligand_label,
+                        top_score=best_score,
+                        is_batch=True,
+                    )
+                except Exception as email_err:
+                    logger.error(f"Batch completion email failed: {email_err}")
+            
+        def run_docking_background():
+            global active_docking_count
+            active_docking_count += 1
+            try:
+                run_docking_background_inner()
             finally:
-                elapsed = _time.monotonic() - t_start
-                with _state_lock:
-                    _queue_state["active_batch"] = max(0, _queue_state["active_batch"] - 1)
-                    _recent_durations.append(elapsed)
-                logger.info(f"[queue] batch-dock {session_id} finished in {elapsed:.1f}s")
+                active_docking_count = max(0, active_docking_count - 1)
 
-        thread = threading.Thread(target=run_docking_background, daemon=True)
+        thread = threading.Thread(target=run_docking_background)
         thread.start()
-
-        return {"status": "ok", "message": "Batch docking started", "total_ligands": len(ligands)}
+        
+        return {"status": "ok", "message": "Batch docking started in background"}
     except HTTPException:
         raise
     except Exception as e:

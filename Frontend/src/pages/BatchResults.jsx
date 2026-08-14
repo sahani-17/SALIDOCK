@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Eye, Download, Search, Info, BarChart2, CheckCircle2, AlertTriangle, FileText, ChevronRight } from 'lucide-react';
-import { toast } from 'sonner';
 import { api, API_BASE_URL } from '../services/api';
 import MolecularViewer from '../components/MolecularViewer';
-import ViewerToggles from '../components/results/ViewerToggles';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
@@ -18,12 +16,6 @@ function BatchResults() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    return () => {
-      toast.dismiss();
-    };
-  }, []);
-
   // Selection states
   const [selectedLigandIdx, setSelectedLigandIdx] = useState(0);
   const [selectedPose, setSelectedPose] = useState(1);
@@ -34,11 +26,6 @@ function BatchResults() {
   const [viewMode, setViewMode] = useState('3d'); // 3d or 2d
   const [svgContent, setSvgContent] = useState("");
   const [loadingSvg, setLoadingSvg] = useState(false);
-  const [showProtein, setShowProtein] = useState(true);
-  const [showPocketResidues, setShowPocketResidues] = useState(false);
-  const [showPocketLabels, setShowPocketLabels] = useState(false);
-  const [showPocketSurface, setShowPocketSurface] = useState(true);
-  const [showInteractions, setShowInteractions] = useState(false);
 
   // Search and sorting
   const [searchTerm, setSearchTerm] = useState('');
@@ -364,25 +351,16 @@ function BatchResults() {
               </div>
             </div>
 
-            <ViewerToggles
-              showProtein={showProtein} setShowProtein={setShowProtein}
-              showPocketResidues={showPocketResidues} setShowPocketResidues={setShowPocketResidues}
-              showPocketLabels={showPocketLabels} setShowPocketLabels={setShowPocketLabels}
-              showPocketSurface={showPocketSurface} setShowPocketSurface={setShowPocketSurface}
-              showInteractions={showInteractions} setShowInteractions={setShowInteractions}
-            />
-
             <div className="flex-1 bg-background/50 border border-border rounded-2xl relative overflow-hidden h-[600px]">
               {pdbData ? (
                 <MolecularViewer
                   ref={viewerRef}
                   pdbData={pdbData}
                   poseNumber={selectedPose}
-                  showProtein={showProtein}
-                  showPocketSurface={showPocketSurface}
-                  showPocketResidues={showPocketResidues}
-                  showPocketLabels={showPocketLabels}
-                  showInteractions={showInteractions}
+                  showPocketSurface={true}
+                  showPocketResidues={false}
+                  showPocketLabels={false}
+                  showInteractions={false}
                 />
               ) : (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
