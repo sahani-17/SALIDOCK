@@ -1,6 +1,7 @@
 # Dependencies Imported
 import os
 import sys
+import asyncio
 from pathlib import Path
 
 # Ensure the directory of the current Python executable is prepended to PATH
@@ -492,14 +493,22 @@ def check_disk_space(required_mb: int = 100):
 async def startup_cleanup():
     """Run cleanup on application startup and launch continuous 24h purge background worker."""
     logger.info("Running startup session cleanup...")
-    cleanup_old_sessions()
+    try:
+        cleanup_old_sessions()
+    except Exception as e:
+        logger.error(f"Startup session cleanup encountered error: {e}")
+
     if supabase_mgr:
         logger.info("✅ Cloud-Only Mode: ENABLED — all files will be persisted to Supabase Storage")
     else:
         logger.warning("⚠️  Supabase manager not initialised — cloud storage unavailable")
     
-    # Start periodic background cleanup
-    asyncio.create_task(periodic_24h_cleanup_loop())
+    # Start periodic background cleanup safely
+    try:
+        asyncio.create_task(periodic_24h_cleanup_loop())
+        logger.info("✅ 24h Background Purge Worker started")
+    except Exception as e:
+        logger.error(f"Failed to start periodic background cleanup: {e}")
 
 @app.post("/api/cleanup/purge-expired")
 async def trigger_manual_cleanup():
