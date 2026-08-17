@@ -1,5 +1,5 @@
-import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import React, { useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
 import Landing from "./pages/Landing";
 import Results from "./pages/Results";
@@ -15,10 +15,29 @@ import Feedback from "./pages/Feedback";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 
+function CanonicalManager() {
+  const location = useLocation();
+
+  useEffect(() => {
+    const origin = "https://salidock-v2.salixirax.com";
+    const canonicalUrl = `${origin}${location.pathname === "/" ? "/" : location.pathname}`;
+    let link = document.querySelector("link[rel='canonical']");
+    if (!link) {
+      link = document.createElement("link");
+      link.setAttribute("rel", "canonical");
+      document.head.appendChild(link);
+    }
+    link.setAttribute("href", canonicalUrl);
+  }, [location.pathname]);
+
+  return null;
+}
+
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <CanonicalManager />
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
