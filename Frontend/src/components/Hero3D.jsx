@@ -3,10 +3,21 @@ import MolecularViewer from "./MolecularViewer";
 import { AnimatedCircularProgressBar } from "./ui/animated-circular-progress-bar";
 
 /**
- * Hero3D — Loads demo protein-ligand complex (PDB 6LU7 / 6LUS: SARS-CoV-2 main protease + N3 inhibitor)
- * Renders an animated 3D protein & ligand viewer with N-to-C rainbow gradient and subtle auto-rotation.
+ * Hero3D — Loads demo protein / ligand complex and renders an interactive 3D Mol* viewer.
+ * Supports both whole receptor view (e.g. 6LUS / 6LU7) and ligand interaction view (e.g. 1DSP / 1STP).
  */
-const Hero3D = ({ pdbId = "6LU7" }) => {
+const Hero3D = ({
+    pdbId = "6LU7",
+    showInteractions = false,
+    showPocketResidues = false,
+    showPocketLabels = false,
+    showPocketSurface = false,
+    colorScheme = "sequence-id",
+    proteinRepr = "cartoon",
+    ligandRepr = "ball-and-stick",
+    spin = true,
+    focusOnLigand = false,
+}) => {
     const viewerRef = useRef(null);
     const [pdbData, setPdbData] = useState(null);
     const [error, setError] = useState(null);
@@ -15,17 +26,41 @@ const Hero3D = ({ pdbId = "6LU7" }) => {
         let cancelled = false;
         setPdbData(null);
         setError(null);
-        fetch(`/${pdbId}.pdb`)
-            .then((r) => {
-                if (!r.ok) throw new Error(`Local fetch ${r.status}`);
-                return r.text();
-            })
-            .then((text) => {
-                if (!cancelled) setPdbData(text);
-            })
-            .catch((e) => {
-                if (!cancelled) setError(e.message || "Failed to load structure");
-            });
+
+        const fetchStructure = async () => {
+            const upper = pdbId.toUpperCase();
+            const lower = pdbId.toLowerCase();
+
+            // Candidate URLs: local exact, uppercase, lowercase, and RCSB fallback
+            const candidates = [
+                `/${pdbId}.pdb`,
+                `/${upper}.pdb`,
+                `/${lower}.pdb`,
+                `https://files.rcsb.org/download/${upper}.pdb`
+            ];
+
+            for (const url of candidates) {
+                try {
+                    const r = await fetch(url);
+                    if (r.ok) {
+                        const text = await r.text();
+                        if (text && text.includes("ATOM") && !cancelled) {
+                            setPdbData(text);
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    // Try next candidate
+                }
+            }
+
+            if (!cancelled) {
+                setError(`Unable to load structure ${pdbId}`);
+            }
+        };
+
+        fetchStructure();
+
         return () => {
             cancelled = true;
         };
@@ -35,8 +70,8 @@ const Hero3D = ({ pdbId = "6LU7" }) => {
         <div className="relative w-full h-full bg-card rounded-xl overflow-hidden">
             {!pdbData && !error && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-card z-10 gap-2">
-                    <AnimatedCircularProgressBar label="RCSB" size={64} strokeWidth={5} />
-                    <span className="text-xs font-semibold text-foreground">Loading {pdbId}…</span>
+                    <AnimatedCircularProgressBar label="RCSB" size={56} strokeWidth={4} />
+                    <span className="text-xs font-semibold text-foreground">Loading {pdbId.toUpperCase()}…</span>
                 </div>
             )}
             {error && (
@@ -49,16 +84,17 @@ const Hero3D = ({ pdbId = "6LU7" }) => {
                     ref={viewerRef}
                     pdbData={pdbData}
                     poseNumber={1}
-                    proteinRepr="cartoon"
-                    ligandRepr="ball-and-stick"
-                    colorScheme="sequence-id"
-                    showPocketResidues={false}
-                    showPocketLabels={false}
-                    showPocketSurface={false}
-                    showInteractions={false}
-                    spin={true}
+                    proteinRepr={proteinRepr}
+                    ligandRepr={ligandRepr}
+                    colorScheme={colorScheme}
+                    showPocketResidues={showPocketResidues}
+                    showPocketLabels={showPocketLabels}
+                    showPocketSurface={showPocketSurface}
+                    showInteractions={showInteractions}
+                    spin={spin}
                     showProtein
                     minimal
+                    focusOnLigand={focusOnLigand || showInteractions}
                 />
             )}
         </div>

@@ -43,3 +43,9 @@ temp_*/
 # Local Docker testing overrides (never deploy to production)
 docker-compose.local.yml
 Caddyfile.local
+
+# Large binaries & manuscripts
+backend/gnina
+SALIDOCK_Manuscript*
+build_manuscript_docx.py
+figures/

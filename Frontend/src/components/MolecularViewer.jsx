@@ -109,14 +109,29 @@ function getProteinExpression() {
  */
 function getLigandExpression() {
   const customLigandNames = [
-    'UNL', 'LIG', 'MOL', 'UNK', 'DRG', '001', '1', 'LIG1', 'LIGAND', 'BTN'
+    'UNL', 'LIG', 'MOL', 'UNK', 'DRG', '001', '1', 'LIG1', 'LIGAND', 'BTN',
+    'IMD', 'HEM', '010', '01T', '02J', 'PJE', 'STI', 'N3'
   ];
 
-  return MS.struct.generator.atomGroups({
-    'residue-test': MS.core.logic.or(
-      customLigandNames.map(name => MS.core.rel.eq([MS.ammp('label_comp_id'), name]))
-    )
-  });
+  return MS.struct.modifier.union([
+    MS.struct.generator.atomGroups({
+      'residue-test': MS.core.logic.or(
+        customLigandNames.map(name => MS.core.rel.eq([MS.ammp('label_comp_id'), name]))
+      )
+    }),
+    MS.struct.modifier.exceptBy({
+      0: MS.struct.generator.atomGroups({
+        'entity-test': MS.core.rel.eq([MS.ammp('entityType'), 'non-polymer'])
+      }),
+      by: MS.struct.generator.atomGroups({
+        'residue-test': MS.core.logic.or([
+          MS.core.rel.eq([MS.ammp('label_comp_id'), 'HOH']),
+          MS.core.rel.eq([MS.ammp('label_comp_id'), 'WAT']),
+          MS.core.rel.eq([MS.ammp('label_comp_id'), 'DOD']),
+        ])
+      })
+    })
+  ]);
 }
 
 /**
@@ -139,6 +154,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
   spin = false,
   showProtein = true,
   minimal = false,
+  focusOnLigand = false,
 }, ref) {
   const viewerRef = useRef(null);
   const pluginRef = useRef(null);
@@ -528,9 +544,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
         console.warn('[MolecularViewer] Error applying representations inside loadStructureInternal:', appErr);
       }
 
-      if (minimal) {
-        plugin.managers.camera.reset();
-      } else if (structureRef && structure) {
+      if (focusOnLigand || (!minimal && structureRef && structure)) {
         // Focus camera on the ligand loci
         try {
           const ligandExpression = getLigandExpression();
@@ -539,7 +553,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
           const loci = StructureSelection.toLociWithCurrentUnits(result);
 
           if (loci && loci.elements && loci.elements.length > 0) {
-            plugin.managers.camera.focusLoci(loci);
+            plugin.managers.camera.focusLoci(loci, { extraRadius: 6 });
           } else {
             plugin.managers.camera.reset();
           }
@@ -561,7 +575,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
     } finally {
       setLoading(false);
     }
-  }, [minimal, applySettings]);
+  }, [minimal, focusOnLigand, applySettings]);
 
   const handleResetCamera = useCallback(() => {
     pluginRef.current?.managers.camera.reset();
