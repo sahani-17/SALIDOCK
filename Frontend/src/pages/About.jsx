@@ -188,27 +188,33 @@ const About = () => {
 
       <div className="xl:pl-64">
         <main className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-24 flex flex-col gap-32">
-          {/* ─── OUR MISSION ─── */}
+          {/* ─── OUR MISSION & SCIENTIFIC COMMITMENT ─── */}
           <section id="mission" className="scroll-mt-32">
             <AnimatedSection>
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-8 h-[2px] bg-primary" />
                 <span className="text-[11px] font-bold tracking-widest text-primary uppercase">
-                  01 / CORE PURPOSE
+                  01 / SCIENTIFIC COMMITMENT
                 </span>
               </div>
               <h1 className="text-4xl md:text-5xl font-medium text-foreground mb-6">
-                Our Mission
+                Scientific Commitment & Our Mission
               </h1>
               <h2 className="text-[22px] md:text-2xl font-bold text-primary mb-10">
                 Seamless, Rigorous, and Accessible Drug Discovery.
               </h2>
 
-              <div className="relative p-8 md:p-10 border border-border rounded-sm bg-card mt-4">
+              <div className="relative p-8 md:p-10 border border-border rounded-sm bg-card mt-4 flex flex-col gap-5">
                 {/* Top left corner accent */}
                 <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-[2.5px] border-l-[2.5px] border-primary" />
                 <p className="text-muted-foreground font-medium leading-[1.8] text-[15px] md:text-[16px]">
-                  At SALIDOCK, we believe that computational drug discovery shouldn't be fragmented. We built this platform to solve a common frustration in cheminformatics: the time-consuming nature of molecular docking workflows. Our goal is to assemble the entire process into one unified platform, saving researchers valuable time and allowing them to focus on the science rather than the software.
+                  As we know, molecular docking is a powerful approach for understanding protein–ligand recognition and prioritizing potential therapeutic molecules, yet conventional workflows often require multiple software packages, complex structure preparation, binding-site identification, docking, rescoring, and specialized visualization skills.
+                </p>
+                <p className="text-muted-foreground font-medium leading-[1.8] text-[15px] md:text-[16px]">
+                  SaliDock addresses this fragmentation by combining automated structure preparation, weighted Robust Rank Fusion (wRRF)-based consensus cavity detection, molecular docking, GNINA convolutional neural networks (CNN)-based scoring, and interactive Molstar (Mol*) visualization, helping researchers focus on biological questions rather than technical workflow complexity.
+                </p>
+                <p className="text-muted-foreground font-medium leading-[1.8] text-[15px] md:text-[16px]">
+                  Ultimately, SaliDock seeks to connect computation with real-world biomedical discovery—helping transform molecular structures into interpretable evidence that can guide research in drug discovery, antimicrobial development, cancer research, neglected diseases, and other areas of global health.
                 </p>
               </div>
             </AnimatedSection>
@@ -473,6 +479,14 @@ const About = () => {
                     Needing an intuitive, all-in-one educational and research tool for learning computational docking and molecular exploration.
                   </p>
                 </div>
+              </div>
+
+              {/* Concluding Global Impact Callout */}
+              <div className="p-8 border border-border bg-muted/60 rounded-sm relative mt-4">
+                <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-[2.5px] border-l-[2.5px] border-primary" />
+                <p className="text-foreground font-medium text-[15px] md:text-[16px] leading-[1.8]">
+                  Ultimately, SaliDock seeks to connect computation with real-world biomedical discovery—helping transform molecular structures into interpretable evidence that can guide research in drug discovery, antimicrobial development, cancer research, neglected diseases, and other areas of global health.
+                </p>
               </div>
             </div>
           </AnimatedSection>
