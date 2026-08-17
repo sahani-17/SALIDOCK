@@ -12,6 +12,8 @@ import ProteinPrepSection from '../components/workflow/ProteinPrepSection';
 import Stepper from '../components/workflow/Stepper';
 import Footer from '../components/Footer';
 import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
+import NotifyMeCard from '../components/workflow/NotifyMeCard';
+import { notifyJobCompletion } from '../utils/notifications';
 
 const STEPS = [
     { key: 'input', label: 'Input' },
@@ -31,6 +33,7 @@ function Dock() {
     const [gridSize, setGridSize] = useState({ x: 20, y: 20, z: 20 });
     const [autoDetectDone, setAutoDetectDone] = useState(false);
     const [notifyEmail, setNotifyEmail] = useState('');
+    const [emailConfirmed, setEmailConfirmed] = useState(false);
     const [queueStatus, setQueueStatus] = useState(null);
     const [stepIndex, setStepIndex] = useState(0);
 
@@ -177,6 +180,14 @@ function Dock() {
             setTargetProgress(100);
             setProgressDuration(400);
             await new Promise(r => setTimeout(r, 450));
+
+            // Notify user with audio chime and browser desktop alert if enabled
+            notifyJobCompletion({
+                title: 'SaliDock: Molecular Docking Complete! 🎉',
+                body: 'Your receptor-ligand docking simulation and CNN rescoring have completed.',
+                url: `/results?session=${workflow.sessionId}`,
+            });
+
             navigate(`/results?session=${workflow.sessionId}`);
         } catch (err) {
             workflow.setError(err.message || 'Failed to run docking');
@@ -240,7 +251,7 @@ function Dock() {
 
                 {/* Step 3: Configure */}
                 {stepIndex === 2 && (
-                    <div className="animate-fade-in-up">
+                    <div className="animate-fade-in-up space-y-6">
                         <section className="rounded-2xl bg-card border border-border p-6 mb-6 shadow-elevated">
                             <div className="flex items-center gap-3 mb-4">
                                 <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -349,50 +360,26 @@ function Dock() {
                             )}
                         </section>
 
-                        {/* Queue ETA banner — always shown when server has jobs queued */}
-                        {queueStatus && queueStatus.total_queued > 0 && (
-                            <div className="mb-4 border border-amber-500/30 bg-amber-500/10 rounded-xl px-4 py-3 flex items-start gap-3">
-                                <span className="text-amber-400 text-lg leading-none mt-0.5">⏳</span>
-                                <div className="flex-1">
-                                    <p className="text-sm font-semibold text-amber-300">
-                                        Server Queue Active — {queueStatus.total_queued} job{queueStatus.total_queued > 1 ? 's' : ''} waiting
-                                    </p>
-                                    <p className="text-xs text-amber-200/70 mt-0.5">
-                                        Estimated wait for next available slot: <span className="font-bold text-amber-300">{queueStatus.eta_label || '~2 min'}</span>
-                                        {' '}· Your job will start automatically when a slot opens.
-                                    </p>
-                                </div>
-                            </div>
-                        )}
+                        {/* Notify Me & Queue Alert Card */}
+                        <NotifyMeCard
+                            notifyEmail={notifyEmail}
+                            setNotifyEmail={setNotifyEmail}
+                            emailConfirmed={emailConfirmed}
+                            setEmailConfirmed={setEmailConfirmed}
+                            queueStatus={queueStatus}
+                            isRunning={isRunning}
+                            jobType="single"
+                        />
 
-                        {/* Email notification — shown when queue is high (>9) */}
-                        {queueStatus && (queueStatus.total_active + queueStatus.total_queued) > 9 && (
-                            <div className="border border-border bg-card/60 p-4 rounded-xl space-y-2">
-                                <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                                    <span>📩 High Server Queue Detected ({(queueStatus?.total_active || 0) + (queueStatus?.total_queued || 0)} Jobs) — Get Email Notification On Completion</span>
-                                    <span className="text-[10px] text-muted-foreground font-normal">(Optional)</span>
-                                </label>
-                                <input
-                                    type="email"
-                                    placeholder="name@example.com"
-                                    value={notifyEmail}
-                                    onChange={(e) => setNotifyEmail(e.target.value)}
-                                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-muted-foreground/60"
-                                    disabled={workflow.loading}
-                                />
-                                <p className="text-[11px] text-muted-foreground">Server queue is high. You can close this page; we'll email you a direct results link & summary once your run finishes.</p>
-                            </div>
-                        )}
-
-                        <div className="flex justify-between">
+                        <div className="flex justify-between items-center pt-2">
                             <button onClick={() => setStepIndex(1)} className="px-5 py-2.5 rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-primary/40 font-semibold text-sm transition-all" disabled={workflow.loading}>Back</button>
                             <button
                                 onClick={handleRunDocking}
                                 disabled={!configureDone || workflow.loading}
-                                className="px-6 py-2.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 inline-flex items-center gap-2"
+                                className="px-6 py-2.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 inline-flex items-center gap-2 shadow-sm"
                             >
                                 {isRunning ? <AnimatedCircularProgressBar value={dockProgress} size={18} strokeWidth={3} className="my-0" /> : <Play size={16} aria-hidden="true" />}
-                                {isRunning ? 'Running…' : 'Run Docking'}
+                                {isRunning ? 'Running Simulation…' : 'Run Docking'}
                             </button>
                         </div>
 

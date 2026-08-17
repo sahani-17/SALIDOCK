@@ -10,6 +10,8 @@ import StatusBanners from '../components/workflow/StatusBanners';
 import Stepper from '../components/workflow/Stepper';
 import Footer from '../components/Footer';
 import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
+import NotifyMeCard from '../components/workflow/NotifyMeCard';
+import { notifyJobCompletion } from '../utils/notifications';
 
 const STEPS = [
     { key: 'input', label: 'Input' },
@@ -31,7 +33,21 @@ function BatchDock() {
     const [autoDetectDone, setAutoDetectDone] = useState(false);
     const [notifyEmail, setNotifyEmail] = useState('');
     const [emailConfirmed, setEmailConfirmed] = useState(false);
+    const [queueStatus, setQueueStatus] = useState(null);
     const [stepIndex, setStepIndex] = useState(0);
+
+    // Poll server queue status
+    const fetchQueueStatus = React.useCallback(() => {
+        api.getQueueStatus()
+            .then(res => setQueueStatus(res))
+            .catch(() => {});
+    }, []);
+
+    React.useEffect(() => {
+        fetchQueueStatus();
+        const id = setInterval(fetchQueueStatus, 10000);
+        return () => clearInterval(id);
+    }, [fetchQueueStatus]);
 
     // Batch docking status polling
     const [dockingStatus, setDockingStatus] = useState(null);
@@ -167,6 +183,14 @@ function BatchDock() {
                     clearInterval(interval);
                     setDockingRunning(false);
                     toast.success('Batch docking completed!');
+
+                    // Trigger browser desktop alert and audio chime
+                    notifyJobCompletion({
+                        title: 'SaliDock: Batch Docking Complete! 🎉',
+                        body: `Batch docking completed for ${status.completed || 'all'} ligands. Click to view binding affinities.`,
+                        url: `/batch-results?session=${workflow.sessionId}`,
+                    });
+
                     navigate(`/batch-results?session=${workflow.sessionId}`);
                 }
             } catch (err) {
@@ -707,107 +731,85 @@ function BatchDock() {
 
                         <div className="mt-6 border-t border-border pt-5 space-y-4">
                             {!dockingRunning && !dockingStatus && (
-                                <div className="border border-border bg-card/60 p-4 rounded-xl space-y-3">
-                                    <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                                        <span>📩 Get Email Notification On Completion</span>
-                                        <span className="text-[10px] text-muted-foreground font-normal">(Optional)</span>
-                                    </label>
-
-                                    {emailConfirmed ? (
-                                        <div className="flex items-center justify-between p-2.5 bg-primary/8 border border-primary/30 rounded-lg">
-                                            <div className="flex items-center gap-2">
-                                                <CheckCircle2 size={15} className="text-primary shrink-0" />
-                                                <span className="text-xs font-semibold text-primary">{notifyEmail}</span>
-                                            </div>
-                                            <button
-                                                onClick={() => { setEmailConfirmed(false); }}
-                                                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
-                                            >
-                                                Change
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <div className="flex gap-2">
-                                            <input
-                                                type="email"
-                                                placeholder="name@example.com"
-                                                value={notifyEmail}
-                                                onChange={(e) => { setNotifyEmail(e.target.value); setEmailConfirmed(false); }}
-                                                onKeyDown={(e) => { if (e.key === 'Enter' && notifyEmail.includes('@')) setEmailConfirmed(true); }}
-                                                className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-muted-foreground/60"
-                                                disabled={workflow.loading}
-                                            />
-                                            <button
-                                                onClick={() => setEmailConfirmed(true)}
-                                                disabled={!notifyEmail.includes('@') || workflow.loading}
-                                                className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:brightness-110 active:scale-95 transition-all disabled:opacity-40 whitespace-nowrap"
-                                            >
-                                                Confirm
-                                            </button>
-                                        </div>
-                                    )}
-
-                                    <p className="text-[11px] text-muted-foreground">Receive a direct batch results link &amp; summary once all ligands complete docking.</p>
-                                </div>
-
+                                <NotifyMeCard
+                                    notifyEmail={notifyEmail}
+                                    setNotifyEmail={setNotifyEmail}
+                                    emailConfirmed={emailConfirmed}
+                                    setEmailConfirmed={setEmailConfirmed}
+                                    queueStatus={queueStatus}
+                                    isRunning={false}
+                                    jobType="batch"
+                                />
                             )}
 
                             {!dockingRunning && !dockingStatus ? (
-                                <div className="flex justify-between">
+                                <div className="flex justify-between items-center pt-2">
                                     <button onClick={() => setStepIndex(1)} className="px-5 py-2.5 rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-primary/40 font-semibold text-sm transition-all" disabled={workflow.loading}>Back</button>
                                     <button
                                         onClick={handleRunBatchDocking}
                                         disabled={!configureDone || workflow.loading}
-                                        className="px-6 py-2.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 inline-flex items-center gap-1.5"
+                                        className="px-6 py-2.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 inline-flex items-center gap-1.5 shadow-sm"
                                     >
                                         <Play size={16} aria-hidden="true" />
                                         Run Docking Simulation
                                     </button>
                                 </div>
                             ) : (
-                                <div className="space-y-6 border border-border bg-card p-5 rounded-2xl flex flex-col md:flex-row items-center gap-6 shadow-elevated">
-                                    <AnimatedCircularProgressBar
-                                        value={batchProgress}
-                                        sublabel={`${dockingStatus?.completed || 0}/${dockingStatus?.total || workflow.batchLigands?.length || 0}`}
-                                        label="Docked"
-                                        size={85}
-                                        strokeWidth={7}
-                                        gaugePrimaryColor="hsl(var(--primary))"
-                                        gaugeSecondaryColor="hsl(var(--border))"
-                                    />
+                                <div className="space-y-4">
+                                    <div className="border border-border bg-card p-5 rounded-2xl flex flex-col md:flex-row items-center gap-6 shadow-elevated">
+                                        <AnimatedCircularProgressBar
+                                            value={batchProgress}
+                                            sublabel={`${dockingStatus?.completed || 0}/${dockingStatus?.total || workflow.batchLigands?.length || 0}`}
+                                            label="Docked"
+                                            size={85}
+                                            strokeWidth={7}
+                                            gaugePrimaryColor="hsl(var(--primary))"
+                                            gaugeSecondaryColor="hsl(var(--border))"
+                                        />
 
-                                    <div className="flex-1 w-full space-y-3">
-                                        <div className="flex justify-between items-center text-xs">
-                                            <span className="font-semibold uppercase tracking-wider text-muted-foreground">Docking Progress</span>
-                                            <span className="font-mono-code font-bold text-primary">
-                                                {dockingStatus?.completed || 0} / {dockingStatus?.total || workflow.batchLigands?.length || 0} molecules docked
-                                            </span>
-                                        </div>
+                                        <div className="flex-1 w-full space-y-3">
+                                            <div className="flex justify-between items-center text-xs">
+                                                <span className="font-semibold uppercase tracking-wider text-muted-foreground">Docking Progress</span>
+                                                <span className="font-mono-code font-bold text-primary">
+                                                    {dockingStatus?.completed || 0} / {dockingStatus?.total || workflow.batchLigands?.length || 0} molecules docked
+                                                </span>
+                                            </div>
 
-                                        <div className="w-full bg-border/60 rounded-full h-2 overflow-hidden">
-                                            <div 
-                                                className="bg-primary h-2 rounded-full transition-all duration-300 ease-out"
-                                                style={{ width: `${batchProgress}%` }}
-                                            />
-                                        </div>
+                                            <div className="w-full bg-border/60 rounded-full h-2 overflow-hidden">
+                                                <div 
+                                                    className="bg-primary h-2 rounded-full transition-all duration-300 ease-out"
+                                                    style={{ width: `${batchProgress}%` }}
+                                                />
+                                            </div>
 
-                                        <div className="max-h-48 overflow-y-auto text-xs space-y-1.5 divide-y divide-border/40 pr-1">
-                                            {dockingStatus?.results?.map((res, i) => (
-                                                <div key={i} className="flex justify-between items-center pt-1.5">
-                                                    <span className="font-mono-code font-semibold text-muted-foreground">{res.name}</span>
-                                                    <div className="flex items-center gap-2">
-                                                        {res.status === 'completed' && (
-                                                            <span className="text-xs font-bold text-primary font-mono-code">{res.affinity?.toFixed(2)} kcal/mol</span>
-                                                        )}
-                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${res.status === 'completed' ? 'bg-primary/10 text-primary' : 'bg-destructive/10 text-destructive'}`}>
-                                                            {res.status === 'completed' ? 'Success' : 'Failed'}
-                                                        </span>
+                                            <div className="max-h-48 overflow-y-auto text-xs space-y-1.5 divide-y divide-border/40 pr-1">
+                                                {dockingStatus?.results?.map((res, i) => (
+                                                    <div key={i} className="flex justify-between items-center pt-1.5">
+                                                        <span className="font-mono-code font-semibold text-muted-foreground">{res.name}</span>
+                                                        <div className="flex items-center gap-2">
+                                                            {res.status === 'completed' && (
+                                                                <span className="text-xs font-bold text-primary font-mono-code">{res.affinity?.toFixed(2)} kcal/mol</span>
+                                                            )}
+                                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${res.status === 'completed' ? 'bg-primary/10 text-primary' : 'bg-destructive/10 text-destructive'}`}>
+                                                                {res.status === 'completed' ? 'Success' : 'Failed'}
+                                                            </span>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))}
-
+                                                ))}
+                                            </div>
                                         </div>
                                     </div>
+
+                                    {/* Notify Me Card while batch run is active/in-queue */}
+                                    <NotifyMeCard
+                                        notifyEmail={notifyEmail}
+                                        setNotifyEmail={setNotifyEmail}
+                                        emailConfirmed={emailConfirmed}
+                                        setEmailConfirmed={setEmailConfirmed}
+                                        queueStatus={queueStatus}
+                                        isRunning={true}
+                                        jobType="batch"
+                                    />
                                 </div>
                             )}
                         </div>
