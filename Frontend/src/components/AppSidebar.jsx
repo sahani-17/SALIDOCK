@@ -143,27 +143,15 @@ export const AppSidebar = ({
       </div>
 
       {/* Sidebar Footer */}
-      {!isCollapsed && (
+      {!isCollapsed && actionButton && (
         <div className="p-3 border-t border-border/60 bg-muted/20 shrink-0">
-          {actionButton ? (
-            <button
-              onClick={actionButton.onClick}
-              className="w-full py-2 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:brightness-110 active:scale-95 transition-all shadow-glow flex items-center justify-center gap-2"
-            >
-              <Sparkles size={14} />
-              {actionButton.label}
-            </button>
-          ) : (
-            <div className="flex items-center gap-2 px-1">
-              <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold border border-primary/30">
-                SD
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-[11px] font-bold text-foreground truncate">SaliDock v2.0</span>
-                <span className="text-[9px] text-muted-foreground truncate">Pro Edition</span>
-              </div>
-            </div>
-          )}
+          <button
+            onClick={actionButton.onClick}
+            className="w-full py-2 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:brightness-110 active:scale-95 transition-all shadow-glow flex items-center justify-center gap-2"
+          >
+            <Sparkles size={14} />
+            {actionButton.label}
+          </button>
         </div>
       )}
     </aside>

@@ -8,7 +8,6 @@ import {
   Network,
   Zap,
   FlaskConical,
-  History,
   Microscope,
   ClipboardList,
   Eye,
@@ -111,8 +110,6 @@ const CursorGlow = () => {
 const About = () => {
   const sections = [
     { id: "mission", label: "Our Mission", icon: Target },
-    { id: "story", label: "Our Story", icon: History },
-    { id: "what-we-do", label: "What We Do", icon: Microscope },
     { id: "technology", label: "Technology", icon: Zap },
     { id: "who-we-serve", label: "Who We Serve", icon: ClipboardList },
   ];
@@ -159,13 +156,6 @@ const About = () => {
       label: "About SaliDock",
       items: [
         { id: "mission", title: "Our Mission", icon: Target },
-        { id: "story", title: "Our Story", icon: History },
-        { id: "what-we-do", title: "What We Do", icon: Microscope },
-      ],
-    },
-    {
-      label: "Architecture & Impact",
-      items: [
         { id: "technology", title: "Technology Stack", icon: Zap },
         { id: "who-we-serve", title: "Who We Serve", icon: ClipboardList },
       ],
@@ -187,7 +177,7 @@ const About = () => {
       </div>
 
       <div className="xl:pl-64">
-        <main className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-24 flex flex-col gap-32">
+        <main className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 pt-24 pb-16">
           {/* ─── OUR MISSION & SCIENTIFIC COMMITMENT ─── */}
           <section id="mission" className="scroll-mt-32">
             <AnimatedSection>
@@ -219,99 +209,6 @@ const About = () => {
               </div>
             </AnimatedSection>
           </section>
-
-          {/* ─── OUR STORY ─── */}
-          <section id="story" className="scroll-mt-32">
-            <AnimatedSection>
-              <div className="flex items-center gap-3 mb-8">
-                <div className="w-8 h-[2px] bg-primary" />
-                <span className="text-[11px] font-bold tracking-widest text-primary uppercase">
-                  02 / GENESIS
-                </span>
-              </div>
-              <h2 className="text-4xl md:text-[42px] font-medium text-foreground mb-12">
-                Our Story: The "Lightbulb" Moment
-              </h2>
-
-              <div className="grid md:grid-cols-5 gap-12 lg:gap-16 items-start">
-                <div className="md:col-span-2 flex flex-col gap-6 text-muted-foreground font-medium leading-[1.8] text-[15px]">
-                  <p>
-                    What started as a minor project utilizing basic machine learning evolved into something far more significant. During a rigorous molecular docking workshop, our founding team realized that current tools lacked biophysical grounding and cross-platform synergy.
-                  </p>
-                  <p>
-                    The transition from a "black box" ML approach to a biophysically grounded platform was our turning point. We realized that researchers needed transparency and precision that only integrated workflows could provide.
-                  </p>
-                </div>
-
-                <div className="md:col-span-3 relative bg-muted/60 p-8 md:py-10 md:px-12 border-l-[3.5px] border-primary">
-                  {/* Faint big quote mark */}
-                  <div className="absolute top-4 left-6 text-[100px] font-serif text-primary opacity-[0.12] leading-none select-none">
-                    "
-                  </div>
-                  <p className="relative z-10 text-lg md:text-[22px] font-bold italic text-foreground leading-relaxed pt-4">
-                    "We moved away from fragmented tools and built a platform that integrates everything, allowing you to focus on the science."
-                  </p>
-                </div>
-              </div>
-            </AnimatedSection>
-          </section>
-
-          {/* ─── WHAT WE DO ─── */}
-          <section id="what-we-do" className="scroll-mt-32">
-            <AnimatedSection>
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-8 h-[2px] bg-primary" />
-                <span className="text-[11px] font-bold tracking-widest text-primary uppercase">
-                  03 / CAPABILITIES
-                </span>
-              </div>
-              <h2 className="text-4xl md:text-[42px] font-medium text-foreground mb-6">
-                What We Do
-              </h2>
-              <h3 className="text-[20px] md:text-2xl font-bold text-primary mb-12">
-                Streamlining the Workflow
-              </h3>
-
-              <div className="grid md:grid-cols-3 gap-5 lg:gap-8 mb-12">
-                {/* Card 1 */}
-                <div className="relative p-8 border border-border rounded-sm bg-card min-h-[220px]">
-                  <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-[2.5px] border-l-[2.5px] border-primary" />
-                  <Network className="w-6 h-6 text-primary mb-6" strokeWidth={2.5} />
-                  <h4 className="text-[15px] md:text-base font-bold text-foreground mb-3 block">Integrated Engine</h4>
-                  <p className="text-muted-foreground font-medium text-[13px] leading-[1.8]">
-                    Seamlessly connecting the docking engine with advanced analytical modules.
-                  </p>
-                </div>
-
-                {/* Card 2 */}
-                <div className="relative p-8 border border-border rounded-sm bg-card min-h-[220px]">
-                  <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-[2.5px] border-l-[2.5px] border-primary" />
-                  <Eye className="w-6 h-6 text-primary mb-6" strokeWidth={2.5} />
-                  <h4 className="text-[15px] md:text-base font-bold text-foreground mb-3 block">2D Visualization</h4>
-                  <p className="text-muted-foreground font-medium text-[13px] leading-[1.8]">
-                    Real-time molecular rendering and 2D interaction mapping for immediate insights.
-                  </p>
-                </div>
-
-                {/* Card 3 */}
-                <div className="relative p-8 border border-border rounded-sm bg-card min-h-[220px]">
-                  <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-[2.5px] border-l-[2.5px] border-primary" />
-                  <Database className="w-6 h-6 text-primary mb-6" strokeWidth={2.5} />
-                  <h4 className="text-[15px] md:text-base font-bold text-foreground mb-3 block">Dataset Handling</h4>
-                  <p className="text-muted-foreground font-medium text-[13px] leading-[1.8]">
-                    Native support for PDBbind and large-scale cheminformatics datasets.
-                  </p>
-                </div>
-              </div>
-
-              {/* Bottom text block */}
-              <div className="p-8 border border-border bg-muted rounded-sm">
-                <p className="text-muted-foreground font-medium text-[14px] md:text-[15px] leading-[1.8]">
-                  By eliminating technical bottlenecks and data fragmentation, SALIDOCK provides an end-to-end environment for molecular docking that is as powerful as it is intuitive.
-                </p>
-              </div>
-            </AnimatedSection>
-          </section>
         </main>
 
 
@@ -331,7 +228,7 @@ const About = () => {
             <div className="flex items-center gap-3 mb-6">
               <div className="w-8 h-[2px] bg-primary" />
               <span className="text-[11px] font-bold tracking-widest text-primary uppercase">
-                04 / TECHNOLOGY
+                02 / TECHNOLOGY
               </span>
             </div>
             <h2 className="text-4xl md:text-[42px] font-medium text-foreground mb-6">
@@ -431,7 +328,7 @@ const About = () => {
             <div className="flex items-center gap-3 mb-6">
               <div className="w-8 h-[2px] bg-primary" />
               <span className="text-[11px] font-bold tracking-widest text-primary uppercase">
-                05 / IMPACT
+                03 / IMPACT
               </span>
             </div>
             <h2 className="text-4xl md:text-[42px] font-medium text-foreground mb-12">
