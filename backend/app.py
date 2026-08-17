@@ -419,9 +419,8 @@ SESSION_EXPIRY_HOURS = 24
 
 def cleanup_old_sessions():
     """
-    Delete sessions older than SESSION_EXPIRY_HOURS.
-    
-    This prevents disk space exhaustion from abandoned sessions.
+    Delete sessions older than SESSION_EXPIRY_HOURS (24 hours default).
+    Cleans local disk directories and triggers Supabase DB + Storage deletion.
     """
     now = time.time()
     expiry_time = SESSION_EXPIRY_HOURS * 3600
@@ -437,15 +436,32 @@ def cleanup_old_sessions():
             if age > expiry_time:
                 try:
                     shutil.rmtree(session_dir)
-                    logger.info(f"Cleaned up expired session: {session_dir.name}")
+                    logger.info(f"Cleaned up expired local session: {session_dir.name}")
                     cleaned_count += 1
                 except Exception as e:
                     logger.error(f"Failed to cleanup session {session_dir.name}: {e}")
         
         if cleaned_count > 0:
-            logger.info(f"Session cleanup complete: {cleaned_count} sessions removed")
+            logger.info(f"Local session cleanup complete: {cleaned_count} sessions removed")
     except Exception as e:
         logger.error(f"Session cleanup failed: {e}")
+
+    # Also clean Supabase records & storage
+    if supabase_mgr:
+        try:
+            supabase_mgr.cleanup_old_sessions(hours=SESSION_EXPIRY_HOURS)
+        except Exception as e:
+            logger.error(f"Supabase 24h session cleanup error: {e}")
+
+async def periodic_24h_cleanup_loop():
+    """Background task running every 30 minutes to clean up 24h expired sessions & Supabase data."""
+    while True:
+        await asyncio.sleep(1800)  # Run every 30 minutes
+        try:
+            logger.info("🧹 [Periodic 24h Cleanup] Running scheduled expiration purge...")
+            cleanup_old_sessions()
+        except Exception as e:
+            logger.error(f"Error in periodic cleanup task: {e}")
 
 def check_disk_space(required_mb: int = 100):
     """
@@ -471,17 +487,28 @@ def check_disk_space(required_mb: int = 100):
     except Exception as e:
         logger.warning(f"Could not check disk space: {e}")
 
-# Startup event: cleanup old sessions
+# Startup event: cleanup old sessions & launch background cleaner
 @app.on_event("startup")
 async def startup_cleanup():
-    """Run cleanup on application startup."""
+    """Run cleanup on application startup and launch continuous 24h purge background worker."""
     logger.info("Running startup session cleanup...")
     cleanup_old_sessions()
-    # Log Supabase connection status
     if supabase_mgr:
         logger.info("✅ Cloud-Only Mode: ENABLED — all files will be persisted to Supabase Storage")
     else:
         logger.warning("⚠️  Supabase manager not initialised — cloud storage unavailable")
+    
+    # Start periodic background cleanup
+    asyncio.create_task(periodic_24h_cleanup_loop())
+
+@app.post("/api/cleanup/purge-expired")
+async def trigger_manual_cleanup():
+    """Manually trigger 24h auto-deletion of expired sessions, results, and Supabase data."""
+    cleanup_old_sessions()
+    supa_stats = {}
+    if supabase_mgr:
+        supa_stats = supabase_mgr.cleanup_old_sessions(hours=SESSION_EXPIRY_HOURS)
+    return {"status": "success", "message": "24h purge completed", "supabase": supa_stats}
 
 @app.get("/health")
 async def health_check():

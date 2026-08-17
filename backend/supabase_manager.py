@@ -113,20 +113,29 @@ class SupabaseManager:
             return []
 
     def delete_session_files(self, session_id: str):
-        """Delete all files for a session"""
+        """Delete all files and subdirectories for a session in Supabase Storage"""
         try:
-            files = self.client.storage.from_(self.storage_bucket).list(
-                path=session_id
-            )
-
+            # List root files in session_id
+            files = self.client.storage.from_(self.storage_bucket).list(path=session_id)
+            file_paths = []
             if files:
-                file_paths = [f"{session_id}/{f['name']}" for f in files]
-                self.client.storage.from_(self.storage_bucket).remove(
-                    paths=file_paths
-                )
-            logger.info(f"✅ Deleted all files for session: {session_id}")
+                for f in files:
+                    file_paths.append(f"{session_id}/{f['name']}")
+                
+                # Check for intermediate subfolder
+                try:
+                    sub_files = self.client.storage.from_(self.storage_bucket).list(path=f"{session_id}/intermediate")
+                    if sub_files:
+                        for sf in sub_files:
+                            file_paths.append(f"{session_id}/intermediate/{sf['name']}")
+                except Exception:
+                    pass
+
+                if file_paths:
+                    self.client.storage.from_(self.storage_bucket).remove(paths=file_paths)
+                    logger.info(f"✅ Deleted {len(file_paths)} storage files for session: {session_id}")
         except Exception as e:
-            logger.error(f"Failed to delete files for {session_id}: {str(e)}")
+            logger.warning(f"Note on storage deletion for {session_id}: {str(e)}")
 
     # ========== DOCKING RESULTS (Database) ==========
 
@@ -192,26 +201,79 @@ class SupabaseManager:
         return self.list_result_files(session_id, subpath="intermediate")
 
 
-    # ========== UTILITY METHODS ==========
+    # ========== 24-HOUR EXPIRATION & CLEANUP ==========
 
-    def cleanup_old_sessions(self, hours: int = 24):
-        """Delete sessions older than specified hours (both DB and Storage)"""
+    def cleanup_old_sessions(self, hours: int = 24) -> dict:
+        """
+        Delete all sessions, docking results, and storage files older than specified hours (24h default).
+        """
+        stats = {"sessions_deleted": 0, "results_deleted": 0, "storage_cleaned": 0}
         try:
             from datetime import timedelta
 
-            cutoff_time = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
+            cutoff_dt = datetime.utcnow() - timedelta(hours=hours)
+            cutoff_time = cutoff_dt.isoformat()
 
-            # Delete from database
-            response = self.client.table("docking_sessions").delete().lt(
-                "created_at", cutoff_time
-            ).execute()
+            logger.info(f"🧹 [Supabase 24h Purge] Starting cleanup (cutoff: {cutoff_time})...")
 
-            logger.info(f"✅ Cleaned up expired sessions: {len(response.data) if response.data else 0}")
-            
-            # In cloud-only mode, storage cleanup handled by bucket lifecycle rules
-            # or scheduled separately - database cleanup is sufficient here
+            # 1. Collect expired session IDs from docking_sessions
+            sessions_to_clean = set()
+            try:
+                resp = self.client.table("docking_sessions").select("id").lt(
+                    "created_at", cutoff_time
+                ).execute()
+                if resp.data:
+                    for row in resp.data:
+                        sessions_to_clean.add(row["id"])
+            except Exception as e:
+                logger.warning(f"Could not fetch expired docking_sessions: {e}")
+
+            # 2. Also collect session IDs from docking_results older than cutoff
+            try:
+                resp_res = self.client.table("docking_results").select("session_id").lt(
+                    "created_at", cutoff_time
+                ).execute()
+                if resp_res.data:
+                    for row in resp_res.data:
+                        if row.get("session_id"):
+                            sessions_to_clean.add(row["session_id"])
+            except Exception as e:
+                logger.warning(f"Could not fetch expired docking_results: {e}")
+
+            # 3. For each expired session, clean up Supabase Storage files
+            for s_id in sessions_to_clean:
+                try:
+                    self.delete_session_files(s_id)
+                    stats["storage_cleaned"] += 1
+                except Exception as err:
+                    logger.warning(f"Storage clean skipped for {s_id}: {err}")
+
+            # 4. Delete docking_results rows older than 24h
+            try:
+                del_res = self.client.table("docking_results").delete().lt(
+                    "created_at", cutoff_time
+                ).execute()
+                stats["results_deleted"] = len(del_res.data) if del_res.data else 0
+            except Exception as e:
+                logger.warning(f"Error deleting expired docking_results: {e}")
+
+            # 5. Delete docking_sessions rows older than 24h
+            try:
+                del_sess = self.client.table("docking_sessions").delete().lt(
+                    "created_at", cutoff_time
+                ).execute()
+                stats["sessions_deleted"] = len(del_sess.data) if del_sess.data else 0
+            except Exception as e:
+                logger.warning(f"Error deleting expired docking_sessions: {e}")
+
+            logger.info(
+                f"✅ [Supabase 24h Purge] Complete: {stats['sessions_deleted']} sessions, "
+                f"{stats['results_deleted']} results, {stats['storage_cleaned']} storage session folders cleaned."
+            )
+            return stats
         except Exception as e:
-            logger.error(f"Failed to cleanup sessions: {str(e)}")
+            logger.error(f"Failed to run Supabase 24h cleanup: {str(e)}")
+            return stats
 
 
 # Global instance
