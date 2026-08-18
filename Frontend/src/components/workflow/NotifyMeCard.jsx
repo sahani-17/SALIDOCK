@@ -23,12 +23,19 @@ export default function NotifyMeCard({
   const [browserPerm, setBrowserPerm] = useState(getNotificationPermission());
   const [testedSound, setTestedSound] = useState(false);
 
-  // Auto-fill logged in user email if empty
+  const queueCount = queueStatus?.total_queued || 0;
+  const totalActiveAndQueued = (queueStatus?.total_active || 0) + (queueStatus?.total_queued || 0);
+
+  // Single Dock: Only show email option if queue is more than 2
+  // Batch Dock: Always show email option as batch jobs can process many ligands
+  const showEmailOption = jobType === 'batch' || queueCount > 2 || totalActiveAndQueued > 2;
+
+  // Auto-fill logged in user email if email option is active
   useEffect(() => {
-    if (user?.email && !notifyEmail) {
+    if (showEmailOption && user?.email && !notifyEmail) {
       setNotifyEmail(user.email);
     }
-  }, [user, notifyEmail, setNotifyEmail]);
+  }, [user, notifyEmail, setNotifyEmail, showEmailOption]);
 
   const handleRequestDesktopAlert = async () => {
     const result = await requestNotificationPermission();
@@ -49,7 +56,6 @@ export default function NotifyMeCard({
   };
 
   const isQueued = queueStatus && (queueStatus.total_queued > 0 || (queueStatus.total_active || 0) > 0);
-  const queueCount = queueStatus?.total_queued || 0;
   const etaText = queueStatus?.eta_label || (queueCount > 0 ? `~${queueCount * 2} min` : 'Under 1 min');
 
   return (
@@ -70,11 +76,13 @@ export default function NotifyMeCard({
             <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
               <span>Notify Me on Completion</span>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-semibold">
-                {isRunning ? 'Run in Progress' : 'Queue Alert'}
+                {isRunning ? 'Run in Progress' : isQueued ? 'Queue Alert' : 'Instant Alert'}
               </span>
             </h3>
             <p className="text-xs text-muted-foreground">
-              Never wait around — get pinged the instant your {jobType === 'batch' ? 'batch results' : 'docked poses'} are ready.
+              {showEmailOption && jobType === 'single'
+                ? 'High server queue (>2 jobs) — enable desktop push alerts or get emailed when your results are ready.'
+                : `Never wait around — get pinged the instant your ${jobType === 'batch' ? 'batch results' : 'docked poses'} are ready.`}
             </p>
           </div>
         </div>
@@ -92,7 +100,7 @@ export default function NotifyMeCard({
       </div>
 
       {/* Grid of Notification Options */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
+      <div className={`grid grid-cols-1 ${showEmailOption ? 'md:grid-cols-2' : ''} gap-3.5 pt-1`}>
         
         {/* Option 1: Desktop Browser Push Notification */}
         <div className="p-3.5 rounded-xl border border-border/80 bg-background flex flex-col justify-between gap-3">
@@ -140,73 +148,75 @@ export default function NotifyMeCard({
           </div>
         </div>
 
-        {/* Option 2: Email Notification */}
-        <div className="p-3.5 rounded-xl border border-border/80 bg-background flex flex-col justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                <Mail size={13} className="text-primary" />
-                Direct Email Results Link
-              </span>
-              <span className="text-[10px] text-muted-foreground">Optional</span>
+        {/* Option 2: Email Notification (Rendered only for batch dock or single dock when queue > 2) */}
+        {showEmailOption && (
+          <div className="p-3.5 rounded-xl border border-border/80 bg-background flex flex-col justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Mail size={13} className="text-primary" />
+                  Direct Email Results Link
+                </span>
+                <span className="text-[10px] text-muted-foreground">Optional</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                We&apos;ll send a direct results summary and 3D viewer link directly to your inbox once ready.
+              </p>
             </div>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              We&apos;ll send a direct results summary and 3D viewer link directly to your inbox.
-            </p>
-          </div>
 
-          <div>
-            {emailConfirmed && notifyEmail.includes('@') ? (
-              <div className="flex items-center justify-between p-2 rounded-lg bg-primary/5 border border-primary/20">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <CheckCircle2 size={13} className="text-primary shrink-0" />
-                  <span className="text-xs font-bold text-primary truncate" title={notifyEmail}>
-                    {notifyEmail}
-                  </span>
+            <div>
+              {emailConfirmed && notifyEmail.includes('@') ? (
+                <div className="flex items-center justify-between p-2 rounded-lg bg-primary/5 border border-primary/20">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <CheckCircle2 size={13} className="text-primary shrink-0" />
+                    <span className="text-xs font-bold text-primary truncate" title={notifyEmail}>
+                      {notifyEmail}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEmailConfirmed(false)}
+                    className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2 ml-2 shrink-0"
+                  >
+                    Edit
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setEmailConfirmed(false)}
-                  className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2 ml-2 shrink-0"
-                >
-                  Edit
-                </button>
-              </div>
-            ) : (
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  placeholder="your.email@university.edu"
-                  value={notifyEmail}
-                  onChange={(e) => {
-                    setNotifyEmail(e.target.value);
-                    if (emailConfirmed) setEmailConfirmed(false);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && notifyEmail.includes('@')) {
-                      setEmailConfirmed(true);
-                      toast.success(`Email alert set for ${notifyEmail}`);
-                    }
-                  }}
-                  className="flex-1 min-w-0 bg-card border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (notifyEmail.includes('@')) {
-                      setEmailConfirmed(true);
-                      toast.success(`Email alert set for ${notifyEmail}`);
-                    }
-                  }}
-                  disabled={!notifyEmail.includes('@')}
-                  className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:brightness-110 active:scale-95 transition-all disabled:opacity-40 whitespace-nowrap"
-                >
-                  Confirm
-                </button>
-              </div>
-            )}
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    placeholder="your.email@university.edu"
+                    value={notifyEmail}
+                    onChange={(e) => {
+                      setNotifyEmail(e.target.value);
+                      if (emailConfirmed) setEmailConfirmed(false);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && notifyEmail.includes('@')) {
+                        setEmailConfirmed(true);
+                        toast.success(`Email alert set for ${notifyEmail}`);
+                      }
+                    }}
+                    className="flex-1 min-w-0 bg-card border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (notifyEmail.includes('@')) {
+                        setEmailConfirmed(true);
+                        toast.success(`Email alert set for ${notifyEmail}`);
+                      }
+                    }}
+                    disabled={!notifyEmail.includes('@')}
+                    className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:brightness-110 active:scale-95 transition-all disabled:opacity-40 whitespace-nowrap"
+                  >
+                    Confirm
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
       </div>
 

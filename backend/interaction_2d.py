@@ -446,6 +446,7 @@ def parse_pdb(
 
             try:
                 aname   = line[12:16].strip()
+                altloc  = line[16:17].strip()
                 resname = line[17:20].strip()
                 chain   = line[21].strip() if len(line) > 21 else "A"
                 resid   = int(line[22:26].strip())
@@ -454,6 +455,9 @@ def parse_pdb(
                 z       = float(line[46:54])
             except (ValueError, IndexError):
                 continue
+
+            if altloc not in ("", "A"):
+                continue  # keep primary conformer only, skip alt confs (B, C, ...)
 
             elem = line[76:78].strip() if len(line) >= 78 else ""
             if not elem or not elem.isalpha():
@@ -697,7 +701,7 @@ def detect(
         return math.sqrt((a["x"] - b["x"]) ** 2 + (a["y"] - b["y"]) ** 2 + (a["z"] - b["z"]) ** 2)
 
     def _update(label, itype, resname, resid, chain, dist, lig_atom_idx):
-        key = (label, itype)
+        key = (chain, resname, resid, itype)   # was: (label, itype) — collided across chains
         if key not in best or dist < best[key]["dist"]:
             best[key] = {
                 "type":    itype,
@@ -1027,18 +1031,6 @@ def _shorten(x1, y1, x2, y2, d1=LINE_SHORTEN_START, d2=LINE_SHORTEN_END):
 
 def _angle_of(cx, cy, x, y) -> float:
     return math.atan2(y - cy, x - cx) % (2 * math.pi)
-
-
-def _get_residue_score(g: ResidueGroup) -> tuple:
-    scores = []
-    for it in g.interactions:
-        itype = _normalize_type(it.get("type", ""))
-        cutoff = DISTANCE_CUTOFFS.get(itype, 5.0)
-        norm_dist = (it.get("dist") or 0.0) / cutoff
-        rank = _priority_rank(itype)
-        scores.append((norm_dist, rank))
-    best_score = min(scores, key=lambda s: (s[0], s[1]))
-    return (best_score[0], best_score[1], g.min_dist)
 
 
 def _get_node_radius(n_res: int) -> float:
