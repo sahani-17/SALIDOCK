@@ -10,7 +10,29 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
   const [error, setError]                   = useState(null);
   const [isCompareMode, setIsCompareMode]   = useState(false);     // toggle compare panel
   const [comparePose, setComparePose]       = useState(null);      // which pose to compare against
-  const [showDistances, setShowDistances]   = useState(false);     // toggle bond distances display
+  const [showDistances, setShowDistances]   = useState(true);      // toggle bond distances display
+
+  // Helper to ensure all distance pill labels have the bond-distance-label class
+  const processSvgString = (rawSvg) => {
+    if (!rawSvg) return "";
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(rawSvg, "image/svg+xml");
+      const groups = doc.querySelectorAll("g");
+      groups.forEach((g) => {
+        if (g.classList.contains("bond-distance-label")) return;
+        const text = g.querySelector("text");
+        const rect = g.querySelector("rect");
+        if (text && rect && /^\s*\d+(\.\d+)?\s*(Å)?\s*$/i.test(text.textContent.trim())) {
+          g.classList.add("bond-distance-label");
+        }
+      });
+      const serializer = new XMLSerializer();
+      return serializer.serializeToString(doc);
+    } catch (e) {
+      return rawSvg;
+    }
+  };
 
   // Pan + zoom state for PRIMARY viewer
   const [scale, setScale]   = useState(1);
@@ -42,7 +64,7 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.text();
       })
-      .then(svg => setSvgContent(svg))
+      .then(svg => setSvgContent(processSvgString(svg)))
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
   }, [sessionId, poseNumber]);
@@ -58,7 +80,7 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.text();        
       })
-      .then(svg => setCompareSvg(svg))
+      .then(svg => setCompareSvg(processSvgString(svg)))
       .catch(err => console.error("Compare fetch failed:", err))
       .finally(() => setCompareLoading(false));
   }, [sessionId, comparePose, isCompareMode]);
@@ -157,6 +179,19 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
     // Parse the SVG to extract its intrinsic width/height
     const parser = new DOMParser();
     const svgDoc = parser.parseFromString(svgString, "image/svg+xml");
+
+    // Sync distance pill visibility with active showDistances state for download
+    const distEls = svgDoc.querySelectorAll(".bond-distance-label");
+    distEls.forEach(el => {
+      if (!showDistances) {
+        el.setAttribute("display", "none");
+        el.style.display = "none";
+      } else {
+        el.removeAttribute("display");
+        el.style.display = "inline";
+      }
+    });
+
     const svgEl = svgDoc.querySelector("svg");
 
     let svgW = 800, svgH = 600; // sensible fallbacks
@@ -285,8 +320,11 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
           max-width: 100% !important;
           max-height: 100% !important;
         }
+        .svg-container-2d .bond-distance-label,
         .bond-distance-label {
           display: ${showDistances ? "inline !important" : "none !important"};
+          visibility: ${showDistances ? "visible !important" : "hidden !important"};
+          opacity: ${showDistances ? "1 !important" : "0 !important"};
         }
       `}</style>
       {/* ── TOOLBAR ─────────────────────────────────────────────────── */}
@@ -319,13 +357,13 @@ const Interaction2DViewer = ({ sessionId, poseNumber, totalPoses }) => {
             disabled={!svgContent}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold transition-all ${
               showDistances
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "bg-card text-foreground hover:bg-muted border border-border"
+                ? "bg-primary/15 text-primary border border-primary/35 shadow-sm"
+                : "bg-card text-muted-foreground hover:text-foreground hover:bg-muted border border-border"
             }`}
-            title="Toggle Bond Distances (Å)"
+            title="Toggle Interaction Distances (Å)"
           >
             <Ruler className="w-3.5 h-3.5" />
-            {showDistances ? "Distances ON" : "Show Distances"}
+            {showDistances ? "Distances: ON" : "Distances: OFF"}
           </button>
         </div>
 

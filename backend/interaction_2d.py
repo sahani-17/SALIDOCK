@@ -1329,9 +1329,8 @@ def _draw_line(g: ResidueGroup, node_radius: float) -> str:
 def _draw_distance_label(x1: float, y1: float, x2: float, y2: float, dist: float) -> str:
     """
     Print the interaction distance (Å) on a small white halo pill at ~55%
-    along the connecting line — the convention used by LigPlot+, Maestro's
-    Ligand Interaction Diagram, and PLIP figure output, so the diagram carries
-    its own quantitative evidence without a separate distance table.
+    along the connecting line — with class 'bond-distance-label' so frontend
+    can dynamically toggle distance visibility.
     """
     if dist is None or dist >= 999.0:
         return ""
@@ -1342,12 +1341,12 @@ def _draw_distance_label(x1: float, y1: float, x2: float, y2: float, dist: float
     pill_w = 9.0 * len(label) * 0.62 + 6.0
     pill_h = 12.0
     return (
-        f'<g>'
+        f'<g class="bond-distance-label">'
         f'<rect x="{lx - pill_w / 2:.1f}" y="{ly - pill_h / 2:.1f}" '
         f'width="{pill_w:.1f}" height="{pill_h:.1f}" rx="3" '
-        f'fill="#FFFFFF" fill-opacity="0.88" stroke="none"/>'
+        f'fill="#FFFFFF" fill-opacity="0.92" stroke="#E2E8F0" stroke-width="0.5"/>'
         f'<text x="{lx:.1f}" y="{ly + 3.2:.1f}" font-family="{FONT_FAMILY}" '
-        f'font-size="9" fill="#555555" text-anchor="middle">{label}</text>'
+        f'font-size="9" font-weight="600" fill="#475569" text-anchor="middle">{label}</text>'
         f'</g>'
     )
 
