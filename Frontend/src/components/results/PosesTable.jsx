@@ -4,18 +4,28 @@ import { AnimatedCircularProgressBar } from '../ui/animated-circular-progress-ba
 
 export default function PosesTable({
   allPoses, filteredPoses, selectedPose, loadingViewer, downloadingPose,
-  onViewPose, onDownloadPose, onCavityClick,
+  onViewPose, onDownloadPose, onCavityClick, dockingParams,
 }) {
   const formatTriplet = (v) => {
     if (!v) return '-';
+    if (typeof v === 'string') return v;
     const arr = Array.isArray(v) ? v : [v.x ?? 0, v.y ?? 0, v.z ?? 0];
     return arr.map((n) => (typeof n === 'number' ? n.toFixed(2) : n)).join(', ');
   };
 
+  const isManualOnly = allPoses.length > 0 && allPoses.every((p) => p.cavity_id === undefined || p.cavity_id === null);
+
   return (
     <section className="bg-card rounded-2xl border border-border p-6 mb-6 shadow-elevated">
-      <div className="mb-6">
-        <h2 className="font-display text-2xl text-foreground">Binding Cavities</h2>
+      <div className="mb-6 flex items-center justify-between">
+        <h2 className="font-display text-2xl text-foreground">
+          {isManualOnly ? 'Active Site Docking Results' : 'Binding Cavities & Docking Poses'}
+        </h2>
+        {isManualOnly && (
+          <span className="text-xs px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 font-semibold">
+            User-Defined Coordinates
+          </span>
+        )}
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-border">
@@ -34,6 +44,8 @@ export default function PosesTable({
             {allPoses.map((pose) => {
               const globalIndex = allPoses.indexOf(pose) + 1;
               const isSelected = selectedPose === globalIndex;
+              const centerCoordinates = pose.cavity_center || pose.grid_center || pose.center || dockingParams?.grid_center;
+
               return (
                 <tr
                   key={globalIndex}
@@ -42,21 +54,25 @@ export default function PosesTable({
                   }`}
                 >
                   <td className="px-4 py-3 text-sm">
-                    {pose.cavity_id !== undefined ? (
+                    {pose.cavity_id !== undefined && pose.cavity_id !== null ? (
                       <button
                         onClick={() => onCavityClick(pose.cavity_id.toString())}
                         className="text-primary font-semibold hover:underline"
                       >
                         C{pose.cavity_id}
                       </button>
-                    ) : '-'}
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
+                        Active Site
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm text-foreground">{pose.mode || '-'}</td>
                   <td className="px-4 py-3 text-sm font-medium text-foreground">
                     {pose.affinity?.toFixed(2) ?? '-'}
                   </td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">
-                    {formatTriplet(pose.cavity_center)}
+                  <td className="px-4 py-3 text-sm font-mono-code text-muted-foreground">
+                    {formatTriplet(centerCoordinates)}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-center gap-2">

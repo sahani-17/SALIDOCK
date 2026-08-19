@@ -314,6 +314,7 @@ function Results() {
           onViewPose={handleViewPose}
           onDownloadPose={handleDownloadPose}
           onCavityClick={handleCavityFilterChange}
+          dockingParams={results?.docking_parameters}
         />
 
 

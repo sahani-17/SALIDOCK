@@ -437,6 +437,7 @@ def parse_pdb(
         raise FileNotFoundError(f"PDB file not found: {pdb_path}")
 
     raw_protein_h: List[Dict] = []   # temp store before bonded-C resolution
+    deferred_hetatm: List[Dict] = []   # non-primary-resname HETATM atoms, resolved after full parse
 
     with open(path, "r") as f:
         for line in f:
@@ -461,8 +462,8 @@ def parse_pdb(
 
             elem = line[76:78].strip() if len(line) >= 78 else ""
             if not elem or not elem.isalpha():
-                clean = aname.lstrip("0123456789")
-                elem  = clean[0].upper() if clean else "C"
+                clean = aname.lstrip("0123456789*").strip()
+                elem  = clean[0].upper() if clean and clean[0].isalpha() else "C"
             else:
                 elem = elem.strip()[0].upper() if elem.strip() else "C"
 
@@ -484,11 +485,53 @@ def parse_pdb(
                 if ligand_resname:
                     if resname == ligand_resname:
                         ligand_atoms.append(atom)
+                    else:
+                        # Defer: may be a same-residue fragment (e.g. UNK, or a
+                        # mislabeled HOH/WAT covalently bonded to the ligand)
+                        # that a fragmenting docking-tool output split off
+                        # under a different resname. Resolved in the merge
+                        # pass below rather than dropped outright.
+                        deferred_hetatm.append(atom)
                 else:
                     if resname in LIGAND_RESNAMES:
                         ligand_atoms.append(atom)
+                    else:
+                        deferred_hetatm.append(atom)
             elif rec == "ATOM":
                 protein_atoms.append(atom)
+
+    # --- Merge fragmented ligand HETATM records ---------------------------
+    # Some docking-tool output splits one physical ligand across multiple
+    # HETATM resnames (e.g. UNL + UNK), or mislabels a ligand oxygen as a
+    # crystallographic water (HOH/WAT) that happens to have the same resid.
+    # Recover any deferred atom that is covalently close (<1.8 A) to an
+    # already-accepted ligand atom -- true solvent/ions never sit that close
+    # to the ligand, so this is a safe discriminator between real water and
+    # a mislabeled ligand fragment.
+    COVALENT_MERGE_CUTOFF = 1.8
+    if deferred_hetatm and ligand_atoms:
+        changed = True
+        while changed:
+            changed = False
+            still_deferred = []
+            for da in deferred_hetatm:
+                is_ligand_fragment = False
+                for la in ligand_atoms:
+                    dd = math.sqrt(
+                        (da["x"] - la["x"]) ** 2 +
+                        (da["y"] - la["y"]) ** 2 +
+                        (da["z"] - la["z"]) ** 2
+                    )
+                    if dd < COVALENT_MERGE_CUTOFF:
+                        is_ligand_fragment = True
+                        break
+                if is_ligand_fragment:
+                    ligand_atoms.append(da)
+                    changed = True
+                else:
+                    still_deferred.append(da)
+            deferred_hetatm = still_deferred
+        # anything left in deferred_hetatm is genuine solvent/ion — discarded
 
     if return_h:
         # Resolve each H atom to its bonded C (nearest heavy protein atom ≤1.15 Å)

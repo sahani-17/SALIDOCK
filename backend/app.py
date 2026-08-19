@@ -1772,6 +1772,28 @@ async def list_results(session_id: str):
                     docking_params = report_data.get("docking_parameters", {})
             except Exception as e:
                 logger.error(f"Failed to parse docking_report.json: {str(e)}")
+
+        # Fallback: ensure poses include center coordinates from docking_params or grid_params.json
+        grid_params_file = WORK_DIR / session_id / "grid_params.json"
+        fallback_center = docking_params.get("grid_center")
+        fallback_size = docking_params.get("grid_size")
+        if not fallback_center and grid_params_file.exists():
+            try:
+                with open(grid_params_file, 'r') as gf:
+                    gp = json.load(gf)
+                    fallback_center = gp.get("center")
+                    fallback_size = gp.get("size")
+            except Exception:
+                pass
+
+        if fallback_center and poses:
+            for p in poses:
+                if not p.get("cavity_center") and not p.get("grid_center"):
+                    p["cavity_center"] = fallback_center
+                    p["grid_center"] = fallback_center
+                if not p.get("cavity_size") and not p.get("grid_size") and fallback_size:
+                    p["cavity_size"] = fallback_size
+                    p["grid_size"] = fallback_size
         
         return {
             "status": "ok",
@@ -2558,12 +2580,16 @@ async def run_docking_endpoint(
             # Parse results
             parsed = results.parse_vina_output(str(out_pdbqt))
             
-            # Inject new metadata (cnn score/affinity, engine_used, routing_reason)
+            # Inject new metadata (cnn score/affinity, engine_used, routing_reason, cavity_center, grid_center)
             for pose in parsed:
                 pose['cnn_score'] = result.cnn_score
                 pose['cnn_affinity'] = result.cnn_affinity
                 pose['engine_used'] = result.engine_used.value
                 pose['routing_reason'] = result.routing_reason
+                pose['cavity_center'] = list(center)
+                pose['grid_center'] = list(center)
+                pose['cavity_size'] = list(size)
+                pose['grid_size'] = list(size)
             
             # Export results to user-facing folder
             try:
@@ -3848,9 +3874,27 @@ async def get_results(session_id: str):
                 cavity_results.sort(key=lambda x: x['affinity'])
                 return {"status": "ok", "results": cavity_results}
         
+        # Check for manual / active-site grid parameters
+        grid_params_file = session_dir / "grid_params.json"
+        manual_grid = None
+        if grid_params_file.exists():
+            try:
+                with open(grid_params_file, 'r') as gf:
+                    manual_grid = json.load(gf)
+            except Exception:
+                pass
+
         # Fall back to standard parsing without cavity metadata
         parsed = results.parse_vina_output(str(out_pdbqt))
-        return {"status": "ok", "results": parsed}
+        if manual_grid and "center" in manual_grid:
+            for pose in parsed:
+                pose['cavity_center'] = manual_grid['center']
+                pose['grid_center'] = manual_grid['center']
+                if "size" in manual_grid:
+                    pose['cavity_size'] = manual_grid['size']
+                    pose['grid_size'] = manual_grid['size']
+
+        return {"status": "ok", "results": parsed, "grid_params": manual_grid}
     except Exception as e:
         return json_error(str(e))
 
