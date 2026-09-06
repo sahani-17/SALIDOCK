@@ -109,11 +109,11 @@ const CursorGlow = () => {
 
 const About = () => {
   const sections = [
-    { id: "mission", label: "Our Mission", icon: Target },
+    { id: "commitment", label: "Scientific Commitment", icon: Target },
     { id: "technology", label: "Technology", icon: Zap },
     { id: "who-we-serve", label: "Who We Serve", icon: ClipboardList },
   ];
-  const [activeSection, setActiveSection] = useState("mission");
+  const [activeSection, setActiveSection] = useState("commitment");
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -155,7 +155,7 @@ const About = () => {
     {
       label: "About SaliDock",
       items: [
-        { id: "mission", title: "Our Mission", icon: Target },
+        { id: "commitment", title: "Scientific Commitment", icon: Target },
         { id: "technology", title: "Technology Stack", icon: Zap },
         { id: "who-we-serve", title: "Who We Serve", icon: ClipboardList },
       ],
@@ -178,8 +178,8 @@ const About = () => {
 
       <div className="xl:pl-64">
         <main className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 pt-24 pb-16">
-          {/* ─── OUR MISSION & SCIENTIFIC COMMITMENT ─── */}
-          <section id="mission" className="scroll-mt-32">
+          {/* ─── SCIENTIFIC COMMITMENT ─── */}
+          <section id="commitment" className="scroll-mt-32">
             <AnimatedSection>
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-8 h-[2px] bg-primary" />
@@ -188,7 +188,7 @@ const About = () => {
                 </span>
               </div>
               <h1 className="text-4xl md:text-5xl font-medium text-foreground mb-6">
-                Scientific Commitment & Our Mission
+                Scientific Commitment
               </h1>
               <h2 className="text-[22px] md:text-2xl font-bold text-primary mb-10">
                 Seamless, Rigorous, and Accessible Drug Discovery.
