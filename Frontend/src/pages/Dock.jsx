@@ -11,7 +11,7 @@ import InputSection from '../components/workflow/InputSection';
 import ProteinPrepSection from '../components/workflow/ProteinPrepSection';
 import Stepper from '../components/workflow/Stepper';
 import Footer from '../components/Footer';
-
+import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
 import NotifyMeCard from '../components/workflow/NotifyMeCard';
 import { notifyJobCompletion } from '../utils/notifications';
 
