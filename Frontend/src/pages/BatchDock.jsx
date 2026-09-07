@@ -472,7 +472,7 @@ function BatchDock() {
                                                                             ? workflow.selectedChains.filter(c => c !== id)
                                                                             : [...workflow.selectedChains, id]
                                                                     )}
-                                                                    className={`relative flex flex-col items-start gap-0.5 px-3 py-2.5 rounded-xl border font-semibold text-sm transition-all disabled:cursor-not-allowed ${
+                                                                    className={`flex flex-col items-start gap-0.5 px-3 py-2.5 rounded-xl border font-semibold text-sm transition-all disabled:cursor-not-allowed ${
                                                                         active
                                                                             ? 'border-primary/50 bg-primary/8 text-primary ring-1 ring-primary/20'
                                                                             : isSuggested
@@ -480,17 +480,19 @@ function BatchDock() {
                                                                                 : 'border-border hover:border-primary/30 bg-card text-foreground'
                                                                     }`}
                                                                 >
-                                                                    <span className="font-mono-code font-bold">Chain {id}</span>
+                                                                    <span className="flex items-center gap-1.5 flex-wrap">
+                                                                        <span className="font-mono-code font-bold">Chain {id}</span>
+                                                                        {isSuggested && (
+                                                                            <span className="text-[9px] font-bold uppercase tracking-wide bg-emerald-500 text-white px-1.5 py-0.5 rounded-full leading-none">
+                                                                                Suggested
+                                                                            </span>
+                                                                        )}
+                                                                    </span>
                                                                     {name && (
-                                                                        <span className="text-[10px] font-medium text-foreground/70 leading-tight max-w-[120px] truncate" title={name}>{name}</span>
+                                                                        <span className="text-[10px] font-medium text-foreground/70 leading-tight max-w-[140px] truncate" title={name}>{name}</span>
                                                                     )}
                                                                     {atoms !== undefined && (
                                                                         <span className="text-[10px] font-normal text-muted-foreground">{atoms} atoms</span>
-                                                                    )}
-                                                                    {isSuggested && (
-                                                                        <span className="absolute -top-2 -right-1 text-[9px] font-bold uppercase tracking-wide bg-emerald-500 text-white px-1.5 py-0.5 rounded-full leading-none">
-                                                                            Suggested
-                                                                        </span>
                                                                     )}
                                                                 </button>
                                                             );
