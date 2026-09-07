@@ -86,8 +86,16 @@ export function useDockingWorkflow({ isBlind = false } = {}) {
             let chainsCount = 0;
             try {
                 const chainsData = await api.getChains(sessionId, savedFilename);
-                setChains(chainsData.chains || []);
-                chainsCount = chainsData.chains?.length || 0;
+                const fetchedChains = chainsData.chains || [];
+                setChains(fetchedChains);
+                chainsCount = fetchedChains.length;
+                // Auto-pre-select the largest chain when multiple chains are present
+                // (avoids keeping fusion proteins / crystallographic copies by default)
+                if (fetchedChains.length > 1) {
+                    const suggested = fetchedChains.reduce((best, c) =>
+                        (c.atoms ?? 0) > (best.atoms ?? 0) ? c : best, fetchedChains[0]);
+                    setSelectedChains([suggested.id ?? suggested]);
+                }
             } catch (chainErr) {
                 console.warn('Failed to fetch chains:', chainErr);
                 setChains([]);
@@ -179,7 +187,13 @@ export function useDockingWorkflow({ isBlind = false } = {}) {
             // Get chains
             try {
                 const chainsData = await api.getChains(sessionId, response.filename);
-                setChains(chainsData.chains || []);
+                const fetchedChains = chainsData.chains || [];
+                setChains(fetchedChains);
+                if (fetchedChains.length > 1) {
+                    const suggested = fetchedChains.reduce((best, c) =>
+                        (c.atoms ?? 0) > (best.atoms ?? 0) ? c : best, fetchedChains[0]);
+                    setSelectedChains([suggested.id ?? suggested]);
+                }
             } catch (err) {
                 setChains([]);
             }
@@ -219,7 +233,13 @@ export function useDockingWorkflow({ isBlind = false } = {}) {
             // Get chains
             try {
                 const chainsData = await api.getChains(sessionId, response.filename);
-                setChains(chainsData.chains || []);
+                const fetchedChains = chainsData.chains || [];
+                setChains(fetchedChains);
+                if (fetchedChains.length > 1) {
+                    const suggested = fetchedChains.reduce((best, c) =>
+                        (c.atoms ?? 0) > (best.atoms ?? 0) ? c : best, fetchedChains[0]);
+                    setSelectedChains([suggested.id ?? suggested]);
+                }
             } catch (err) {
                 setChains([]);
             }

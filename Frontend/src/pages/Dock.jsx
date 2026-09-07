@@ -11,7 +11,7 @@ import InputSection from '../components/workflow/InputSection';
 import ProteinPrepSection from '../components/workflow/ProteinPrepSection';
 import Stepper from '../components/workflow/Stepper';
 import Footer from '../components/Footer';
-import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
+
 import NotifyMeCard from '../components/workflow/NotifyMeCard';
 import { notifyJobCompletion } from '../utils/notifications';
 
@@ -375,11 +375,11 @@ function Dock() {
                             <button onClick={() => setStepIndex(1)} className="px-5 py-2.5 rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-primary/40 font-semibold text-sm transition-all" disabled={workflow.loading}>Back</button>
                             <button
                                 onClick={handleRunDocking}
-                                disabled={!configureDone || workflow.loading}
+                                disabled={!configureDone || workflow.loading || isRunning}
                                 className="px-6 py-2.5 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 inline-flex items-center gap-2 shadow-sm"
                             >
-                                {isRunning ? <AnimatedCircularProgressBar value={dockProgress} size={18} strokeWidth={3} className="my-0" /> : <Play size={16} aria-hidden="true" />}
-                                {isRunning ? 'Running Simulation…' : 'Run Docking'}
+                                <Play size={16} aria-hidden="true" />
+                                Run Docking
                             </button>
                         </div>
 

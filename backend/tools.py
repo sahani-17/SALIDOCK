@@ -161,42 +161,162 @@ def _convert_to_pdbqt_openbabel(input_file, output_pdbqt, is_receptor=True):
 
 def detect_chains(input_pdb):
     """
-    Detect all unique chain IDs in a PDB file.
-    
-    Uses direct PDB column parsing (chain ID at column 21) for ATOM records.
-    
+    Detect all unique chain IDs in a PDB file and resolve molecule names.
+
+    Name resolution uses a layered fallback strategy:
+      1. COMPND MOLECULE: records  — best, maps each chain individually
+      2. TITLE record              — general structure description
+      3. HEADER classification     — short keyword (e.g. "HYDROLASE")
+      4. Filename stem             — last resort (e.g. "alphafold_P12345")
+
+    For single-chain files, the fallback name is assigned to that one chain.
+    For multi-chain files without COMPND, each chain gets "Unknown protein"
+    so the UI always shows something meaningful instead of a blank.
+
     Args:
         input_pdb: Input PDB file path
-        
+
     Returns:
-        List of dicts with chain info: [{'id': 'A', 'atoms': 1523}, ...]
-        
+        List of dicts:
+        [{'id': 'A', 'atoms': 1523, 'name': 'Cdk2', 'name_source': 'compnd'}, ...]
+        'name' is never None — worst case it is 'Unknown protein'.
+        'name_source' is one of: 'compnd', 'title', 'header', 'filename', 'unknown'
+
     Raises:
         FileNotFoundError: If input file doesn't exist
-        ValueError: If file is empty or contains no valid ATOM/HETATM records
+        ValueError: If file is empty or contains no valid ATOM records
     """
     input_pdb = str(input_pdb)
-    
+
     if not os.path.exists(input_pdb):
         raise FileNotFoundError(f"PDB file not found: {input_pdb}")
     if os.path.getsize(input_pdb) == 0:
         raise ValueError(f"PDB file is empty: {input_pdb}")
-    
+
     chain_atoms = {}
-    
+    compnd_lines = []
+    title_parts = []
+    header_classification = None
+
     with open(input_pdb, 'r') as fh:
         for line in fh:
-            if line.startswith('ATOM') and len(line) >= 22:
+            record = line[:6].strip()
+
+            if record == 'ATOM' and len(line) >= 22:
                 chain_id = line[21].strip().upper()
-                if not chain_id:
-                    continue
-                chain_atoms[chain_id] = chain_atoms.get(chain_id, 0) + 1
-    
+                if chain_id:
+                    chain_atoms[chain_id] = chain_atoms.get(chain_id, 0) + 1
+
+            elif record == 'COMPND':
+                compnd_lines.append(line[10:80].strip())
+
+            elif record == 'TITLE':
+                # Cols 10-80 hold the title text (continuation lines allowed)
+                title_parts.append(line[10:80].strip())
+
+            elif record == 'HEADER':
+                # Cols 10-50 = classification, 62-66 = PDB ID
+                classification = line[10:50].strip()
+                if classification:
+                    header_classification = classification
+
     if not chain_atoms:
         raise ValueError(f"No valid ATOM records found in PDB file: {input_pdb}")
-    
-    chains = [{'id': cid, 'atoms': count} for cid, count in sorted(chain_atoms.items())]
+
+    # ── Priority 1: Parse COMPND to build per-chain name mapping ─────────
+    chain_names = {}   # chain_id → name
+    name_source = {}   # chain_id → source label
+
+    if compnd_lines:
+        try:
+            compnd_text = ' '.join(compnd_lines)
+            tokens = [t.strip() for t in compnd_text.split(';') if t.strip()]
+
+            current_molecule = None
+            current_chains = []
+
+            for token in tokens:
+                if ':' not in token:
+                    continue
+                key, _, value = token.partition(':')
+                key = key.strip().upper()
+                value = value.strip()
+
+                if key == 'MOLECULE':
+                    if current_molecule and current_chains:
+                        for cid in current_chains:
+                            chain_names[cid.upper()] = current_molecule.rstrip('.')
+                            name_source[cid.upper()] = 'compnd'
+                    current_molecule = value.rstrip('.')
+                    current_chains = []
+                elif key == 'CHAIN':
+                    current_chains = [c.strip().upper() for c in value.split(',')]
+
+            if current_molecule and current_chains:
+                for cid in current_chains:
+                    chain_names[cid.upper()] = current_molecule.rstrip('.')
+                    name_source[cid.upper()] = 'compnd'
+
+        except Exception:
+            pass  # COMPND parsing is best-effort
+
+    # ── Priority 2: TITLE record as fallback ──────────────────────────────
+    title_name = None
+    if title_parts:
+        raw = ' '.join(title_parts).strip()
+        # Collapse multiple spaces, strip common boilerplate prefixes
+        import re as _re
+        raw = _re.sub(r'\s+', ' ', raw)
+        # Truncate very long titles to keep the UI clean
+        title_name = raw[:80].rstrip() if raw else None
+
+    # ── Priority 3: HEADER classification ────────────────────────────────
+    # e.g. "HYDROLASE", "TRANSFERASE/INHIBITOR", "MEMBRANE PROTEIN"
+    header_name = header_classification.title() if header_classification else None
+
+    # ── Priority 4: Filename stem ─────────────────────────────────────────
+    stem = Path(input_pdb).stem
+    # Clean up common pipeline prefixes/suffixes
+    import re as _re2
+    stem_clean = _re2.sub(r'[_\-\.]+', ' ', stem).strip().title()
+    filename_name = stem_clean if stem_clean else None
+
+    # ── Assign fallback names to chains that COMPND didn't cover ─────────
+    num_chains = len(chain_atoms)
+    for cid in chain_atoms:
+        if cid in chain_names:
+            continue  # Already resolved via COMPND
+
+        if title_name:
+            # For single-chain files the TITLE is unambiguous; for multi-chain
+            # files it describes the whole structure, so append the chain ID
+            chain_names[cid] = title_name if num_chains == 1 else f"{title_name} (Chain {cid})"
+            name_source[cid] = 'title'
+
+        elif header_name:
+            chain_names[cid] = header_name if num_chains == 1 else f"{header_name} (Chain {cid})"
+            name_source[cid] = 'header'
+
+        elif filename_name:
+            chain_names[cid] = filename_name if num_chains == 1 else f"{filename_name} (Chain {cid})"
+            name_source[cid] = 'filename'
+
+        else:
+            chain_names[cid] = 'Unknown protein'
+            name_source[cid] = 'unknown'
+
+    chains = [
+        {
+            'id': cid,
+            'atoms': count,
+            'name': chain_names.get(cid, 'Unknown protein'),
+            'name_source': name_source.get(cid, 'unknown'),
+        }
+        for cid, count in sorted(chain_atoms.items())
+    ]
     return chains
+
+
 
 
 def validate_ligand_molecule(input_file):

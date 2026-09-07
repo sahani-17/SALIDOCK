@@ -85,7 +85,14 @@ export function useBatchDockingWorkflow() {
 
             // Fetch protein chains
             const chainsData = await api.getChains(sessionId, savedFilename);
-            setChains(chainsData.chains || []);
+            const fetchedChains = chainsData.chains || [];
+            setChains(fetchedChains);
+            // Auto-pre-select the largest chain when multiple chains are present
+            if (fetchedChains.length > 1) {
+                const suggested = fetchedChains.reduce((best, c) =>
+                    (c.atoms ?? 0) > (best.atoms ?? 0) ? c : best, fetchedChains[0]);
+                setSelectedChains([suggested.id ?? suggested]);
+            }
 
             // Fetch heteroatoms to keep
             const heteroData = await api.getHeteroatoms(sessionId, savedFilename);
@@ -137,7 +144,13 @@ export function useBatchDockingWorkflow() {
             setUploadProgress(prev => ({ ...prev, protein: true }));
 
             const chainsData = await api.getChains(sessionId, response.filename);
-            setChains(chainsData.chains || []);
+            const fetchedChains2 = chainsData.chains || [];
+            setChains(fetchedChains2);
+            if (fetchedChains2.length > 1) {
+                const suggested = fetchedChains2.reduce((best, c) =>
+                    (c.atoms ?? 0) > (best.atoms ?? 0) ? c : best, fetchedChains2[0]);
+                setSelectedChains([suggested.id ?? suggested]);
+            }
 
             const heteroData = await api.getHeteroatoms(sessionId, response.filename);
             setHeteroatoms(heteroData.all_heteroatoms || []);
@@ -169,7 +182,13 @@ export function useBatchDockingWorkflow() {
             setUploadProgress(prev => ({ ...prev, protein: true }));
 
             const chainsData = await api.getChains(sessionId, response.filename);
-            setChains(chainsData.chains || []);
+            const fetchedChains3 = chainsData.chains || [];
+            setChains(fetchedChains3);
+            if (fetchedChains3.length > 1) {
+                const suggested = fetchedChains3.reduce((best, c) =>
+                    (c.atoms ?? 0) > (best.atoms ?? 0) ? c : best, fetchedChains3[0]);
+                setSelectedChains([suggested.id ?? suggested]);
+            }
 
             const heteroData = await api.getHeteroatoms(sessionId, response.filename);
             setHeteroatoms(heteroData.all_heteroatoms || []);
