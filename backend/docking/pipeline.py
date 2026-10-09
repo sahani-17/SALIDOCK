@@ -181,5 +181,6 @@ def run_docking(
         vina_affinity  = raw_result["vina_affinity"],
         engine_used    = engine,
         routing_reason = routing_reason,
+        top_pose_pdbqt = raw_result.get("top_pose_pdbqt"),
     )
 

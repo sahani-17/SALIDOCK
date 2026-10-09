@@ -1357,33 +1357,15 @@ async def create_ligand_from_smiles(
         output_pdbqt = session_dir / f"ligand_{ligand_name}.pdbqt"
         prepared_pdbqt = session_dir / "ligand_prepared.pdbqt"
         
-        # Convert SMILES to 3D structure (pH fixed at 7.4)
+        sdf_ref_path = session_dir / "ligand_ref.sdf"
+        
+        # Convert SMILES to 3D structure and write reference SDF directly
         tools.smiles_to_3d(
             smiles=smiles,
             output_pdbqt=str(output_pdbqt),
-            optimize=optimize
+            optimize=optimize,
+            output_sdf=str(sdf_ref_path)
         )
-        
-        # ── Save ligand_ref.sdf from SMILES (needed for 2D interaction diagram) ────
-        # Without this, render_svg falls back to parsing the docked PDB which
-        # lacks element columns → RDKit "Cannot determine element for PDB atom #1".
-        sdf_ref_path = session_dir / "ligand_ref.sdf"
-        try:
-            from rdkit import Chem
-            from rdkit.Chem import AllChem
-            _smi_mol = Chem.MolFromSmiles(smiles)
-            if _smi_mol is not None:
-                _smi_mol = Chem.AddHs(_smi_mol)
-                AllChem.EmbedMolecule(_smi_mol, AllChem.ETKDG())
-                _smi_mol = Chem.RemoveHs(_smi_mol)
-                try:
-                    Chem.Kekulize(_smi_mol, clearAromaticFlags=True)
-                except Exception:
-                    pass
-                Chem.MolToMolFile(_smi_mol, str(sdf_ref_path))
-                logger.info(f"Saved ligand_ref.sdf from SMILES: {sdf_ref_path}")
-        except Exception as _sdf_err:
-            logger.warning(f"Could not create ligand_ref.sdf from SMILES: {_sdf_err}")
         
         # Copy to standard ligand_prepared.pdbqt for workflow compatibility
         shutil.copy(output_pdbqt, prepared_pdbqt)
@@ -1446,35 +1428,17 @@ async def download_complex_from_results(session_id: str, pose_number: int):
         if pose_number < 1:
             raise HTTPException(status_code=400, detail="Pose number must be >= 1")
         
-        # Pre-fetch key files from Supabase if missing locally
+        # Pre-fetch key protein and report files if missing locally
         ensure_session_file(session_id, "protein_prepared.pdbqt")
         ensure_session_file(session_id, "protein_prepared.pdb")
-        ensure_session_file(session_id, "docking_out_out.pdbqt")
-        ensure_session_file(session_id, "cavities.json")
-        
-        # Pre-fetch results report if missing
         ensure_results_file(session_id, "reports/docking_report.json")
-        
-        # Pre-fetch cavity-specific files if relevant
-        cavities_json = session_dir / "cavities.json"
-        if cavities_json.exists():
-            try:
-                with open(cavities_json) as f:
-                    cavs = json.load(f)
-                for i in range(len(cavs)):
-                    cav_num = i + 1
-                    ensure_session_file(session_id, f"docking_out_cavity_{cav_num}_out.pdbqt")
-            except Exception as e:
-                logger.warning(f"Could not pre-fetch cavity PDBQTs: {e}")
 
         protein_pdbqt = session_dir / "protein_prepared.pdbqt"
         if not protein_pdbqt.exists():
             raise HTTPException(status_code=404, detail="Prepared protein not found. Please run protein preparation first.")
         
-        # Try to read pose info from the docking report to find the correct source file
-        # For multi-cavity docking, each pose may come from a different PDBQT file
+        # Read pose info from docking report to find the specific source file
         docking_report = RESULTS_DIR / session_id / "reports" / "docking_report.json"
-        
         ligand_pdbqt = None
         mode_in_file = pose_number  # Default: pose_number = mode index in file
         
@@ -1485,9 +1449,9 @@ async def download_complex_from_results(session_id: str, pose_number: int):
                 poses = report_data.get("poses", [])
                 if pose_number <= len(poses):
                     pose_info = poses[pose_number - 1]
-                    # Use per-cavity pdbqt_file if available (multi-cavity docking)
                     if 'pdbqt_file' in pose_info:
-                        pdbqt_path = Path(pose_info['pdbqt_file'])
+                        pdbqt_name = Path(pose_info['pdbqt_file']).name
+                        pdbqt_path = ensure_session_file(session_id, pdbqt_name)
                         if pdbqt_path.exists():
                             ligand_pdbqt = pdbqt_path
                             mode_in_file = pose_info.get('mode', 1)
@@ -1496,6 +1460,7 @@ async def download_complex_from_results(session_id: str, pose_number: int):
         
         # Fallback to main docking output if report not available
         if ligand_pdbqt is None:
+            ensure_session_file(session_id, "docking_out_out.pdbqt")
             ligand_pdbqt = session_dir / "docking_out_out.pdbqt"
         
         if not ligand_pdbqt.exists():
@@ -1773,22 +1738,20 @@ async def detect_cavities_endpoint(
         if not protein_pdbqt.exists():
             raise HTTPException(status_code=404, detail="Prepared protein not found. Please prepare protein first.")
         
-        # Convert PDBQT to PDB (both fpocket and P2RANK require PDB format)
-        protein_pdb = session_dir / "protein_for_cavity_detection.pdb"
-        
-        # Simple PDBQT to PDB conversion (remove charge and atom type columns)
-        pdb_lines = []
-        for line in protein_pdbqt.read_text().splitlines():
-            if line.startswith(('ATOM', 'HETATM')):
-                # Keep only standard PDB columns (first 66 characters)
-                pdb_lines.append(line[:66])
-            elif line.startswith(('TER', 'END')):
-                pdb_lines.append(line)
-        
-        protein_pdb.write_text('\n'.join(pdb_lines))
-        
-        # Persist cavity detection PDB to Supabase
-        cloud_save(session_id, protein_pdb.name, protein_pdb.read_bytes())
+        # Reuse protein_prepared.pdb directly if present (both fpocket and P2RANK require PDB format)
+        prepared_pdb = session_dir / "protein_prepared.pdb"
+        if prepared_pdb.exists():
+            protein_pdb = prepared_pdb
+        else:
+            protein_pdb = session_dir / "protein_for_cavity_detection.pdb"
+            pdb_lines = []
+            for line in protein_pdbqt.read_text().splitlines():
+                if line.startswith(('ATOM', 'HETATM')):
+                    pdb_lines.append(line[:66])
+                elif line.startswith(('TER', 'END')):
+                    pdb_lines.append(line)
+            protein_pdb.write_text('\n'.join(pdb_lines))
+            cloud_save(session_id, protein_pdb.name, protein_pdb.read_bytes())
         
         # Ensure top_n is at least 1
         top_n = max(1, top_n)
@@ -2119,6 +2082,12 @@ async def run_docking_endpoint(
     docking_mode: str = "cavity",  # "cavity" or "manual"
     cavity_ids: str = None,  # Comma-separated cavity IDs, or None for all
     notify_email: str = None,  # Optional email for completion notification
+    center_x: float = None,
+    center_y: float = None,
+    center_z: float = None,
+    size_x: float = None,
+    size_y: float = None,
+    size_z: float = None,
 ):
     """
     Run molecular docking using new engines (GNINA / QuickVina-W).
@@ -2222,9 +2191,12 @@ async def run_docking_endpoint(
                             logger.error(f"Docking failed for cavity {cav_id}: {result.message}")
                             continue
                         
-                        # Convert the resulting top_pose_sdf to PDBQT format
+                        # Save or convert top pose to PDBQT format
                         out_pdbqt = session_dir / f"docking_out_cavity_{cav_id}_out.pdbqt"
-                        convert_sdf_to_pdbqt(result.top_pose_sdf, result.vina_affinity, out_pdbqt)
+                        if result.top_pose_pdbqt:
+                            out_pdbqt.write_text(result.top_pose_pdbqt, encoding="utf-8")
+                        else:
+                            convert_sdf_to_pdbqt(result.top_pose_sdf, result.vina_affinity, out_pdbqt)
                         
                         # Prep log file
                         log_file = session_dir / f"docking_out_cavity_{cav_id}.log"
@@ -2352,36 +2324,33 @@ async def run_docking_endpoint(
         
         elif docking_mode == "manual":
             # Manual mode: Single docking with user-defined grid
-            grid_file = session_dir / "grid_params.json"
-            
-            if not grid_file.exists():
-                raise HTTPException(
-                    status_code=404,
-                    detail="Grid parameters not found. Please calculate grid first."
-                )
-            
-            # Load grid parameters
-            try:
-                with open(grid_file, 'r') as f:
-                    grid_params = json.load(f)
-            except json.JSONDecodeError:
-                raise HTTPException(
-                    status_code=500,
-                    detail="Grid parameters file is corrupted. Please recalculate grid."
-                )
-            except Exception as e:
-                logger.error(f"Failed to load grid parameters: {e}")
-                raise HTTPException(status_code=500, detail="Failed to load grid parameters")
-            
-            if grid_params.get('mode') != 'manual':
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Grid was calculated in {grid_params.get('mode')} mode. "
-                           "Please recalculate grid in manual mode."
-                )
-            
-            center = tuple(grid_params['center'])
-            size = tuple(grid_params['size'])
+            if all(v is not None for v in [center_x, center_y, center_z, size_x, size_y, size_z]):
+                center = (center_x, center_y, center_z)
+                size = (size_x, size_y, size_z)
+                grid_params = {'mode': 'manual', 'center': list(center), 'size': list(size)}
+                (session_dir / "grid_params.json").write_text(json.dumps(grid_params, indent=2))
+            else:
+                grid_file = session_dir / "grid_params.json"
+                if not grid_file.exists():
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Grid parameters not found. Please provide center and size or calculate grid first."
+                    )
+                try:
+                    with open(grid_file, 'r') as f:
+                        grid_params = json.load(f)
+                except Exception as e:
+                    logger.error(f"Failed to load grid parameters: {e}")
+                    raise HTTPException(status_code=500, detail="Failed to load grid parameters")
+                
+                if grid_params.get('mode') != 'manual':
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Grid was calculated in {grid_params.get('mode')} mode. "
+                               "Please recalculate grid in manual mode."
+                    )
+                center = tuple(grid_params['center'])
+                size = tuple(grid_params['size'])
             
             # Calculate volume
             volume = size[0] * size[1] * size[2]
@@ -2401,9 +2370,12 @@ async def run_docking_endpoint(
             if isinstance(result, DockingError):
                 raise HTTPException(status_code=500, detail=f"Docking failed: {result.message}")
             
-            # Convert SDF top pose to PDBQT format
+            # Save or convert top pose to PDBQT format
             out_pdbqt = session_dir / "docking_out_out.pdbqt"
-            convert_sdf_to_pdbqt(result.top_pose_sdf, result.vina_affinity, out_pdbqt)
+            if result.top_pose_pdbqt:
+                out_pdbqt.write_text(result.top_pose_pdbqt, encoding="utf-8")
+            else:
+                convert_sdf_to_pdbqt(result.top_pose_sdf, result.vina_affinity, out_pdbqt)
             
             # Mock log path
             log_file = session_dir / "docking_out.log"
@@ -2411,19 +2383,21 @@ async def run_docking_endpoint(
             log_file.write_text(log_content, encoding="utf-8")
             cloud_save_text(session_id, log_file.name, log_content)  # Upload log to Supabase
             
-            # Parse results
-            parsed = results.parse_vina_output(str(out_pdbqt))
-            
-            # Inject new metadata (cnn score/affinity, engine_used, routing_reason, cavity_center, grid_center)
-            for pose in parsed:
-                pose['cnn_score'] = result.cnn_score
-                pose['cnn_affinity'] = result.cnn_affinity
-                pose['engine_used'] = result.engine_used.value
-                pose['routing_reason'] = result.routing_reason
-                pose['cavity_center'] = list(center)
-                pose['grid_center'] = list(center)
-                pose['cavity_size'] = list(size)
-                pose['grid_size'] = list(size)
+            # Build results directly from DockingResult (bypassing redundant disk re-read and regex parsing)
+            parsed = [{
+                'mode': 1,
+                'affinity': result.vina_affinity,
+                'rmsd_lb': 0.0,
+                'rmsd_ub': 0.0,
+                'cnn_score': result.cnn_score,
+                'cnn_affinity': result.cnn_affinity,
+                'engine_used': result.engine_used.value,
+                'routing_reason': result.routing_reason,
+                'cavity_center': list(center),
+                'grid_center': list(center),
+                'cavity_size': list(size),
+                'grid_size': list(size)
+            }]
             
             # Export results to user-facing folder
             try:
@@ -2709,23 +2683,17 @@ async def prepare_batch_ligands_endpoint(session_id: str):
         status_file.write_text(json.dumps(status_data, indent=2))
         
         def run_prep_background():
+            import concurrent.futures
             completed_count = 0
             failed_count = 0
-            
-            for idx, lig in enumerate(ligands):
-                # Update status
-                status_data["current_ligand"] = lig["name"]
-                status_file.write_text(json.dumps(status_data, indent=2))
-                
+
+            def _prep_single(lig):
                 raw_sdf_path = session_dir / lig["raw_sdf"]
                 out_pdbqt_name = f"ligand_{lig['index']}_prepared.pdbqt"
                 out_pdbqt_path = session_dir / out_pdbqt_name
-                
+
                 try:
-                    # Run standard preparation
                     tools.prepare_ligand(str(raw_sdf_path), str(out_pdbqt_path), optimize=True)
-                    
-                    # Compute descriptors using RDKit
                     from rdkit import Chem
                     from rdkit.Chem import Descriptors, rdMolDescriptors
                     mol = Chem.MolFromMolFile(str(raw_sdf_path), sanitize=True, removeHs=False)
@@ -2739,36 +2707,55 @@ async def prepare_batch_ligands_endpoint(session_id: str):
                             "rotatable_bonds": int(rdMolDescriptors.CalcNumRotatableBonds(mol)),
                             "heavy_atoms": int(mol.GetNumHeavyAtoms())
                         }
-                    
                     lig["prepared_pdbqt"] = out_pdbqt_name
                     sdf_ref_name = f"ligand_{lig['index']}_ref.sdf"
                     sdf_ref_path = session_dir / sdf_ref_name
                     shutil.copy(raw_sdf_path, sdf_ref_path)
                     lig["ref_sdf"] = sdf_ref_name
-                    
-                    # Persist prepared files to Supabase
-                    cloud_save(session_id, out_pdbqt_name, out_pdbqt_path.read_bytes())
-                    cloud_save(session_id, sdf_ref_name, sdf_ref_path.read_bytes())
-                    
-                    completed_count += 1
-                    status_data["details"].append({"name": lig["name"], "status": "success"})
+                    return lig, True, None
                 except Exception as ex:
                     logger.error(f"Failed to prepare batch ligand {lig['name']}: {ex}")
-                    failed_count += 1
-                    status_data["details"].append({"name": lig["name"], "status": "failed", "error": str(ex)})
-                    
-                status_data["completed"] = completed_count
-                status_data["failed"] = failed_count
-                status_file.write_text(json.dumps(status_data, indent=2))
-                
+                    return lig, False, str(ex)
+
+            max_workers = min(os.cpu_count() or 4, 4)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
+                futures = [pool.submit(_prep_single, lig) for lig in ligands]
+                for future in concurrent.futures.as_completed(futures):
+                    lig, success, err = future.result()
+                    if success:
+                        completed_count += 1
+                        status_data["details"].append({"name": lig["name"], "status": "success"})
+                    else:
+                        failed_count += 1
+                        status_data["details"].append({"name": lig["name"], "status": "failed", "error": err})
+                    status_data["completed"] = completed_count
+                    status_data["failed"] = failed_count
+                    status_data["current_ligand"] = lig["name"]
+                    status_file.write_text(json.dumps(status_data, indent=2))
+
             status_data["status"] = "completed" if failed_count == 0 else "completed_with_errors"
             status_data["current_ligand"] = ""
             status_file.write_text(json.dumps(status_data, indent=2))
-            
+
             # Save updated metadata
             batch_meta_file.write_text(json.dumps(meta_data, indent=2))
             cloud_save_text(session_id, "batch_ligands.json", json.dumps(meta_data, indent=2))
             cloud_save_text(session_id, "batch_prep_status.json", json.dumps(status_data, indent=2))
+
+            # Persist prepared files to Supabase concurrently
+            uploads = []
+            for lig in ligands:
+                if lig.get("prepared_pdbqt"):
+                    p_path = session_dir / lig["prepared_pdbqt"]
+                    if p_path.exists():
+                        uploads.append((p_path.name, p_path.read_bytes()))
+                if lig.get("ref_sdf"):
+                    r_path = session_dir / lig["ref_sdf"]
+                    if r_path.exists():
+                        uploads.append((r_path.name, r_path.read_bytes()))
+            if uploads:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as uploader:
+                    list(uploader.map(lambda item: cloud_save(session_id, item[0], item[1]), uploads))
             
         thread = threading.Thread(target=run_prep_background)
         thread.start()
@@ -2943,7 +2930,10 @@ async def run_batch_docking(
                         return idx, {"index": idx, "name": name, "safe_name": safe_name, "status": "failed", "error": result.message}
                         
                     out_pdbqt = session_dir / f"docking_out_ligand_{idx}_out.pdbqt"
-                    convert_sdf_to_pdbqt(result.top_pose_sdf, result.vina_affinity, out_pdbqt)
+                    if result.top_pose_pdbqt:
+                        out_pdbqt.write_text(result.top_pose_pdbqt, encoding="utf-8")
+                    else:
+                        convert_sdf_to_pdbqt(result.top_pose_sdf, result.vina_affinity, out_pdbqt)
                     
                     log_file = session_dir / f"docking_out_ligand_{idx}.log"
                     log_file.write_text(f"Engine: {result.engine_used.value}\nRouting Reason: {result.routing_reason}\nStatus: Success\n", encoding="utf-8")
@@ -2953,9 +2943,6 @@ async def run_batch_docking(
                     ligand_efficiency = 0.0
                     if heavy_atoms > 0:
                         ligand_efficiency = round(result.vina_affinity / heavy_atoms, 3)
-                        
-                    cloud_save(session_id, out_pdbqt.name, out_pdbqt.read_bytes())
-                    cloud_save(session_id, log_file.name, log_file.read_bytes())
                     
                     return idx, {
                         "index": idx,
@@ -3021,6 +3008,21 @@ async def run_batch_docking(
             
             cloud_save_text(session_id, "batch_docking_report.json", json.dumps(report_data, indent=2))
             cloud_save_text(session_id, "batch_dock_status.json", json.dumps(status_data, indent=2))
+            
+            # Offload batch ligand output uploads to background thread
+            if CLOUD_ONLY_MODE and supabase_mgr:
+                def _upload_batch_outputs():
+                    for res in results_list:
+                        if res.get("status") != "completed":
+                            continue
+                        l_idx = res["index"]
+                        p = session_dir / f"docking_out_ligand_{l_idx}_out.pdbqt"
+                        lf = session_dir / f"docking_out_ligand_{l_idx}.log"
+                        if p.exists():
+                            cloud_save(session_id, p.name, p.read_bytes())
+                        if lf.exists():
+                            cloud_save(session_id, lf.name, lf.read_bytes())
+                threading.Thread(target=_upload_batch_outputs, daemon=True).start()
             
             if supabase_mgr:
                 try:
@@ -3213,6 +3215,8 @@ async def download_batch_results_zip(session_id: str):
             
             protein_pdbqt = session_dir / "protein_prepared.pdbqt"
             protein_pdb = session_dir / "protein_prepared.pdb"
+            ensure_session_file(session_id, "protein_prepared.pdbqt")
+            ensure_session_file(session_id, "protein_prepared.pdb")
             if protein_pdbqt.exists():
                 zip_file.write(str(protein_pdbqt), f"{protein_name}_prepared.pdbqt")
             if protein_pdb.exists():
@@ -3230,8 +3234,6 @@ async def download_batch_results_zip(session_id: str):
                 if out_pdbqt_path.exists():
                     zip_file.write(str(out_pdbqt_path), f"ligands/{lig_safe_name}_poses.pdbqt")
                     
-                ensure_session_file(session_id, "protein_prepared.pdbqt")
-                ensure_session_file(session_id, "protein_prepared.pdb")
                 if protein_pdbqt.exists() and out_pdbqt_path.exists():
                     try:
                         complex_pdb = create_protein_ligand_complex(

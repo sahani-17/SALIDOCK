@@ -108,6 +108,7 @@ class DockingResult:
     vina_affinity:  float
     engine_used:    EngineChoice
     routing_reason: str
+    top_pose_pdbqt: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

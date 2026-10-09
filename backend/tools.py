@@ -1735,7 +1735,7 @@ def prepare_ligand(input_ligand, output_pdbqt, optimize=True):
     return output_pdbqt
 
 
-def smiles_to_3d(smiles: str, output_pdbqt: str, optimize: bool = True) -> Path:
+def smiles_to_3d(smiles: str, output_pdbqt: str, optimize: bool = True, output_sdf: str | None = None) -> Path:
     """
     Convert SMILES string to 3D ligand structure in PDBQT format.
     
@@ -1745,11 +1745,13 @@ def smiles_to_3d(smiles: str, output_pdbqt: str, optimize: bool = True) -> Path:
     3. Add hydrogens using RDKit
     4. Optimize geometry using RDKit MMFF94 with UFF fallback (automatic)
     5. Convert to PDBQT using Open Babel (ONLY step using Open Babel)
+    6. Optionally write reference SDF directly from the generated conformer
     
     Args:
         smiles: SMILES string representation of the molecule
         output_pdbqt: Output PDBQT file path
         optimize: Whether to optimize geometry (default: True)
+        output_sdf: Optional output SDF path (reuses 3D conformer without re-embedding)
     
     Note:
         pH is fixed at 7.4 for hydrogen addition.
@@ -1853,6 +1855,15 @@ def smiles_to_3d(smiles: str, output_pdbqt: str, optimize: bool = True) -> Path:
             except (OSError, PermissionError) as e:
                 logger.warning(f"  ⚠ Could not remove temp file {temp_pdb}: {e}")
     
+    if output_sdf:
+        try:
+            sdf_mol = Chem.RemoveHs(mol)
+            Chem.Kekulize(sdf_mol, clearAromaticFlags=True)
+            Chem.MolToMolFile(sdf_mol, str(output_sdf))
+            logger.info(f"  Reference SDF saved: {output_sdf}")
+        except Exception as sdf_err:
+            logger.warning(f"  Could not save reference SDF: {sdf_err}")
+
     logger.info(f"SMILES conversion complete: {Path(output_pdbqt).name}")
     return Path(output_pdbqt)
 

@@ -403,19 +403,13 @@ def run_quickvina(
                 ),
             }
 
-        # ── Convert top pose to SDF ───────────────────────────────────────────
-        sdf_path = Path(tmp) / "top_pose.sdf"
-        converted = _convert_pdbqt_to_sdf_obabel(out_pdbqt, sdf_path)
-
-        if converted:
-            top_pose_sdf = sdf_path.read_text()
-        else:
-            # obabel unavailable — synthesise a minimal SDF from PDBQT atoms
-            top_pose_sdf = _pdbqt_model_to_minimal_sdf(pdbqt_text, vina_affinity)
+        # ── Synthesise top pose SDF in Python & preserve raw PDBQT ───────────
+        top_pose_sdf = _pdbqt_model_to_minimal_sdf(pdbqt_text, vina_affinity)
 
     return {
-        "top_pose_sdf":  top_pose_sdf,
-        "cnn_score":     None,   # QuickVina-W does not compute CNN scores
-        "cnn_affinity":  None,   # QuickVina-W does not compute CNN affinity
-        "vina_affinity": vina_affinity,
+        "top_pose_sdf":   top_pose_sdf,
+        "top_pose_pdbqt": pdbqt_text,
+        "cnn_score":      None,   # QuickVina-W does not compute CNN scores
+        "cnn_affinity":   None,   # QuickVina-W does not compute CNN affinity
+        "vina_affinity":  vina_affinity,
     }, None
