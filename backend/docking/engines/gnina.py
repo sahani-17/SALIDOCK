@@ -58,7 +58,7 @@ GNINA_BIN:   str   = os.environ.get("GNINA_BIN", "gnina")
 TIMEOUT_SEC: int   = int(os.environ.get("GNINA_TIMEOUT_SEC", "600"))
 
 # Performance tuning — all overridable via environment variables
-GNINA_CPU:          int   = int(os.environ.get("GNINA_CPU", "4"))           # cores per job
+GNINA_CPU:          int   = int(os.environ.get("GNINA_CPU", str(min(os.cpu_count() or 4, 4)))) # cores per job
 GNINA_EXHAUSTIVENESS: int = int(os.environ.get("GNINA_EXHAUSTIVENESS", "4")) # sampling depth (was 8)
 GNINA_NUM_MODES:    int   = int(os.environ.get("GNINA_NUM_MODES", "5"))     # output poses (was 9)
 

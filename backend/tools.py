@@ -43,12 +43,7 @@ def check_tools():
     tools['gnina']     = shutil.which('gnina') is not None
     tools['quickvina'] = shutil.which('qvina-w') is not None or shutil.which('qvina-w.exe') is not None
     
-    # Visualizer tools
-    tools['pymol']     = shutil.which('pymol') is not None or shutil.which('pymol.exe') is not None
-    tools['plip']      = shutil.which('plip') is not None
-    tools['apbs']      = shutil.which('apbs') is not None or shutil.which('apbs.exe') is not None
-    tools['pdb2pqr']   = shutil.which('pdb2pqr') is not None or shutil.which('pdb2pqr.exe') is not None
-    
+    # Tools availability
     try:
         from rdkit import Chem
         tools['rdkit'] = True
@@ -1895,7 +1890,6 @@ def convert_sdf_to_pdb(input_file: Path, output_file: Path) -> None:
 # Backward compatibility aliases
 prepare_receptor_adfr = prepare_protein
 prepare_ligand_adfr = prepare_ligand
-prepare_ligand_meeko = prepare_ligand
 
 
 # =============================================================================

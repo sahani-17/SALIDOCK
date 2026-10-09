@@ -349,6 +349,35 @@ class TestRunDockingQuickVinaSuccess:
         # rule (Rule 1) before the LOW-tier rule (Rule 2).
         assert "QuickVina" in result.routing_reason or "coordinates" in result.routing_reason.lower()
 
+    def test_quickvina_passes_cpu_flag(self):
+        meta = CavityMetadata(tier=ConfidenceTier.LOW, volume_angstrom3=300.0)
+        with tempfile.TemporaryDirectory() as tmp:
+            rec = Path(tmp) / "receptor.pdbqt"
+            lig = Path(tmp) / "ligand.pdbqt"
+            _make_valid_pdbqt(rec)
+            _make_valid_pdbqt(lig)
+            captured_cmd = []
+            with (
+                patch("docking.engines.quickvina.shutil.which", return_value="/usr/local/bin/qvina-w"),
+                patch("docking.engines.quickvina.subprocess.run") as mock_run,
+                patch("docking.engines.quickvina._convert_pdbqt_to_sdf_obabel", return_value=False),
+            ):
+                def fake_run(cmd, **kwargs):
+                    captured_cmd.extend(cmd)
+                    out_path = cmd[cmd.index("--out") + 1]
+                    Path(out_path).write_text(_QVINA_PDBQT)
+                    r = MagicMock()
+                    r.returncode = 0
+                    r.stderr = ""
+                    return r
+
+                mock_run.side_effect = fake_run
+                run_docking(str(rec), str(lig), meta)
+
+            assert "--cpu" in captured_cmd
+            cpu_idx = captured_cmd.index("--cpu")
+            assert int(captured_cmd[cpu_idx + 1]) >= 1
+
 
 # ===========================================================================
 # Error condition tests

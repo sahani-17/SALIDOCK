@@ -5,7 +5,6 @@ import asyncio
 from pathlib import Path
 
 # Ensure the directory of the current Python executable is prepended to PATH
-# so that conda environment binaries (pymol, plip, apbs, pdb2pqr) are always discoverable.
 python_bin_dir = os.path.dirname(sys.executable)
 if python_bin_dir and python_bin_dir not in os.environ.get("PATH", ""):
     os.environ["PATH"] = python_bin_dir + os.pathsep + os.environ.get("PATH", "")
@@ -22,7 +21,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uuid
 import shutil
-import os
+import threading
+from functools import lru_cache
 import re
 import logging
 import json
@@ -124,31 +124,6 @@ def cloud_read(session_id: str, filename: str) -> bytes | None:
     except Exception as e:
         logger.error(f"Cloud-read failed for {session_id}/{filename}: {e}")
         return None
-
-
-# Aliases expected by validate_cloud_only_mode.py
-def save_session_file(session_id: str, filename: str, content: bytes):
-    """Save a file locally and to Supabase Storage."""
-    session_dir = WORK_DIR / session_id
-    session_dir.mkdir(exist_ok=True)
-    local_path = session_dir / filename
-    local_path.write_bytes(content)
-    logger.info(f"Local-saved: {session_id}/{filename}")
-    cloud_save(session_id, filename, content)
-
-
-def read_session_file(session_id: str, filename: str) -> bytes:
-    """Read a file from local disk, falling back to Supabase Storage."""
-    session_dir = WORK_DIR / session_id
-    local_path = session_dir / filename
-    if local_path.exists():
-        logger.info(f"Local-read: {session_id}/{filename}")
-        return local_path.read_bytes()
-    # Fall back to Supabase
-    data = cloud_read(session_id, filename)
-    if data is not None:
-        return data
-    raise FileNotFoundError(f"File not found: {session_id}/{filename}")
 
 
 def ensure_session_file(session_id: str, filename: str) -> Path:
@@ -284,47 +259,6 @@ def validate_residue_name(name: str) -> str:
         )
     return name
 
-def sanitize_ligand_name(name: str) -> str:
-    """
-    Sanitize ligand name for safe filename usage.
-    
-    Returns:
-        Safe filename string
-    """
-    # Remove dangerous characters
-    safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', name)
-    
-    # Limit length
-    safe_name = safe_name[:50]
-    
-    # Check reserved names (Windows)
-    if safe_name.upper() in RESERVED_NAMES:
-        safe_name = f"ligand_{safe_name}"
-    
-    # Ensure not empty
-    if not safe_name:
-        safe_name = "ligand"
-    
-    return safe_name
-
-def validate_docking_params(exhaustiveness: int, num_modes: int):
-    """
-    Validate docking parameters are within acceptable ranges.
-    
-    Raises:
-        HTTPException: If parameters are out of bounds
-    """
-    if not 1 <= exhaustiveness <= 100:
-        raise HTTPException(
-            status_code=400,
-            detail=f"exhaustiveness must be between 1 and 100 (got {exhaustiveness})"
-        )
-    
-    if not 1 <= num_modes <= 100:
-        raise HTTPException(
-            status_code=400,
-            detail=f"num_modes must be between 1 and 100 (got {num_modes})"
-        )
 
 def validate_pose_number(pose_number: int, session_dir: Path) -> int:
     """
@@ -510,14 +444,6 @@ async def startup_cleanup():
     except Exception as e:
         logger.error(f"Failed to start periodic background cleanup: {e}")
 
-@app.post("/api/cleanup/purge-expired")
-async def trigger_manual_cleanup():
-    """Manually trigger 24h auto-deletion of expired sessions, results, and Supabase data."""
-    cleanup_old_sessions()
-    supa_stats = {}
-    if supabase_mgr:
-        supa_stats = supabase_mgr.cleanup_old_sessions(hours=SESSION_EXPIRY_HOURS)
-    return {"status": "success", "message": "24h purge completed", "supabase": supa_stats}
 
 @app.get("/health")
 async def health_check():
@@ -729,6 +655,25 @@ def _generate_ligand_conect_records(
     return []
 
 
+@lru_cache(maxsize=16)
+def _get_cached_protein_pdb_lines(protein_source_str: str, mtime: float) -> tuple[str, ...]:
+    """Parse and clean protein ATOM/HETATM lines once, cached across poses."""
+    lines = []
+    content = Path(protein_source_str).read_text(errors="replace")
+    for line in content.splitlines():
+        if line.startswith('ATOM'):
+            resname = line[17:20].strip() if len(line) > 20 else ''
+            if resname in ('UNK', 'UNL'):
+                continue
+            lines.append(line[:66].rstrip())
+        elif line.startswith('HETATM'):
+            resname = line[17:20].strip() if len(line) > 20 else ''
+            if resname in ('HOH', 'WAT', 'H2O', 'UNK', 'UNL'):
+                continue
+            lines.append(line[:66].rstrip())
+    return tuple(lines)
+
+
 # Helper to create protein-ligand complex
 def create_protein_ligand_complex(
     protein_pdbqt: Path,
@@ -805,30 +750,12 @@ def create_protein_ligand_complex(
     # Use prepared PDB if available (preserves full residue names and chains)
     protein_pdb_path = protein_pdbqt.parent / "protein_prepared.pdb"
     protein_source = protein_pdb_path if protein_pdb_path.exists() else protein_pdbqt
-    protein_content = protein_source.read_text()
-    protein_atom_count = 0
-    for line in protein_content.splitlines():
-        if line.startswith('ATOM'):
-            # Skip any leftover UNK/UNL ligand residues from the protein
-            resname = line[17:20].strip() if len(line) > 20 else ''
-            if resname in ('UNK', 'UNL'):
-                continue
-            # Convert to PDB: keep only first 66 characters (removes PDBQT-specific columns)
-            pdb_line = line[:66].rstrip()
-            protein_lines.append(pdb_line)
-            protein_atom_count += 1
-        elif line.startswith('HETATM'):
-            # Skip water molecules and any leftover UNK/UNL residues from the protein source
-            resname = line[17:20].strip() if len(line) > 20 else ''
-            if resname in ('HOH', 'WAT', 'H2O', 'UNK', 'UNL'):
-                continue
-            pdb_line = line[:66].rstrip()
-            protein_lines.append(pdb_line)
-            protein_atom_count += 1
-        elif line.startswith('REMARK'):
-            if include_remarks:
-                header_lines.append(line)
-
+    try:
+        mtime = protein_source.stat().st_mtime
+    except OSError:
+        mtime = 0.0
+    protein_lines = list(_get_cached_protein_pdb_lines(str(protein_source), mtime))
+    protein_atom_count = len(protein_lines)
     print(f"[DEBUG] Protein atoms: {protein_atom_count} from {protein_source}")
     
     # Extract and process ligand pose
@@ -889,15 +816,6 @@ def create_protein_ligand_complex(
     
     return '\n'.join(all_lines)
 
-def check_disk_space(required_mb: int = 100):
-    """Check available disk space and log a warning if low."""
-    try:
-        total, used, free = shutil.disk_usage(WORK_DIR)
-        free_mb = free / (1024 * 1024)
-        if free_mb < required_mb:
-            logger.warning(f"Low disk space: {free_mb:.1f} MB available (requires {required_mb} MB)")
-    except Exception as e:
-        logger.debug(f"Could not check disk space: {e}")
 
 @app.post("/api/session/create")
 async def create_session():
@@ -1015,11 +933,6 @@ async def upload_file(session_id: str, filetype: str, file: UploadFile = File(..
         logger.error(f"Upload error for session {session_id}: {e}")
         return json_error(str(e))
 
-
-from pydantic import BaseModel
-
-class PrepareRequest(BaseModel):
-    file_name: str
 
 @app.get("/api/chains/{session_id}/{filename}")
 async def get_chains(session_id: str, filename: str):
@@ -1322,7 +1235,7 @@ async def prepare_ligand(session_id: str, file_name: str):
         
         # Proceed with ligand preparation
         out_pdbqt = session_dir / "ligand_prepared.pdbqt"
-        tools.prepare_ligand_adfr(inp, out_pdbqt)
+        tools.prepare_ligand(inp, out_pdbqt)
         
         # Fix 1+2: Save a Kekulized SDF reference for template-guided bond order
         # assignment in the 2D interaction diagram. Aromatic bond notation from
@@ -1382,29 +1295,6 @@ async def prepare_ligand(session_id: str, file_name: str):
             log_details=str(e)
         )
 
-@app.post("/api/convert/ligand")
-async def convert_ligand(request: PrepareRequest):
-    """Convert SDF/MOL2 ligand to PDB format for visualization."""
-    try:
-        inp = WORK_DIR / request.file_name
-        if not inp.exists():
-            raise HTTPException(status_code=404, detail=f"File {request.file_name} not found")
-        
-        # Convert to PDB
-        out_pdb = WORK_DIR / f"{inp.stem}_converted.pdb"
-        tools.convert_sdf_to_pdb(inp, out_pdb)
-        
-        # Read and return PDB content
-        pdb_content = out_pdb.read_text()
-        
-        return {
-            "status": "ok", 
-            "pdb_content": pdb_content,
-            "original_format": inp.suffix,
-            "converted_file": str(out_pdb.name)
-        }
-    except Exception as e:
-        return json_error(str(e))
 
 @app.post("/api/ligand/from-smiles/{session_id}")
 async def create_ligand_from_smiles(
@@ -1629,50 +1519,6 @@ async def download_complex_from_results(session_id: str, pose_number: int):
         raise
     except Exception as e:
         logger.error(f"Error generating complex: {str(e)}")
-        return json_error(str(e))
-
-
-@app.get("/api/results/download/report/{session_id}/{report_name}")
-async def download_report(session_id: str, report_name: str):
-    """Download report file (CSV, JSON, or TXT)."""
-    from fastapi.responses import FileResponse
-    
-    try:
-        validate_session_id(session_id)
-        
-        # Validate report name (prevent path traversal)
-        allowed_reports = ["docking_summary.csv", "docking_report.json", "parameters.txt"]
-        if report_name not in allowed_reports:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid report name. Allowed: {', '.join(allowed_reports)}"
-            )
-        
-        report_file = RESULTS_DIR / session_id / "reports" / report_name
-        
-        if not report_file.exists():
-            raise HTTPException(
-                status_code=404,
-                detail=f"Report {report_name} not found. Please run docking first."
-            )
-        
-        # Determine media type
-        media_type = "text/plain"
-        if report_name.endswith(".csv"):
-            media_type = "text/csv"
-        elif report_name.endswith(".json"):
-            media_type = "application/json"
-        
-        return FileResponse(
-            report_file,
-            filename=report_name,
-            media_type=media_type
-        )
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error downloading report: {str(e)}")
         return json_error(str(e))
 
 
@@ -2454,26 +2300,14 @@ async def run_docking_endpoint(
             except Exception as e:
                 logger.error(f"Failed to export results: {str(e)}")
             
-            # ── Persist docking outputs to Supabase ──
-            for cav in cavities:
-                cav_pdbqt = session_dir / f"docking_out_cavity_{cav['cavity_id']}_out.pdbqt"
-                if cav_pdbqt.exists():
-                    cloud_save(session_id, cav_pdbqt.name, cav_pdbqt.read_bytes())
-            main_out = session_dir / "docking_out_out.pdbqt"
-            if main_out.exists():
-                cloud_save(session_id, main_out.name, main_out.read_bytes())
-                
-            if supabase_mgr and all_poses:
-                try:
-                    supabase_mgr.save_docking_result(session_id, {
-                        "best_affinity": all_poses[0]['affinity'] if all_poses else None,
-                        "num_poses": len(all_poses),
-                        "cavity_count": len(cavities),
-                        "docking_mode": "cavity",
-                    })
-                    supabase_mgr.update_session_status(session_id, "completed")
-                except Exception as db_err:
-                    logger.error(f"Supabase DB save failed: {db_err}")
+            # ── Persist docking outputs and results to Supabase asynchronously ──
+            sync_docking_results_to_cloud_async(
+                session_id=session_id,
+                session_dir=session_dir,
+                all_poses=all_poses,
+                docking_mode="cavity",
+                cavities=cavities,
+            )
             
             if notify_email:
                 try:
@@ -2605,21 +2439,14 @@ async def run_docking_endpoint(
             except Exception as e:
                 logger.error(f"Failed to export results: {str(e)}")
             
-            # ── Persist docking outputs to Supabase ──
-            if out_pdbqt.exists():
-                cloud_save(session_id, out_pdbqt.name, out_pdbqt.read_bytes())
-                
-            if supabase_mgr and parsed:
-                try:
-                    supabase_mgr.save_docking_result(session_id, {
-                        "best_affinity": parsed[0]['affinity'] if parsed else None,
-                        "num_poses": len(parsed),
-                        "cavity_count": 0,
-                        "docking_mode": "manual",
-                    })
-                    supabase_mgr.update_session_status(session_id, "completed")
-                except Exception as db_err:
-                    logger.error(f"Supabase DB save failed: {db_err}")
+            # ── Persist docking outputs and results to Supabase asynchronously ──
+            sync_docking_results_to_cloud_async(
+                session_id=session_id,
+                session_dir=session_dir,
+                all_poses=parsed,
+                docking_mode="manual",
+                out_pdbqt=out_pdbqt,
+            )
             
             if notify_email:
                 try:
@@ -3556,286 +3383,6 @@ async def get_structure(session_id: str, filetype: str):
     except Exception as e:
         return json_error(str(e))
 
-@app.get("/api/structure/pdb/{session_id}/{filename}")
-async def get_pdb_structure(session_id: str, filename: str):
-    """
-    Convert PDBQT to clean PDB format for Mol* visualization.
-    Removes docking-specific columns (charge, atom type).
-    """
-    try:
-        session_dir = get_session_dir(session_id)
-        
-        # Validate filename to prevent path traversal
-        filename = validate_filename(filename)
-        ensure_session_file(session_id, filename)
-        pdbqt_file = session_dir / filename
-        
-        # Validate resolved path is within session directory
-        if not pdbqt_file.resolve().is_relative_to(session_dir.resolve()):
-            raise HTTPException(status_code=403, detail="Access denied")
-        
-        if not pdbqt_file.exists():
-            raise HTTPException(status_code=404, detail=f"File not found: {filename}")
-        
-        # Convert PDBQT to PDB (remove extra columns)
-        pdb_lines = []
-        for line in pdbqt_file.read_text().splitlines():
-            if line.startswith(('ATOM', 'HETATM')):
-                # Keep only standard PDB columns (first 66 characters)
-                # This removes the charge and atom type columns added by the docking software
-                pdb_lines.append(line[:66])
-            elif line.startswith(('MODEL', 'ENDMDL', 'TER', 'END', 'CONECT')):
-                pdb_lines.append(line)
-            elif line.startswith('REMARK'):
-                pdb_lines.append(line)
-        
-        pdb_content = '\n'.join(pdb_lines)
-        
-        return PlainTextResponse(
-            pdb_content,
-            media_type="chemical/x-pdb",
-            headers={"Content-Disposition": f"inline; filename={filename.replace('.pdbqt', '.pdb')}"}
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        return json_error(str(e))
-
-@app.get("/api/pose/{session_id}/{mode}")
-async def get_pose(session_id: str, mode: int = 1):
-    """Extract a specific pose from docking results."""
-    try:
-        session_dir = get_session_dir(session_id)
-        ensure_session_file(session_id, "docking_out_out.pdbqt")
-        mode = validate_pose_number(mode, session_dir)
-        
-        out_pdbqt = session_dir / "docking_out_out.pdbqt"
-        if not out_pdbqt.exists():
-            raise HTTPException(status_code=404, detail="Docking output not found")
-        
-        pose = results.extract_pose_from_pdbqt(str(out_pdbqt), int(mode))
-        return PlainTextResponse(pose)
-    except Exception as e:
-        return json_error(str(e))
-
-@app.get("/api/pose/pdb/{session_id}/{mode}")
-async def get_pose_pdb(session_id: str, mode: int = 1):
-    """
-    Extract a specific pose in clean PDB format for Mol* visualization.
-    Removes docking-specific columns (charge, atom type) from PDBQT.
-    
-    Args:
-        session_id: Session ID
-        mode: Pose number (1-based, e.g., 1 for best pose)
-    """
-    try:
-        session_dir = get_session_dir(session_id)
-        ensure_session_file(session_id, "docking_out_out.pdbqt")
-        mode = validate_pose_number(mode, session_dir)
-        out_pdbqt = session_dir / "docking_out_out.pdbqt"
-        if not out_pdbqt.exists():
-            raise HTTPException(status_code=404, detail="Docking output not found")
-        
-        # Extract the specific pose (PDBQT format)
-        pose_pdbqt = results.extract_pose_from_pdbqt(str(out_pdbqt), int(mode))
-        
-        # Convert PDBQT to clean PDB format
-        pdb_lines = []
-        for line in pose_pdbqt.splitlines():
-            if line.startswith(('ATOM', 'HETATM')):
-                # Keep only standard PDB columns (first 66 characters)
-                # This removes the charge and atom type columns added by the docking software
-                pdb_lines.append(line[:66].rstrip())
-            elif line.startswith(('MODEL', 'ENDMDL', 'TER', 'END', 'CONECT')):
-                pdb_lines.append(line)
-            elif line.startswith('REMARK'):
-                pdb_lines.append(line)
-        
-        pdb_content = '\n'.join(pdb_lines)
-        
-        return PlainTextResponse(
-            pdb_content,
-            media_type="chemical/x-pdb",
-            headers={"Content-Disposition": f"inline; filename=pose_{mode}.pdb"}
-        )
-    except Exception as e:
-        return json_error(str(e))
-
-@app.get("/api/complex/pdb/{session_id}/{mode}")
-async def get_complex_pdb(session_id: str, mode: int = 1):
-    """
-    Get protein-ligand complex in PDB format for visualization.
-    
-    This endpoint solves the issue where docking output PDBQT files contain only
-    ligand coordinates. It merges the prepared protein structure with the selected
-    ligand pose into a single PDB file for complete complex visualization.
-    
-    Args:
-        session_id: Session ID
-        mode: Ligand pose number (1-based, e.g., 1 for best pose)
-    
-    Returns:
-        Combined protein-ligand complex in clean PDB format
-    
-    Example:
-        GET /api/complex/pdb/{session_id}/1
-        Returns the protein with the best-scoring ligand pose
-    """
-    try:
-        session_dir = get_session_dir(session_id)
-        
-        # Pre-fetch key files from Supabase if missing locally
-        ensure_session_file(session_id, "protein_prepared.pdbqt")
-        ensure_session_file(session_id, "protein_prepared.pdb")
-        ensure_session_file(session_id, "docking_out_out.pdbqt")
-        ensure_session_file(session_id, "cavities.json")
-        ensure_session_file(session_id, "grid_params.json")
-        
-        # Pre-fetch cavity-specific files if relevant
-        cavities_json = session_dir / "cavities.json"
-        if cavities_json.exists():
-            try:
-                with open(cavities_json) as f:
-                    cavs = json.load(f)
-                for i in range(len(cavs)):
-                    cav_num = i + 1
-                    ensure_session_file(session_id, f"docking_out_cavity_{cav_num}_out.pdbqt")
-            except Exception as e:
-                logger.warning(f"Could not pre-fetch cavity PDBQTs: {e}")
-
-        mode = validate_pose_number(mode, session_dir)
-        protein_pdbqt = session_dir / "protein_prepared.pdbqt"
-        ligand_pdbqt, internal_mode = resolve_pose_pdbqt(session_dir, mode)
-        
-        if not protein_pdbqt.exists():
-            raise HTTPException(status_code=404, detail="Prepared protein not found")
-        if not ligand_pdbqt or not ligand_pdbqt.exists():
-            raise HTTPException(status_code=404, detail="Docking results not found")
-        
-        # Create the complex using helper function
-        complex_pdb = create_protein_ligand_complex(
-            protein_pdbqt=protein_pdbqt,
-            ligand_pdbqt=ligand_pdbqt,
-            pose_number=internal_mode,
-            include_remarks=True
-        )
-        
-        return PlainTextResponse(
-            complex_pdb,
-            media_type="chemical/x-pdb",
-            headers={"Content-Disposition": f"inline; filename=complex_pose_{mode}.pdb"}
-        )
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        error_details = traceback.format_exc()
-        print(f"Error creating complex: {error_details}")
-        return json_error(str(e))
-
-@app.get("/api/pose/download/{session_id}/{mode}")
-async def download_pose(session_id: str, mode: int = 1):
-    """
-    Download a specific pose as a PDBQT file.
-    
-    Args:
-        session_id: Session ID
-        mode: Pose number (1-based, e.g., 1 for best pose, 2 for second best, etc.)
-    """
-    try:
-        session_dir = get_session_dir(session_id)
-        mode = validate_pose_number(mode, session_dir)
-        out_pdbqt = session_dir / "docking_out_out.pdbqt"
-        if not out_pdbqt.exists():
-            raise HTTPException(status_code=404, detail="Docking output not found")
-        
-        # Extract the specific pose
-        pose_content = results.extract_pose_from_pdbqt(str(out_pdbqt), int(mode))
-        
-        # Return as downloadable file
-        from fastapi.responses import Response
-        return Response(
-            content=pose_content,
-            media_type="chemical/x-pdbqt",
-            headers={
-                "Content-Disposition": f"attachment; filename=pose_{mode}.pdbqt"
-            }
-        )
-    except Exception as e:
-        return json_error(str(e))
-
-@app.get("/api/poses/download/{session_id}")
-async def download_top_poses(session_id: str, top_n: int = 5):
-    """
-    Download top N poses as a ZIP file containing individual PDBQT files.
-    
-    Args:
-        session_id: Session ID
-        top_n: Number of top poses to download (default: 5, max: 20)
-    """
-    try:
-        import zipfile
-        import io
-        
-        session_dir = get_session_dir(session_id)
-        out_pdbqt = session_dir / "docking_out_out.pdbqt"
-        if not out_pdbqt.exists():
-            raise HTTPException(status_code=404, detail="Docking output not found")
-        
-        # Limit to reasonable number
-        top_n = min(max(1, top_n), 20)
-        
-        # Parse results to get affinity scores
-        parsed_results = results.parse_vina_output(str(out_pdbqt))
-        available_poses = len(parsed_results)
-        
-        if available_poses == 0:
-            raise HTTPException(status_code=404, detail="No poses found in docking results")
-        
-        # Adjust top_n if fewer poses available
-        top_n = min(top_n, available_poses)
-        
-        # Create ZIP file in memory
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            # Add README with binding affinities
-            readme_content = f"Top {top_n} Binding Poses\n"
-            readme_content += "=" * 50 + "\n\n"
-            for i in range(top_n):
-                pose_data = parsed_results[i]
-                readme_content += f"Pose {i+1}:\n"
-                readme_content += f"  Affinity: {pose_data['affinity']} kcal/mol\n"
-                readme_content += f"  RMSD (lower bound): {pose_data['rmsd_lb']} Å\n"
-                readme_content += f"  RMSD (upper bound): {pose_data['rmsd_ub']} Å\n\n"
-            
-            zip_file.writestr("README.txt", readme_content)
-            
-            # Extract and add each pose
-            for i in range(1, top_n + 1):
-                pose_content = results.extract_pose_from_pdbqt(str(out_pdbqt), i)
-                pose_data = parsed_results[i-1]
-                
-                # Filename includes affinity for easy identification
-                filename = f"pose_{i}_affinity_{pose_data['affinity']:.2f}.pdbqt"
-                zip_file.writestr(filename, pose_content)
-        
-        # Prepare ZIP for download
-        zip_buffer.seek(0)
-        
-        from fastapi.responses import StreamingResponse
-        return StreamingResponse(
-            zip_buffer,
-            media_type="application/zip",
-            headers={
-                "Content-Disposition": f"attachment; filename=top_{top_n}_poses.zip"
-            }
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        return json_error(str(e))
 
 @app.get("/api/results/{session_id}")
 async def get_results(session_id: str):
@@ -3897,6 +3444,81 @@ async def get_results(session_id: str):
         return {"status": "ok", "results": parsed, "grid_params": manual_grid}
     except Exception as e:
         return json_error(str(e))
+
+def sync_docking_results_to_cloud_async(
+    session_id: str,
+    session_dir: Path,
+    all_poses: list,
+    docking_mode: str = "cavity",
+    cavities: list | None = None,
+    out_pdbqt: Path | None = None,
+):
+    """Upload docking outputs and exported result files to Supabase in a background thread."""
+    def _worker():
+        import concurrent.futures
+        try:
+            uploads: list[tuple[str, bytes]] = []
+
+            # 1. Docking outputs
+            if cavities:
+                for cav in cavities:
+                    cav_id = cav.get('cavity_id') if isinstance(cav, dict) else getattr(cav, 'cavity_id', None)
+                    if cav_id is not None:
+                        cav_file = session_dir / f"docking_out_cavity_{cav_id}_out.pdbqt"
+                        if cav_file.exists():
+                            uploads.append((cav_file.name, cav_file.read_bytes()))
+                main_out = session_dir / "docking_out_out.pdbqt"
+                if main_out.exists():
+                    uploads.append((main_out.name, main_out.read_bytes()))
+            elif out_pdbqt and out_pdbqt.exists():
+                uploads.append((out_pdbqt.name, out_pdbqt.read_bytes()))
+
+            # 2. Exported results folder files
+            session_results_dir = RESULTS_DIR / session_id
+            if session_results_dir.exists():
+                complexes_dir = session_results_dir / "complexes"
+                if complexes_dir.exists():
+                    for f in complexes_dir.glob("*.pdb"):
+                        uploads.append((f"results/complexes/{f.name}", f.read_bytes()))
+                interactions_dir = session_results_dir / "interactions"
+                if interactions_dir.exists():
+                    for f in interactions_dir.glob("*.json"):
+                        uploads.append((f"results/interactions/{f.name}", f.read_bytes()))
+                reports_dir = session_results_dir / "reports"
+                if reports_dir.exists():
+                    for f in reports_dir.iterdir():
+                        if f.is_file():
+                            uploads.append((f"results/reports/{f.name}", f.read_bytes()))
+                readme = session_results_dir / "README.txt"
+                if readme.exists():
+                    uploads.append(("results/README.txt", readme.read_bytes()))
+
+            # Execute uploads concurrently
+            if uploads:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                    list(executor.map(lambda item: cloud_save(session_id, item[0], item[1]), uploads))
+
+            # 3. Supabase DB record
+            if supabase_mgr and all_poses:
+                try:
+                    best_aff = None
+                    if all_poses and isinstance(all_poses[0], dict):
+                        best_aff = all_poses[0].get('affinity')
+                    supabase_mgr.save_docking_result(session_id, {
+                        "best_affinity": best_aff,
+                        "num_poses": len(all_poses),
+                        "cavity_count": len(cavities) if cavities else 0,
+                        "docking_mode": docking_mode,
+                    })
+                    supabase_mgr.update_session_status(session_id, "completed")
+                except Exception as db_err:
+                    logger.error(f"Supabase DB save failed: {db_err}")
+            logger.info(f"Background cloud upload completed for session {session_id} ({len(uploads)} files)")
+        except Exception as e:
+            logger.error(f"Background cloud upload error for session {session_id}: {e}")
+
+    threading.Thread(target=_worker, daemon=True).start()
+
 
 # ====================================================
 # RESULT EXPORT FUNCTIONS (SwissDock-style organization)
@@ -3962,8 +3584,6 @@ def export_results_to_user_folder(session_id: str, docking_results: list, dockin
                 dest_file.write_text(complex_pdb)
                 tools.strip_model_records(str(dest_file))   # Fix 3: remove MODEL/ENDMDL tags for Mol* viewer
                 logger.info(f"Exported complex_pose_{i}.pdb to results")
-                
-                pass
         except Exception as e:
             logger.error(f"Failed to export complex for pose {i}: {str(e)}")
     
@@ -3984,29 +3604,6 @@ def export_results_to_user_folder(session_id: str, docking_results: list, dockin
     create_user_readme(session_results_dir, len(docking_results))
     
     logger.info(f"Results exported to {session_results_dir}")
-    
-    # ── Persist all exported result files to Supabase Storage ──
-    try:
-        # Upload complexes
-        if complexes_dir.exists():
-            for f in complexes_dir.glob("*.pdb"):
-                cloud_save(session_id, f"results/complexes/{f.name}", f.read_bytes())
-        # Upload interactions
-        if interactions_dir.exists():
-            for f in interactions_dir.glob("*.json"):
-                cloud_save(session_id, f"results/interactions/{f.name}", f.read_bytes())
-        # Upload reports
-        if reports_dir.exists():
-            for f in reports_dir.iterdir():
-                if f.is_file():
-                    cloud_save(session_id, f"results/reports/{f.name}", f.read_bytes())
-        # Upload README
-        readme_file = session_results_dir / "README.txt"
-        if readme_file.exists():
-            cloud_save(session_id, "results/README.txt", readme_file.read_bytes())
-        logger.info(f"Cloud-uploaded all result files for session {session_id}")
-    except Exception as cloud_err:
-        logger.error(f"Failed to upload result files to Supabase: {cloud_err}")
 
 
 def generate_docking_summary_csv(docking_results: list, output_dir: Path):
@@ -4137,53 +3734,6 @@ Generated by Molecular Docking Platform
 # DOCKING ENDPOINT
 # ====================================================
 
-@app.get("/api/protein/metadata/{session_id}")
-async def get_protein_metadata(session_id: str):
-    """Get protein structure metadata (chains, residues, atoms)."""
-    try:
-        session_dir = get_session_dir(session_id)
-        protein_file = session_dir / "protein_prepared.pdbqt"
-        
-        if not protein_file.exists():
-            raise HTTPException(status_code=404, detail="Prepared protein not found")
-        
-        # Parse PDBQT to extract metadata
-        chains = set()
-        num_atoms = 0
-        residues = set()
-        residue_names = set()
-        
-        for line in protein_file.read_text().splitlines():
-            if line.startswith('ATOM') or line.startswith('HETATM'):
-                try:
-                    chain = line[21] if len(line) > 21 else ' '
-                    chains.add(chain)
-                    
-                    res_name = line[17:20].strip() if len(line) > 20 else ''
-                    res_num = line[22:26].strip() if len(line) > 26 else ''
-                    if res_name and res_num:
-                        residues.add(f"{res_name}_{res_num}_{chain}")
-                        residue_names.add(res_name)
-                    
-                    num_atoms += 1
-                except (ValueError, IndexError):
-                    continue
-        
-        return {
-            "status": "ok",
-            "metadata": {
-                "chains": sorted([c for c in chains if c.strip()]),
-                "num_chains": len([c for c in chains if c.strip()]),
-                "num_residues": len(residues),
-                "num_atoms": num_atoms,
-                "residue_types": sorted(residue_names)
-            }
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        return json_error(str(e))
-
 @app.delete("/api/session/{session_id}")
 async def delete_session(session_id: str):
     """Delete a session and all associated files."""
@@ -4202,105 +3752,6 @@ async def delete_session(session_id: str):
     except Exception as e:
         return json_error(str(e))
 
-@app.delete("/api/clear")
-async def clear_work_dir():
-    """Clear all files in work directory."""
-    try:
-        for item in WORK_DIR.iterdir():
-            if item.is_file():
-                item.unlink()
-        return {"status": "ok", "message": "Work directory cleared"}
-    except Exception as e:
-        return json_error(str(e))
-
-@app.get("/api/interactions/{session_id}/{pose_number}")
-async def get_interactions(session_id: str, pose_number: int = 1):
-    """
-    Analyze protein-ligand interactions for a specific pose.
-    
-    Args:
-        session_id: Session ID
-        pose_number: Pose number to analyze (1-based)
-    
-    Returns:
-        Detailed interaction analysis including all interaction types
-    """
-    try:
-        import interaction_analysis
-        
-        session_dir = get_session_dir(session_id)
-        protein_file = session_dir / "protein_prepared.pdbqt"
-        ligand_file = session_dir / "docking_out_out.pdbqt"
-        
-        if not protein_file.exists():
-            raise HTTPException(status_code=404, detail="Prepared protein not found")
-        if not ligand_file.exists():
-            raise HTTPException(status_code=404, detail="Docking results not found")
-        
-        # Analyze interactions
-        result = interaction_analysis.analyze_interactions(
-            str(protein_file),
-            str(ligand_file),
-            pose_number
-        )
-        
-        # Check if there was an error in the analysis
-        if 'error' in result:
-            # Return the result with error info but don't raise exception
-            return {"status": "error", "message": result['error'], **result}
-        
-        return {"status": "ok", **result}
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        error_details = traceback.format_exc()
-        print(f"Error in interaction analysis: {error_details}")
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "message": str(e),
-                "details": error_details
-            }
-        )
-
-@app.get("/api/interactions/summary/{session_id}")
-async def get_interactions_summary(session_id: str, num_poses: int = 9):
-    """
-    Get interaction summary for all poses.
-    
-    Args:
-        session_id: Session ID
-        num_poses: Number of poses to analyze (default: 9)
-    
-    Returns:
-        Summary of interactions for each pose
-    """
-    try:
-        import interaction_analysis
-        
-        session_dir = get_session_dir(session_id)
-        protein_file = session_dir / "protein_prepared.pdbqt"
-        ligand_file = session_dir / "docking_out_out.pdbqt"
-        
-        if not protein_file.exists():
-            raise HTTPException(status_code=404, detail="Prepared protein not found")
-        if not ligand_file.exists():
-            raise HTTPException(status_code=404, detail="Docking results not found")
-        
-        # Get summaries for all poses
-        summaries = interaction_analysis.get_interaction_summary_all_poses(
-            str(protein_file),
-            str(ligand_file),
-            num_poses
-        )
-        
-        return {"status": "ok", "summaries": summaries}
-    except HTTPException:
-        raise
-    except Exception as e:
-        return json_error(str(e))
 
 def resolve_pose_pdbqt(session_dir: Path, rank: int) -> tuple[Path, int]:
     """
@@ -4425,18 +3876,6 @@ async def get_2d_interaction_svg(session_id: str, pose: int):
     ensure_session_file(session_id, "ligand_ref.sdf")
     ensure_session_file(session_id, "docking_out_out.pdbqt")
     
-    # Pre-fetch cavity-specific files if relevant
-    cavities_json = session_dir / "cavities.json"
-    if cavities_json.exists():
-        try:
-            with open(cavities_json) as f:
-                cavs = json.load(f)
-            for i in range(len(cavs)):
-                cav_num = i + 1
-                ensure_session_file(session_id, f"docking_out_cavity_{cav_num}_out.pdbqt")
-        except Exception as e:
-            logger.warning(f"Could not pre-fetch cavity PDBQTs: {e}")
-
     protein_pdbqt = session_dir / "protein_prepared.pdbqt"
     if not protein_pdbqt.exists():
         raise HTTPException(status_code=404, detail="Prepared protein not found")
@@ -4502,149 +3941,6 @@ async def get_2d_interaction_svg(session_id: str, pose: int):
             except:
                 pass
 
-@app.get("/api/batch/interactions/2d/{session_id}/{ligand_idx}/{pose}")
-async def get_batch_2d_interaction_svg(session_id: str, ligand_idx: int, pose: int):
-    """
-    Generate and return a 2D interaction diagram SVG for the given batch ligand pose.
-    """
-    from fastapi.responses import Response
-    from interaction_2d import parse_pdb, detect, render_svg
-    try:
-        session_dir = get_session_dir(session_id)
-        
-        ensure_session_file(session_id, "protein_prepared.pdbqt")
-        ensure_session_file(session_id, "protein_prepared.pdb")
-        
-        ligand_name = f"docking_out_ligand_{ligand_idx}_out.pdbqt"
-        ensure_session_file(session_id, ligand_name)
-        
-        sdf_ref_name = f"ligand_{ligand_idx}_ref.sdf"
-        ensure_session_file(session_id, sdf_ref_name)
-        
-        protein_pdbqt = session_dir / "protein_prepared.pdbqt"
-        ligand_pdbqt = session_dir / ligand_name
-        
-        if not protein_pdbqt.exists():
-            raise HTTPException(status_code=404, detail="Prepared protein not found")
-        if not ligand_pdbqt.exists():
-            raise HTTPException(status_code=404, detail=f"Docking output for ligand index {ligand_idx} not found")
-            
-        pose = max(1, pose)
-        affinity = 0.0
-        try:
-            parsed_results = results.parse_vina_output(str(ligand_pdbqt))
-            if parsed_results and len(parsed_results) >= pose:
-                affinity = parsed_results[pose - 1].get("affinity", 0.0)
-        except Exception as e:
-            logger.warning(f"Could not parse affinity for batch ligand {ligand_idx} pose {pose}: {e}")
-            
-        sdf_ref_path = session_dir / sdf_ref_name
-        original_sdf_path = str(sdf_ref_path) if sdf_ref_path.exists() else None
-        
-        complex_pdb_string = create_protein_ligand_complex(
-            protein_pdbqt=protein_pdbqt,
-            ligand_pdbqt=ligand_pdbqt,
-            pose_number=pose,
-            include_remarks=False
-        )
-        
-        complex_path = session_dir / f"temp_batch_complex_{ligand_idx}_{pose}.pdb"
-        try:
-            complex_path.write_text(complex_pdb_string, encoding="utf-8")
-            protein_atoms, ligand_atoms = parse_pdb(str(complex_path))
-            interactions = detect(protein_atoms, ligand_atoms, pdb_path=str(complex_path))
-            svg_content = render_svg(
-                str(complex_path), interactions, affinity,
-                original_sdf_path=original_sdf_path
-            )
-            return Response(content=svg_content, media_type="image/svg+xml")
-        finally:
-            if complex_path.exists():
-                try:
-                    complex_path.unlink()
-                except:
-                    pass
-    except Exception as e:
-        logger.error(f"Failed to generate 2D interactions for batch ligand {ligand_idx}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/interactions/3d/{session_id}/{pose}")
-async def get_3d_interaction_lines(session_id: str, pose: int):
-    """
-    Return JSON list of interaction records with 3D Cartesian coordinates
-    for ligand atom (origin) and protein residue centroid (endpoint).
-    Used by the frontend to render colored dashed cylinders in Mol*.
-    """
-    from fastapi.responses import JSONResponse
-    from interaction_2d import parse_pdb, detect
-
-    session_dir = get_session_dir(session_id)
-    ensure_session_file(session_id, "protein_prepared.pdb")
-    ensure_session_file(session_id, "protein_prepared.pdbqt")
-
-    protein_pdbqt = session_dir / "protein_prepared.pdbqt"
-    ligand_pdbqt, internal_mode = resolve_pose_pdbqt(session_dir, pose)
-    if not ligand_pdbqt or not ligand_pdbqt.exists():
-        raise HTTPException(404, f"Docking results not found for pose {pose}")
-
-    affinity = 0.0
-    try:
-        parsed = results.parse_vina_output(str(ligand_pdbqt))
-        if parsed and len(parsed) >= internal_mode:
-            affinity = parsed[internal_mode - 1].get("affinity", 0.0)
-    except Exception:
-        pass
-
-    complex_pdb = create_protein_ligand_complex(
-        protein_pdbqt=protein_pdbqt,
-        ligand_pdbqt=ligand_pdbqt,
-        pose_number=internal_mode,
-        include_remarks=False,
-    )
-    complex_path = session_dir / f"temp_3d_lines_pose_{pose}.pdb"
-    try:
-        with open(complex_path, "w") as f:
-            f.write(complex_pdb)
-        protein_atoms, ligand_atoms = parse_pdb(str(complex_path))
-        
-        # Parse PDB for H-atoms if available for C-H bond analysis
-        _, _, h_atoms = parse_pdb(str(complex_path), return_h=True)
-        
-        interactions = detect(protein_atoms, ligand_atoms, pdb_path=str(complex_path), h_atoms=h_atoms)
-
-        records = []
-        for ix in interactions:
-            li = ix.get("lig_atom_idx", 0)
-            la = ligand_atoms[li] if li < len(ligand_atoms) else {}
-            res_atoms = [a for a in protein_atoms
-                         if a["resid"] == ix["resid"]
-                         and a["chain"] == ix["chain"]]
-            if not res_atoms:
-                continue
-            rx = sum(a["x"] for a in res_atoms) / len(res_atoms)
-            ry = sum(a["y"] for a in res_atoms) / len(res_atoms)
-            rz = sum(a["z"] for a in res_atoms) / len(res_atoms)
-            records.append({
-                "type":    ix["type"],
-                "label":   f"{ix['resname']} {ix['chain']}:{ix['resid']}",
-                "resname": ix["resname"],
-                "resid":   ix["resid"],
-                "chain":   ix["chain"],
-                "dist":    round(ix.get("dist", 0.0), 3),
-                "lig_x":  round(la.get("x", 0.0), 3),
-                "lig_y":  round(la.get("y", 0.0), 3),
-                "lig_z":  round(la.get("z", 0.0), 3),
-                "res_x":  round(rx, 3),
-                "res_y":  round(ry, 3),
-                "res_z":  round(rz, 3),
-            })
-        return {"pose": pose, "affinity": affinity, "interactions": records}
-    finally:
-        if complex_path.exists():
-            try:
-                complex_path.unlink()
-            except:
-                pass
 
 @app.post("/api/alphafold/uniprot/{session_id}")
 async def fetch_alphafold_from_uniprot(session_id: str, uniprot_id: str):

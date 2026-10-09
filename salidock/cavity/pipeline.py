@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import logging
+import shutil
 import time
 from pathlib import Path
 from typing import List, Optional
@@ -73,22 +74,39 @@ class CavityDetectionPipeline:
                 log.error("fpocket runner error: %s", exc, exc_info=True)
                 return []
 
+        can_run_puresnet = cfg.use_puresnet and (shutil.which("docker") is not None)
         cascade_triggered = False
         tools_used = ["p2rank"]
-        if cfg.use_puresnet:
+        if can_run_puresnet:
             tools_used.append("puresnet")
 
-        # ── Primary tools execution ──────────────────────────────────────────
-        p2r_pockets, pur_pockets = self._run_primary_tools_parallel(pdb_path)
-        fp_pockets = []
         dist = None
+        fp_pockets = []
 
-        # ── Cascade Check ────────────────────────────────────────────────────
-        if not cfg.cascade_mode:
-            log.info("Cascade mode disabled: running fpocket along with primary tools")
-            fp_pockets = _run_fpocket_helper()
+        if not can_run_puresnet:
+            # Without PUResNet, run P2Rank and fpocket concurrently (saves ~50% wall-clock time)
+            log.info("PUResNet unavailable: running P2Rank and fpocket concurrently")
             tools_used.append("fpocket")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                f_p2r = pool.submit(lambda: run_p2rank(pdb_path, timeout_sec=cfg.timeout_sec, p2rank_path=cfg.p2rank_path))
+                f_fp = pool.submit(_run_fpocket_helper)
+                p2r_pockets = f_p2r.result()
+                fp_pockets = f_fp.result()
+            pur_pockets = []
+        elif not cfg.cascade_mode:
+            # Cascade disabled: run all 3 tools concurrently
+            log.info("Cascade mode disabled: running all tools concurrently")
+            tools_used.append("fpocket")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+                f_p2r = pool.submit(lambda: run_p2rank(pdb_path, timeout_sec=cfg.timeout_sec, p2rank_path=cfg.p2rank_path))
+                f_pur = pool.submit(lambda: run_puresnet(pdb_path, docker_image=cfg.puresnet_docker_image, top_n=cfg.puresnet_top_n, timeout_sec=cfg.timeout_sec))
+                f_fp = pool.submit(_run_fpocket_helper)
+                p2r_pockets = f_p2r.result()
+                pur_pockets = f_pur.result()
+                fp_pockets = f_fp.result()
         else:
+            # Primary tools execution with cascade check
+            p2r_pockets, pur_pockets = self._run_primary_tools_parallel(pdb_path)
             agreement = False
             p2r_top1 = p2r_pockets[0] if p2r_pockets else None
             pur_top1 = pur_pockets[0] if pur_pockets else None
