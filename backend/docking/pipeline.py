@@ -25,6 +25,7 @@ Error mapping
 """
 from __future__ import annotations
 
+from pathlib import Path
 import logging
 from typing import Optional, Union
 
@@ -40,6 +41,23 @@ from docking.models import (
 from docking.router import select_engine
 
 log = logging.getLogger(__name__)
+
+
+def _sanitize_pdbqt(path: str, is_receptor: bool = False) -> None:
+    """Strip tags not supported by AutoDock Vina / GNINA / QuickVina (e.g. COMPND, HEADER, CONECT)."""
+    try:
+        p = Path(path)
+        if not p.is_file():
+            return
+        lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
+        allowed = ("ATOM", "HETATM", "REMARK", "TER") if is_receptor else (
+            "ROOT", "ENDROOT", "BRANCH", "ENDBRANCH", "ATOM", "HETATM", "TORSDOF", "REMARK"
+        )
+        cleaned = [l for l in lines if l.strip().startswith(allowed)]
+        if len(cleaned) != len(lines):
+            p.write_text("\n".join(cleaned) + "\n", encoding="utf-8")
+    except Exception:
+        pass
 
 
 def run_docking(
@@ -97,6 +115,10 @@ def run_docking(
     ... )
     >>> result = run_docking("receptor.pdbqt", "ligand.pdbqt", meta_low)
     """
+    # ── Step 0: Sanitize inputs (strip stray COMPND/HEADER/CONECT tags) ───────
+    _sanitize_pdbqt(receptor_pdbqt, is_receptor=True)
+    _sanitize_pdbqt(ligand_pdbqt, is_receptor=False)
+
     # ── Step 1: Routing decision ──────────────────────────────────────────────
     engine, routing_reason = select_engine(cavity_metadata)
     log.info("[docking] engine=%s reason=%r", engine.value, routing_reason)

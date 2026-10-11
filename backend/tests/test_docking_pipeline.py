@@ -649,3 +649,58 @@ class TestRunDockingCustomCoordinates:
         assert isinstance(result, DockingResult)
         assert result.engine_used == EngineChoice.QUICKVINA
 
+
+class TestSanitizePdbqt:
+    """Tests for PDBQT sanitization (stripping COMPND/HEADER/CONECT tags)."""
+
+    def test_sanitize_ligand_strips_compnd_and_conect(self):
+        from docking.pipeline import _sanitize_pdbqt
+
+        with tempfile.TemporaryDirectory() as tmp:
+            lig_path = Path(tmp) / "ligand.pdbqt"
+            lig_path.write_text(
+                "REMARK  Name = test_lig\n"
+                "COMPND    5481173\n"
+                "HEADER    DRUG MOLECULE\n"
+                "ROOT\n"
+                "ATOM      1  C   UNL     1       0.0  0.0  0.0  1.00  0.00    +0.000 C \n"
+                "ENDROOT\n"
+                "TORSDOF 0\n"
+                "CONECT    1    2\n"
+            )
+
+            _sanitize_pdbqt(str(lig_path), is_receptor=False)
+            lines = lig_path.read_text().splitlines()
+
+            assert "COMPND    5481173" not in lines
+            assert "HEADER    DRUG MOLECULE" not in lines
+            assert "CONECT    1    2" not in lines
+            assert "ROOT" in lines
+            assert "ENDROOT" in lines
+            assert "TORSDOF 0" in lines
+            assert any(l.startswith("ATOM") for l in lines)
+
+    def test_sanitize_receptor_strips_torsions_and_compnd(self):
+        from docking.pipeline import _sanitize_pdbqt
+
+        with tempfile.TemporaryDirectory() as tmp:
+            rec_path = Path(tmp) / "receptor.pdbqt"
+            rec_path.write_text(
+                "REMARK  Receptor\n"
+                "COMPND    PROTEIN\n"
+                "ROOT\n"
+                "ATOM      1  N   ALA A   1       0.0  0.0  0.0  1.00 20.00    -0.400 N \n"
+                "ENDROOT\n"
+                "TORSDOF 0\n"
+            )
+
+            _sanitize_pdbqt(str(rec_path), is_receptor=True)
+            lines = rec_path.read_text().splitlines()
+
+            assert "COMPND    PROTEIN" not in lines
+            assert "ROOT" not in lines
+            assert "ENDROOT" not in lines
+            assert "TORSDOF 0" not in lines
+            assert any(l.startswith("ATOM") for l in lines)
+
+

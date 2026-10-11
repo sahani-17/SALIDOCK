@@ -153,6 +153,25 @@ def _convert_to_pdbqt_openbabel(input_file, output_pdbqt, is_receptor=True):
     except Exception as e:
         raise RuntimeError(f"Open Babel conversion failed: {e}")
 
+    _sanitize_pdbqt(output_pdbqt, is_receptor=is_receptor)
+
+
+def _sanitize_pdbqt(path, is_receptor=False):
+    """Strip tags not supported by AutoDock Vina / GNINA / QuickVina (e.g. COMPND, HEADER, CONECT)."""
+    try:
+        p = Path(path)
+        if not p.is_file():
+            return
+        lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
+        allowed = ("ATOM", "HETATM", "REMARK", "TER") if is_receptor else (
+            "ROOT", "ENDROOT", "BRANCH", "ENDBRANCH", "ATOM", "HETATM", "TORSDOF", "REMARK"
+        )
+        cleaned = [l for l in lines if l.strip().startswith(allowed)]
+        if len(cleaned) != len(lines):
+            p.write_text("\n".join(cleaned) + "\n", encoding="utf-8")
+    except Exception as e:
+        logger.warning(f"Failed to sanitize PDBQT {path}: {e}")
+
 
 def detect_chains(input_pdb):
     """
@@ -1709,8 +1728,10 @@ def prepare_ligand(input_ligand, output_pdbqt, optimize=True):
     else:
         logger.info("Step 3/4: Skipping geometry optimization...")
     
-    # Step 4: Save as PDB intermediate
+    # Step 4: Save as PDB intermediate (clear _Name so RDKit does not emit COMPND lines)
     logger.info("Step 4/4: Converting to PDBQT format...")
+    if mol.HasProp('_Name'):
+        mol.ClearProp('_Name')
     temp_pdb = str(output_pdbqt).replace('.pdbqt', '_temp.pdb')
     Chem.MolToPDBFile(mol, temp_pdb)
     
@@ -1841,7 +1862,9 @@ def smiles_to_3d(smiles: str, output_pdbqt: str, optimize: bool = True, output_s
     temp_pdb = str(output_pdbqt).replace('.pdbqt', '_temp.pdb')
     
     try:
-        # Save as PDB intermediate
+        # Save as PDB intermediate (clear _Name so RDKit does not emit COMPND lines)
+        if mol.HasProp('_Name'):
+            mol.ClearProp('_Name')
         Chem.MolToPDBFile(mol, temp_pdb)
         
         # Convert to PDBQT using Open Babel
