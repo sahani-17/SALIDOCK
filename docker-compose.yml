@@ -7,6 +7,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
@@ -22,7 +24,8 @@ services:
     restart: always
     user: root
     env_file:
-      - ./backend/.env          # loads all docking tuning vars (GNINA_BIN, QUICKVINA_BIN, etc.)
+      - path: ./backend/.env
+        required: false
     environment:
       # These override anything in .env for production correctness
       - ENVIRONMENT=production

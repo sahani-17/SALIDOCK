@@ -49,3 +49,7 @@ backend/gnina
 SALIDOCK_Manuscript*
 build_manuscript_docx.py
 figures/
+
+# Agent skills & config
+.agents/
+skills-lock.json

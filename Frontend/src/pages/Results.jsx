@@ -10,7 +10,7 @@ import Navbar from '../components/Navbar';
 import ViewerToolbar from '../components/results/ViewerToolbar';
 import ViewerToggles from '../components/results/ViewerToggles';
 import PosesTable from '../components/results/PosesTable';
-
+import SegmentedControl from '../components/ui/SegmentedControl';
 import ResultsSkeleton from '../components/results/ResultsSkeleton';
 
 function Results() {
@@ -184,24 +184,15 @@ function Results() {
       <div className="max-w-7xl mx-auto px-6 py-8">
         <section className="bg-card rounded-2xl border border-border p-6 mb-6 shadow-elevated">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-4">
-            <div className="flex bg-muted rounded-lg p-1 border border-border">
-              <button
-                onClick={() => setViewMode('3d')}
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-md transition-all ${
-                  viewMode === '3d' ? 'bg-card shadow-sm text-primary border border-primary/20' : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Eye className="w-4 h-4" /> 3D View
-              </button>
-              <button
-                onClick={() => setViewMode('2d')}
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-md transition-all ${
-                  viewMode === '2d' ? 'bg-card shadow-sm text-primary border border-primary/20' : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                2D Interactions
-              </button>
-            </div>
+            <SegmentedControl
+              id="results-view-mode"
+              value={viewMode}
+              onChange={setViewMode}
+              options={[
+                { value: '3d', label: '3D View', icon: Eye },
+                { value: '2d', label: '2D Interactions' },
+              ]}
+            />
             <div className="flex flex-wrap items-center gap-3">
               {uniqueCavityIds.length > 0 && (
                 <div className="flex items-center gap-3 bg-muted p-1.5 rounded-lg border border-border">

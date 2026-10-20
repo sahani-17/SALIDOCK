@@ -48,19 +48,19 @@ const Register = () => {
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <Navbar />
       <main className="flex-1 pt-24 pb-10 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
-        <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 sm:p-8 shadow-elevated">
-          <div className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-primary mb-4">
-            Join Salidock
+        <div className="w-full max-w-md rounded-3xl border border-border/80 bg-card/80 backdrop-blur-2xl p-6 sm:p-8 shadow-elevated apple-specular-edge">
+          <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-3 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-primary mb-3">
+            Join SaliDock
           </div>
-          <h1 className="text-2xl font-bold mb-1 text-foreground">Register</h1>
-          <p className="text-sm text-muted-foreground mb-6">Create an account to access SALIDOCK secure pages.</p>
+          <h1 className="text-2xl font-bold mb-1 text-foreground tracking-tight">Register</h1>
+          <p className="text-sm text-muted-foreground mb-6">Create an account to access SaliDock secure workflows.</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm mb-1 font-medium text-foreground">User name</label>
+              <label className="block text-xs uppercase tracking-wider mb-1.5 font-semibold text-muted-foreground">Username</label>
               <input
                 type="text"
-                className="w-full rounded-lg bg-background border border-border px-3 py-2 outline-none text-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                className="w-full rounded-xl bg-card/70 border border-border/80 px-3.5 py-2.5 outline-none text-foreground text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-150"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
@@ -68,10 +68,10 @@ const Register = () => {
             </div>
 
             <div>
-              <label className="block text-sm mb-1 font-medium text-foreground">Email</label>
+              <label className="block text-xs uppercase tracking-wider mb-1.5 font-semibold text-muted-foreground">Email</label>
               <input
                 type="email"
-                className="w-full rounded-lg bg-background border border-border px-3 py-2 outline-none text-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                className="w-full rounded-xl bg-card/70 border border-border/80 px-3.5 py-2.5 outline-none text-foreground text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-150"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -79,10 +79,10 @@ const Register = () => {
             </div>
 
             <div>
-              <label className="block text-sm mb-1 font-medium text-foreground">Password</label>
+              <label className="block text-xs uppercase tracking-wider mb-1.5 font-semibold text-muted-foreground">Password</label>
               <input
                 type="password"
-                className="w-full rounded-lg bg-background border border-border px-3 py-2 outline-none text-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                className="w-full rounded-xl bg-card/70 border border-border/80 px-3.5 py-2.5 outline-none text-foreground text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-150"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -93,13 +93,13 @@ const Register = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-primary text-primary-foreground py-2.5 font-bold hover:brightness-110 transition-all disabled:opacity-60"
+              className="w-full rounded-full bg-primary text-primary-foreground py-2.5 font-semibold text-sm hover:brightness-105 active:scale-[0.97] transition-all duration-150 ease-out shadow-sm shadow-primary/20 apple-specular-edge disabled:opacity-40"
             >
               {loading ? "Creating account..." : "Register"}
             </button>
           </form>
 
-          <p className="text-sm text-muted-foreground mt-4 text-center">
+          <p className="text-sm text-muted-foreground mt-5 text-center">
             Already have an account?{" "}
             <Link to="/login" state={location.state} className="text-primary hover:underline font-semibold">
               Login

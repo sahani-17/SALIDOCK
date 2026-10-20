@@ -54,10 +54,10 @@ const Feedback = () => {
       <Navbar />
 
       <div className="max-w-6xl mx-auto px-6 py-8 w-full flex-1">
-        <div className="rounded-2xl border border-primary/20 bg-card p-6 mb-6 shadow-elevated">
-          <div className="flex items-center gap-2 mb-1">
+        <div className="rounded-3xl border border-border/80 bg-card/80 backdrop-blur-2xl p-6 sm:p-7 mb-6 shadow-elevated apple-specular-edge">
+          <div className="flex items-center gap-2.5 mb-1.5">
             <MessageSquareText className="w-5 h-5 text-primary" />
-            <h1 className="text-2xl font-bold text-foreground">What Users Say</h1>
+            <h1 className="text-2xl font-bold text-foreground tracking-tight">What Users Say</h1>
           </div>
           <p className="text-sm text-muted-foreground">
             Real testimonials and ratings from docking workflow users.
@@ -69,7 +69,7 @@ const Feedback = () => {
             {feedbacks.length > 0 ? `${feedbacks.length} testimonial${feedbacks.length > 1 ? "s" : ""}` : "No testimonials yet"}
           </p>
           {feedbacks.length > 0 && (
-            <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground bg-card border border-border rounded-full px-3 py-1.5 shadow-sm">
+            <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground bg-card/80 backdrop-blur-md border border-border/80 rounded-full px-3 py-1.5 shadow-sm apple-specular-edge">
               <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
               Community feedback
             </div>
@@ -81,11 +81,11 @@ const Feedback = () => {
             <AnimatedCircularProgressBar label="Feedback" size={68} strokeWidth={6} />
           </div>
         ) : error ? (
-          <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 text-destructive text-sm">
+          <div className="bg-destructive/10 border border-destructive/30 rounded-2xl p-4 text-destructive text-sm">
             {error}
           </div>
         ) : feedbacks.length === 0 ? (
-          <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground shadow-sm">
+          <div className="bg-card/70 backdrop-blur-md border border-border/80 rounded-2xl p-8 text-center text-muted-foreground shadow-sm">
             No feedback available yet.
           </div>
         ) : (
@@ -93,10 +93,10 @@ const Feedback = () => {
             {feedbacks.map((item, index) => (
               <div
                 key={item.id}
-                className={`group relative overflow-hidden rounded-2xl border p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-elevated ${
+                className={`group relative overflow-hidden rounded-2xl border p-5 shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-elevated apple-specular-edge ${
                   index === 0
-                    ? "border-primary/30 bg-primary/5"
-                    : "border-border bg-card hover:border-primary/30"
+                    ? "border-primary/40 bg-card/90"
+                    : "border-border/80 bg-card/70 hover:border-primary/30"
                 }`}
               >
                 <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-primary/10 blur-2xl pointer-events-none" />

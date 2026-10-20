@@ -14,46 +14,8 @@ import {
   LogOut,
   Menu,
   X,
-  Sun,
-  Moon,
 } from "lucide-react";
 
-// ─── Theme Toggle ────────────────────────────────────────────────────────────
-const ThemeToggle = () => {
-  const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem("theme");
-    if (stored === "dark") {
-      setIsDark(true);
-      document.documentElement.classList.add("dark");
-    } else if (stored === "light") {
-      setIsDark(false);
-      document.documentElement.classList.remove("dark");
-    } else {
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      setIsDark(prefersDark);
-      document.documentElement.classList.toggle("dark", prefersDark);
-    }
-  }, []);
-
-  const toggle = () => {
-    const next = !isDark;
-    setIsDark(next);
-    document.documentElement.classList.toggle("dark", next);
-    localStorage.setItem("theme", next ? "dark" : "light");
-  };
-
-  return (
-    <button
-      onClick={toggle}
-      className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-foreground/10 transition-colors text-muted-foreground hover:text-foreground"
-      aria-label="Toggle theme"
-    >
-      {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-    </button>
-  );
-};
 
 // ─── Main Spotlight Navbar ───────────────────────────────────────────────────
 export const Navbar = () => {
@@ -166,12 +128,12 @@ export const Navbar = () => {
 
   return (
     <>
-      <header className="fixed top-0 inset-x-0 z-50 h-16 flex items-center justify-between px-4 md:px-8 bg-background/80 backdrop-blur-md border-b border-border/50">
+      <header className="fixed top-0 inset-x-0 z-50 h-16 flex items-center justify-between px-4 md:px-8 bg-background/70 backdrop-blur-2xl border-b border-border/50 transition-colors duration-200">
         
         {/* Left Side: Brand Logo */}
         <Link
           to="/"
-          className="flex items-center gap-2.5 shrink-0 hover:opacity-90 transition-opacity"
+          className="flex items-center gap-2.5 shrink-0 hover:opacity-90 active:scale-95 transition-all"
         >
           <div className="h-11 w-11 shrink-0 overflow-hidden rounded-sm relative">
             <img
@@ -182,26 +144,12 @@ export const Navbar = () => {
             />
           </div>
           <div className="flex flex-col leading-none gap-0.5">
-            <span
-              className="font-bold tracking-wide"
-              style={{
-                fontFamily: "'Rajdhani', 'DM Sans', system-ui, sans-serif",
-                fontSize: "1.25rem",
-                lineHeight: 1,
-              }}
-            >
-              <span className="text-foreground dark:text-white">Sali</span>
+            <span className="font-bold tracking-tight text-lg text-foreground">
+              <span>Sali</span>
               <span className="text-primary">Dock</span>
             </span>
-            <span
-              className="tracking-widest uppercase text-muted-foreground"
-              style={{
-                fontFamily: "'DM Sans', system-ui, sans-serif",
-                fontSize: "7px",
-                letterSpacing: "0.08em",
-              }}
-            >
-              (Structure·Affinity·Ligand Interaction)
+            <span className="tracking-[0.08em] uppercase text-muted-foreground text-[8px] font-semibold">
+              Structure · Affinity · Ligand Interaction
             </span>
           </div>
         </Link>
@@ -210,7 +158,7 @@ export const Navbar = () => {
         <div className="hidden md:flex items-center justify-center">
           <nav
             ref={navRef}
-            className="spotlight-nav relative h-11 rounded-full transition-all duration-300 overflow-hidden border border-border/60 bg-card/60 backdrop-blur-lg shadow-sm"
+            className="spotlight-nav relative h-10 rounded-full transition-all duration-300 overflow-hidden border border-border/70 bg-card/75 backdrop-blur-xl shadow-sm apple-specular-edge"
           >
             {/* Nav Items List */}
             <ul className="relative flex items-center h-full px-2 gap-1 z-[10]">
@@ -267,9 +215,8 @@ export const Navbar = () => {
           </nav>
         </div>
 
-        {/* Right Side: Theme Toggle & User Auth */}
+        {/* Right Side: User Auth */}
         <div className="hidden md:flex items-center gap-3">
-          <ThemeToggle />
 
           {!user ? (
             <div className="flex items-center gap-2">
@@ -313,7 +260,6 @@ export const Navbar = () => {
 
         {/* Mobile Hamburger & Controls */}
         <div className="md:hidden flex items-center gap-2">
-          <ThemeToggle />
           <button
             className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -329,11 +275,11 @@ export const Navbar = () => {
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div
-            initial={{ opacity: 0, y: -16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -16 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className="fixed inset-x-0 top-16 z-40 bg-card/95 backdrop-blur-md border-b border-border/60 p-4 md:hidden shadow-lg"
+            initial={{ opacity: 0, y: -20, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -16, scale: 0.98 }}
+            transition={{ type: "spring", stiffness: 350, damping: 28 }}
+            className="fixed inset-x-0 top-16 z-40 bg-card/90 backdrop-blur-2xl border-b border-border/60 p-4 md:hidden shadow-xl apple-specular-edge"
           >
             <nav className="flex flex-col gap-1">
               {items.map((item) => {

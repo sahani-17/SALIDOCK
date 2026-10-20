@@ -1,7 +1,7 @@
 import React from 'react';
 
 const Footer = () => (
-    <footer className="bg-card/40 backdrop-blur-md border-t border-border/40 mt-auto">
+    <footer className="w-full relative z-40 bg-card/60 backdrop-blur-2xl border-t border-border/50 mt-auto transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5">
                 <div className="flex items-center gap-2.5">

@@ -155,6 +155,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
   showProtein = true,
   minimal = false,
   focusOnLigand = false,
+  transparent = false,
 }, ref) {
   const viewerRef = useRef(null);
   const pluginRef = useRef(null);
@@ -485,6 +486,10 @@ const MolecularViewer = forwardRef(function MolecularViewer({
 
       if (plugin.canvas3d) {
         plugin.canvas3d.setProps({
+          renderer: {
+            backgroundColor: transparent ? Color(0x000000) : Color(0xffffff),
+            transparentBackground: !!transparent,
+          },
           trackball: {
             animate: spin
               ? { name: 'spin', params: { speed: 0.8 } }
@@ -506,6 +511,7 @@ const MolecularViewer = forwardRef(function MolecularViewer({
     showInteractions,
     spin,
     showProtein,
+    transparent,
     deleteCompByTag,
     clearNodeChildren
   ]);
@@ -688,6 +694,10 @@ const MolecularViewer = forwardRef(function MolecularViewer({
     const container = document.createElement('div');
     container.style.width = '100%';
     container.style.height = '100%';
+    container.style.backgroundColor = 'transparent';
+    if (transparent) {
+      container.className = 'molstar-transparent';
+    }
     viewerRef.current.appendChild(container);
 
     const initPlugin = async () => {
@@ -733,22 +743,18 @@ const MolecularViewer = forwardRef(function MolecularViewer({
         }
 
         // ── Canvas3D settings ─────────────────────────────────────────────
-        // White background matching the reference image (PyMOL/PLIP style).
-        // Fog is disabled so nothing dissolves during rotation — instead we
-        // rely on SSAO and silhouette outlines for depth perception.
         PluginCommands.Canvas3D.SetSettings(plugin, {
           settings: (props) => {
-            // Crisp white background for canvas (PyMOL / publication style)
-            props.renderer.backgroundColor = Color(0xffffff);
+            props.renderer.backgroundColor = transparent ? Color(0x000000) : Color(0xffffff);
 
             // Disable fog / depth cueing entirely (prevents structure fading)
             if ('fog' in props.renderer) {
               props.renderer.fog = false;
             }
 
-            // Ensure transparent atoms still render correctly
+            // Support transparent background when transparent=true
             if (props.renderer.transparentBackground !== undefined) {
-              props.renderer.transparentBackground = false;
+              props.renderer.transparentBackground = !!transparent;
             }
 
             // Screen-Space Ambient Occlusion: crevice shadows
@@ -863,13 +869,12 @@ const MolecularViewer = forwardRef(function MolecularViewer({
         {/* Mol* Viewer Canvas — background matches canvas3D backgroundColor (#ffffff) */}
         <div
           ref={viewerRef}
+          className={`relative w-full h-full overflow-hidden ${transparent ? 'molstar-transparent bg-transparent' : 'rounded-lg'}`}
           style={{
             position: 'relative',
-            overflow: 'hidden',
-            borderRadius: '8px',
             width: '100%',
             height: minimal ? '100%' : '600px',
-            backgroundColor: '#ffffff',
+            backgroundColor: transparent ? 'transparent' : '#ffffff',
           }}
         />
 

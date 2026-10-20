@@ -21,28 +21,28 @@ export default function Stepper({ steps, currentIndex, completed = {}, onStepCli
                                     type="button"
                                     onClick={() => isReachable && onStepClick?.(i)}
                                     disabled={!isReachable}
-                                    className={`w-full text-left rounded-xl border px-3 py-2.5 transition-all flex items-center gap-3 ${
+                                    className={`w-full text-left rounded-2xl border px-3.5 py-2.5 transition-all duration-150 ease-out active:scale-[0.98] flex items-center gap-3 ${
                                         isCurrent
-                                            ? 'border-primary/40 bg-primary/5 shadow-elevated'
+                                            ? 'border-primary/40 bg-card/85 backdrop-blur-xl shadow-sm apple-specular-edge'
                                             : isDone
-                                                ? 'border-border bg-card hover:border-primary/30'
-                                                : 'border-border bg-card/50 opacity-60 cursor-not-allowed'
+                                                ? 'border-border/80 bg-card/65 backdrop-blur-md hover:border-primary/30 hover:bg-card'
+                                                : 'border-border/50 bg-card/30 opacity-50 cursor-not-allowed'
                                     }`}
                                 >
                                     <span
-                                        className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${
+                                        className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 transition-transform ${
                                             isDone
-                                                ? 'bg-primary text-primary-foreground'
+                                                ? 'bg-primary text-primary-foreground shadow-xs'
                                                 : isCurrent
-                                                    ? 'bg-primary text-primary-foreground'
-                                                    : 'bg-muted text-muted-foreground'
+                                                    ? 'bg-primary text-primary-foreground shadow-xs shadow-primary/30'
+                                                    : 'bg-muted/70 text-muted-foreground'
                                         }`}
                                     >
                                         {isDone ? <Check size={14} aria-hidden="true" /> : i + 1}
                                     </span>
                                     <span className="min-w-0">
-                                        <span className="block text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">Step {i + 1}</span>
-                                        <span className={`block text-sm font-semibold truncate ${isCurrent ? 'text-foreground' : 'text-muted-foreground'}`}>{step.label}</span>
+                                        <span className="block text-[9px] font-bold uppercase tracking-[0.1em] text-muted-foreground">Step {i + 1}</span>
+                                        <span className={`block text-xs sm:text-sm font-semibold truncate tracking-tight ${isCurrent ? 'text-foreground' : 'text-muted-foreground'}`}>{step.label}</span>
                                     </span>
                                 </button>
                             </li>

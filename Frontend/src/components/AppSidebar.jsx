@@ -34,26 +34,26 @@ export const AppSidebar = ({
 
   return (
     <aside
-      className={`fixed left-0 top-0 h-screen z-40 pt-20 flex flex-col bg-card border-r border-border/80 transition-all duration-300 ${
+      className={`fixed left-0 top-16 bottom-0 h-[calc(100vh-4rem)] z-30 flex flex-col bg-card/85 backdrop-blur-2xl border-r border-border/70 rounded-none shadow-none transition-all duration-300 ease-out ${
         isCollapsed ? "w-16" : "w-64"
       }`}
     >
       {/* Sidebar Header */}
-      <div className="p-3 border-b border-border/60 flex items-center justify-between shrink-0">
+      <div className="p-3 border-b border-border/50 flex items-center justify-between shrink-0">
         {!isCollapsed && (
           <div className="flex items-center gap-2.5 px-2 overflow-hidden">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20 apple-specular-edge">
               <FlaskConical className="w-4 h-4 text-primary" />
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="text-xs font-bold text-foreground truncate">{headerTitle}</span>
+              <span className="text-xs font-bold text-foreground truncate tracking-tight">{headerTitle}</span>
               <span className="text-[10px] text-muted-foreground truncate">{headerSubtitle}</span>
             </div>
           </div>
         )}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors ml-auto"
+          className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 active:scale-95 transition-all ml-auto"
           title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
         >
           {isCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
@@ -84,9 +84,9 @@ export const AppSidebar = ({
                         if (hasSubItems) toggleExpand(item.title);
                       }}
                       title={isCollapsed ? item.title : undefined}
-                      className={`relative flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                      className={`relative flex items-center gap-3 w-full px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 ease-out active:scale-[0.98] ${
                         isActive
-                          ? "text-primary bg-primary/10 font-bold"
+                          ? "text-primary bg-primary/10 font-semibold shadow-xs"
                           : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
                       } ${isCollapsed ? "justify-center" : ""}`}
                     >

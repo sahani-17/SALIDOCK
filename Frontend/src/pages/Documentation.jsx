@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -20,8 +20,17 @@ import {
   Layers,
   Target,
   Network,
+  Sparkles,
+  Command,
+  ArrowRight,
+  ShieldCheck,
+  CheckCircle2,
+  Download,
+  Flame,
+  Info,
+  Dna,
+  Atom
 } from "lucide-react";
-
 import AppSidebar from "../components/AppSidebar";
 
 /* ─── Scroll Section Wrapper ─── */
@@ -33,7 +42,7 @@ const AnimatedSection = ({ children, className = "", delay = 0 }) => {
       className={`transition-all duration-700 ease-out ${className}`}
       style={{
         opacity: isVisible ? 1 : 0,
-        transform: isVisible ? "translateY(0)" : "translateY(30px)",
+        transform: isVisible ? "translateY(0)" : "translateY(24px)",
         transitionDelay: `${delay}ms`,
       }}
     >
@@ -42,26 +51,27 @@ const AnimatedSection = ({ children, className = "", delay = 0 }) => {
   );
 };
 
-/* ─── 3D Tilt Card ─── */
+/* ─── 3D Tilt Card (Apple subtle depth) ─── */
 const TiltCard = ({ children, className = "" }) => {
   const cardRef = useRef(null);
   const [transform, setTransform] = useState("");
   const [glare, setGlare] = useState({ x: 50, y: 50, opacity: 0 });
 
   const handleMouseMove = (e) => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const el = cardRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
-    const rotateX = (0.5 - y) * 10;
-    const rotateY = (x - 0.5) * 10;
-    setTransform(`perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.015,1.015,1.015)`);
-    setGlare({ x: x * 100, y: y * 100, opacity: 0.1 });
+    const rotateX = (0.5 - y) * 6;
+    const rotateY = (x - 0.5) * 6;
+    setTransform(`perspective(900px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.008,1.008,1.008)`);
+    setGlare({ x: x * 100, y: y * 100, opacity: 0.08 });
   };
 
   const handleMouseLeave = () => {
-    setTransform("perspective(800px) rotateX(0deg) rotateY(0deg) scale3d(1,1,1)");
+    setTransform("perspective(900px) rotateX(0deg) rotateY(0deg) scale3d(1,1,1)");
     setGlare({ x: 50, y: 50, opacity: 0 });
   };
 
@@ -85,46 +95,10 @@ const TiltCard = ({ children, className = "" }) => {
   );
 };
 
-/* ─── Cursor Glow Trail ─── */
-const CursorGlow = () => {
-  const glowRef = useRef(null);
-
-  useEffect(() => {
-    const handleMove = (e) => {
-      if (glowRef.current) {
-        glowRef.current.style.left = `${e.clientX}px`;
-        glowRef.current.style.top = `${e.clientY}px`;
-      }
-    };
-    window.addEventListener("mousemove", handleMove);
-    return () => window.removeEventListener("mousemove", handleMove);
-  }, []);
-
-  return (
-    <div
-      ref={glowRef}
-      className="fixed w-[350px] h-[350px] rounded-full pointer-events-none z-[9999] -translate-x-1/2 -translate-y-1/2 blur-[100px] transition-[left,top] duration-150 ease-out hidden md:block"
-      style={{ background: "hsl(var(--primary) / 0.05)" }}
-    />
-  );
-};
-
-/* ─── Corner Accent Card ─── */
-const AccentCard = ({ children, className = "" }) => (
-  <div className={`relative p-8 border border-border rounded-sm bg-muted/20 ${className}`}>
-    <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-[2.5px] border-l-[2.5px] border-primary" />
-    <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b-[2.5px] border-r-[2.5px] border-primary" />
+/* ─── Apple Frosted Card ─── */
+const AppleCard = ({ children, className = "" }) => (
+  <div className={`rounded-3xl bg-card/75 backdrop-blur-2xl border border-white/[0.08] dark:border-white/[0.08] shadow-elevated apple-specular-edge p-6 ${className}`}>
     {children}
-  </div>
-);
-
-/* ─── Step Badge ─── */
-const StepBadge = ({ n, label }) => (
-  <div className="flex items-center gap-3 mb-6">
-    <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0">
-      <span className="text-[13px] font-bold text-primary-foreground">{n}</span>
-    </div>
-    <span className="text-[11px] font-bold tracking-widest text-muted-foreground uppercase">{label}</span>
   </div>
 );
 
@@ -132,15 +106,15 @@ const StepBadge = ({ n, label }) => (
 const ScreenshotFrame = ({ src, alt, caption, className = "" }) => (
   <div className={`flex flex-col w-full h-full ${className}`}>
     <TiltCard className="h-full">
-      <div className="w-full h-full rounded-2xl bg-card shadow-2xl overflow-hidden flex flex-col group transition-all duration-300">
-        <div className="h-7 bg-muted/60 px-3.5 flex items-center justify-between shrink-0">
+      <div className="w-full h-full rounded-2xl bg-card shadow-2xl overflow-hidden flex flex-col group transition-all duration-300 border border-white/[0.08]">
+        <div className="h-7 bg-muted/60 px-3.5 flex items-center justify-between shrink-0 border-b border-border/40">
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full bg-[#FF5F56]/80" />
             <div className="w-2.5 h-2.5 rounded-full bg-[#FFBD2E]/80" />
             <div className="w-2.5 h-2.5 rounded-full bg-[#27C93F]/80" />
           </div>
           <span className="text-[10px] font-mono tracking-wider text-muted-foreground/70 uppercase truncate px-2">
-            salidock-interface // preview
+            salidock // runtime-preview
           </span>
           <div className="w-10" />
         </div>
@@ -154,7 +128,7 @@ const ScreenshotFrame = ({ src, alt, caption, className = "" }) => (
       </div>
     </TiltCard>
     {caption && (
-      <p className="text-[10px] text-muted-foreground font-medium mt-2 text-center tracking-wide uppercase shrink-0">
+      <p className="text-[10px] text-muted-foreground font-semibold mt-2 text-center tracking-wider uppercase shrink-0">
         {caption}
       </p>
     )}
@@ -167,25 +141,29 @@ const stickyDocsContent = [
     title: "Step 1 — Input Ingestion",
     description: (
       <div className="flex flex-col gap-4 mt-2">
-        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
           <FlaskConical size={16} /> SYSTEM PROTOCOL 01 // INGESTION
         </div>
-        <AccentCard className="p-5">
-          <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide mb-2">Protein Receptor Modes</h4>
-          <ul className="text-[13px] text-muted-foreground font-medium space-y-2">
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">PDB File</strong> — Direct upload (.pdb, .ent)</span></li>
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">FASTA</strong> — ESMFold sequence structure prediction</span></li>
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">UniProt ID</strong> — Direct AlphaFold DB model fetch</span></li>
+        <AppleCard className="p-5">
+          <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+            <Dna size={14} /> Protein Receptor Modes
+          </h4>
+          <ul className="text-xs text-muted-foreground font-medium space-y-2">
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">PDB File Upload</strong> — Direct intake of .pdb or .ent crystallography coordinates</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">FASTA Sequence</strong> — Direct ESMFold 3D structure prediction from sequence (up to 400 residues)</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">UniProt ID</strong> — Direct AlphaFold DB model retrieval with pLDDT confidence</span></li>
           </ul>
-        </AccentCard>
+        </AppleCard>
 
-        <AccentCard className="p-5">
-          <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide mb-2">Ligand Molecule Modes</h4>
-          <ul className="text-[13px] text-muted-foreground font-medium space-y-2">
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">SDF / MOL2</strong> — Direct 3D chemical file upload</span></li>
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">SMILES</strong> — Canonical SMILES with auto 3D conformer generation</span></li>
+        <AppleCard className="p-5">
+          <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+            <Atom size={14} /> Ligand Molecule Modes
+          </h4>
+          <ul className="text-xs text-muted-foreground font-medium space-y-2">
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">SDF / MOL2 Files</strong> — Multi-conformer chemical files with 3D atomic coordinates</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">SMILES String</strong> — Canonical or isomeric SMILES with automated 3D embedding and MMFF94 minimization</span></li>
           </ul>
-        </AccentCard>
+        </AppleCard>
       </div>
     ),
     content: (
@@ -201,17 +179,19 @@ const stickyDocsContent = [
     title: "Step 2 — Structure Preparation",
     description: (
       <div className="flex flex-col gap-4 mt-2">
-        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
           <Layers size={16} /> SYSTEM PROTOCOL 02 // PREPARATION
         </div>
-        <AccentCard className="p-5">
-          <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide mb-2">Preparation Protocol</h4>
-          <ul className="text-[13px] text-muted-foreground font-medium space-y-2.5">
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Chain Filtering</strong> — Toggle specific target chains to retain</span></li>
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Heteroatoms & Water</strong> — Strip or preserve specific ions & cofactors</span></li>
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Automated Repair</strong> — PDBFixer protonation & OpenBabel PDBQT conversion</span></li>
+        <AppleCard className="p-5">
+          <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+            <ShieldCheck size={14} /> Structure Preparation Pipeline
+          </h4>
+          <ul className="text-xs text-muted-foreground font-medium space-y-2.5">
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">Chain Filtering</strong> — Select specific biological chains or keep all intact</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">Heteroatoms & Ions</strong> — Strip crystal solvent or retain critical active-site cofactors (e.g. Zn²⁺, Mg²⁺, HEM)</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">Protonation & Charges</strong> — PDBFixer hydrogen addition & OpenBabel Gasteiger partial charges</span></li>
           </ul>
-        </AccentCard>
+        </AppleCard>
       </div>
     ),
     content: (
@@ -227,17 +207,19 @@ const stickyDocsContent = [
     title: "Step 3 — Auto-Blind Cavities (wRRF)",
     description: (
       <div className="flex flex-col gap-4 mt-2">
-        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
           <Compass size={16} /> SYSTEM PROTOCOL 03 // CONSENSUS
         </div>
-        <AccentCard className="p-5">
-          <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide mb-2">Consensus Pocket Detection</h4>
-          <ul className="text-[13px] text-muted-foreground font-medium space-y-2.5">
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">3 Predictors</strong> — fpocket, P2Rank, PUResNetV2.0</span></li>
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Top Cavities</strong> — Automatic ranking of top 5 consensus binding sites</span></li>
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Smart Routing</strong> — GNINA (CNN scoring) for compact sites, QuickVina-W for large volumes</span></li>
+        <AppleCard className="p-5">
+          <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+            <Sparkles size={14} /> Weighted Reciprocal Rank Fusion
+          </h4>
+          <ul className="text-xs text-muted-foreground font-medium space-y-2.5">
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">Ensemble Predictors</strong> — fpocket (Voronoi tessellation), P2Rank (Random Forest ML), PUResNet (Deep ResNet)</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">Consensus Clustering</strong> — DBSCAN 4.5 Å centroid clustering ranks top 5 non-redundant pockets</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">Smart Routing</strong> — GNINA CNN scoring for compact pockets (&lt;1200 Å³), QuickVina-W for large surfaces</span></li>
           </ul>
-        </AccentCard>
+        </AppleCard>
       </div>
     ),
     content: (
@@ -253,17 +235,19 @@ const stickyDocsContent = [
     title: "Step 4 — Batch Screening",
     description: (
       <div className="flex flex-col gap-4 mt-2">
-        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
           <Network size={16} /> SYSTEM PROTOCOL 04 // SCREENING
         </div>
-        <AccentCard className="p-5">
-          <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide mb-2">Multi-Ligand Screening</h4>
-          <ul className="text-[13px] text-muted-foreground font-medium space-y-2.5">
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Library Intake</strong> — Multi-SDF, ZIP archive, or newline SMILES list</span></li>
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Target Cavity Lock</strong> — Select 1 target pocket from consensus table for uniform scoring</span></li>
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">MMFF94 Optimization</strong> — Parallel 3D conformer geometry optimization</span></li>
+        <AppleCard className="p-5">
+          <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+            <Zap size={14} /> High-Throughput Ensemble Screening
+          </h4>
+          <ul className="text-xs text-muted-foreground font-medium space-y-2.5">
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">Chemical Library Intake</strong> — Multi-mol SDF, compressed ZIP folder, or newline SMILES lists</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">Consensus Target Lock</strong> — Select a single high-confidence cavity deck card to target all ligands uniformly</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">Real-Time Leaderboard</strong> — Stream completed conformers ranked by negative binding affinity</span></li>
           </ul>
-        </AccentCard>
+        </AppleCard>
       </div>
     ),
     content: (
@@ -279,17 +263,19 @@ const stickyDocsContent = [
     title: "Step 5 — Targeted Active-Site Box",
     description: (
       <div className="flex flex-col gap-4 mt-2">
-        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
           <Grid size={16} /> SYSTEM PROTOCOL 05 // TARGETING
         </div>
-        <AccentCard className="p-5">
-          <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide mb-2">Targeted Grid Setup</h4>
-          <ul className="text-[13px] text-muted-foreground font-medium space-y-2.5">
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Spatial Coordinates</strong> — Custom X, Y, Z grid center (Å) & box dimensions</span></li>
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">3D Viewport Overlay</strong> — Live real-time grid box visualization in Mol*</span></li>
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Auto-Detect Centroid</strong> — 1-click centroid initialization from target residues</span></li>
+        <AppleCard className="p-5">
+          <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+            <Target size={14} /> Custom 3D Search Grid Box
+          </h4>
+          <ul className="text-xs text-muted-foreground font-medium space-y-2.5">
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">Coordinates (Å)</strong> — User-specified X, Y, Z center coordinates and box dimensions</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">3D Viewer Overlay</strong> — Live real-time color-coded search volume box rendered in Mol*</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">Centroid Detection</strong> — 1-click centroid calculation based on active macromolecule</span></li>
           </ul>
-        </AccentCard>
+        </AppleCard>
       </div>
     ),
     content: (
@@ -305,17 +291,19 @@ const stickyDocsContent = [
     title: "Step 6 — 3D Pose & Surface Analytics",
     description: (
       <div className="flex flex-col gap-4 mt-2">
-        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
           <LayoutDashboard size={16} /> SYSTEM PROTOCOL 06 // 3D VISUALIZATION
         </div>
-        <AccentCard className="p-5">
-          <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide mb-2">3D Binding Complex Inspection</h4>
-          <ul className="text-[13px] text-muted-foreground font-medium space-y-2.5">
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Interactive Mol* Canvas</strong> — Full 3D rotation, zooming, slab slicing, & pose switching</span></li>
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Pocket & Surface Display</strong> — Toggle cavity surface mesh, pocket residues, & atom labels</span></li>
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Complex Download</strong> — 1-click PDB export of receptor bound to top-ranked ligand poses</span></li>
+        <AppleCard className="p-5">
+          <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+            <Activity size={14} /> 3D Binding Complex Inspection
+          </h4>
+          <ul className="text-xs text-muted-foreground font-medium space-y-2.5">
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">Interactive Mol* Canvas</strong> — Full 3D rotation, zooming, slab slicing, and pose switching</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">Surface & Pocket Mesh</strong> — Toggle solvent-accessible surface, cavity bounding box, and residue contacts</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">Complex Download</strong> — 1-click PDB export of receptor bound to top-ranked ligand poses</span></li>
           </ul>
-        </AccentCard>
+        </AppleCard>
       </div>
     ),
     content: (
@@ -331,17 +319,19 @@ const stickyDocsContent = [
     title: "Step 7 — 2D Interaction Diagram",
     description: (
       <div className="flex flex-col gap-4 mt-2">
-        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
           <Activity size={16} /> SYSTEM PROTOCOL 07 // 2D MAPS
         </div>
-        <AccentCard className="p-5">
-          <h4 className="text-[13px] font-bold text-primary uppercase tracking-wide mb-2">2D Contact Analysis</h4>
-          <ul className="text-[13px] text-muted-foreground font-medium space-y-2.5">
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">ProLIF Contact Mapping</strong> — Color-coded non-covalent bonds (H-bonds, salt bridges, hydrophobic)</span></li>
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Bond Distance Overlay</strong> — Explicit distance annotations (Å) between ligand heavy atoms and pocket residues</span></li>
-            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground">Vector Graphic Export</strong> — Download high-resolution publication-ready SVG diagrams</span></li>
+        <AppleCard className="p-5">
+          <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+            <Network size={14} /> 2D Contact Analysis
+          </h4>
+          <ul className="text-xs text-muted-foreground font-medium space-y-2.5">
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">ProLIF Contact Mapping</strong> — Color-coded non-covalent bonds (H-bonds, salt bridges, π-stacking)</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">Bond Distances (Å)</strong> — Explicit distance annotations between heavy ligand atoms and residue side chains</span></li>
+            <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span><strong className="text-foreground font-semibold">Vector SVG Export</strong> — Download publication-grade vector diagrams with legend</span></li>
           </ul>
-        </AccentCard>
+        </AppleCard>
       </div>
     ),
     content: (
@@ -354,9 +344,21 @@ const stickyDocsContent = [
   },
 ];
 
+const SEARCH_TOPICS = [
+  { id: "input", title: "PDB / FASTA / UniProt Intake", section: "Step 1 — Input", category: "Ingestion" },
+  { id: "prepare", title: "Chain Selection & Heteroatoms", section: "Step 2 — Prepare", category: "Structure Prep" },
+  { id: "auto-blind", title: "wRRF Consensus (fpocket, P2Rank, PUResNet)", section: "Step 3 — Auto-Blind", category: "Consensus" },
+  { id: "batch-dock", title: "Batch Multi-Ligand Screening (MMFF94)", section: "Step 4 — Batch Screening", category: "Screening" },
+  { id: "active-site", title: "Active-Site Coordinates & Grid Box", section: "Step 5 — Targeted Mode", category: "Targeting" },
+  { id: "results-3d", title: "Mol* 3D Pose Inspection & Surface Mesh", section: "Step 6 — 3D Viewer", category: "Visualization" },
+  { id: "results-2d", title: "ProLIF 2D Interaction Diagrams (SVG)", section: "Step 7 — 2D Maps", category: "Analysis" },
+  { id: "exports", title: "Exporting Results & Mol* Tips", section: "Platform Reference", category: "Exports" },
+];
+
 const Documentation = () => {
   const sections = [
     { id: "docs-hero",   label: "Overview",           icon: BookOpen },
+    { id: "scrubber",    label: "3-Stage Scrubber",   icon: Layers },
     { id: "input",       label: "Step 1 — Input",      icon: FlaskConical },
     { id: "prepare",     label: "Step 2 — Prepare",    icon: Layers },
     { id: "auto-blind",  label: "Single Dock",          icon: Compass },
@@ -364,9 +366,27 @@ const Documentation = () => {
     { id: "active-site", label: "Active-Site Mode",     icon: Grid },
     { id: "results-3d",  label: "3D Viewer",           icon: LayoutDashboard },
     { id: "results-2d",  label: "2D Interactions",     icon: Activity },
+    { id: "exports",     label: "Exports & Tips",      icon: FileText },
   ];
+
   const [activeSection, setActiveSection] = useState("docs-hero");
   const [showDockingOptions, setShowDockingOptions] = useState(false);
+
+  // Spotlight Search State
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+
+
+
+  // 3-Stage Pipeline Scrubber active stage
+  const [activePipelineStage, setActivePipelineStage] = useState(1);
+
+  // Filter search results
+  const filteredSearch = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase();
+    return SEARCH_TOPICS.filter(t => t.title.toLowerCase().includes(q) || t.section.toLowerCase().includes(q) || t.category.toLowerCase().includes(q));
+  }, [searchQuery]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -409,6 +429,7 @@ const Documentation = () => {
       label: "Getting Started",
       items: [
         { id: "docs-hero", title: "Overview", icon: BookOpen },
+        { id: "scrubber", title: "3-Stage Scrubber", icon: Layers },
       ],
     },
     {
@@ -438,191 +459,265 @@ const Documentation = () => {
       items: [
         { id: "results-3d", title: "3D Pose Viewer", icon: LayoutDashboard },
         { id: "results-2d", title: "2D Interaction Diagrams", icon: Activity },
+        { id: "exports", title: "Exports & Mol* Tips", icon: FileText },
       ],
     },
   ];
 
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans">
-      <Navbar lightTheme />
+    <div className="min-h-screen bg-background text-foreground font-sans flex flex-col justify-between selection:bg-primary/20 selection:text-primary">
+      <Navbar />
 
-      <div className="hidden xl:block relative z-50">
-        <AppSidebar
-          groups={docsSidebarGroups}
-          activeSection={activeSection}
-          onSectionClick={scrollToSection}
-          headerTitle="Documentation"
-          headerSubtitle="User & Workflow Guide"
-          actionButton={{
-            label: "Start Docking",
-            onClick: () => setShowDockingOptions((prev) => !prev),
-          }}
-        />
-        {showDockingOptions && (
-          <div className="fixed left-4 bottom-16 w-56 z-50 overflow-hidden rounded-xl border border-border bg-card shadow-2xl flex flex-col p-1 animate-fade-in-up">
-            <Link
-              to="/dock"
-              onClick={() => setShowDockingOptions(false)}
-              className="px-4 py-2.5 text-[12px] font-bold text-foreground hover:bg-muted hover:text-primary transition-colors border-b border-border/60 rounded-t-lg"
-            >
-              Single Docking
-            </Link>
-            <Link
-              to="/batch-dock"
-              onClick={() => setShowDockingOptions(false)}
-              className="px-4 py-2.5 text-[12px] font-bold text-foreground hover:bg-muted hover:text-primary transition-colors rounded-b-lg"
-            >
-              Batch Screening
-            </Link>
-          </div>
-        )}
-      </div>
+      <div className="flex-1 flex flex-col">
+        <div className="hidden xl:block relative z-50">
+          <AppSidebar
+            groups={docsSidebarGroups}
+            activeSection={activeSection}
+            onSectionClick={scrollToSection}
+            headerTitle="Documentation"
+            headerSubtitle="Developer & Workflow Guide"
+            actionButton={{
+              label: "Start Docking",
+              onClick: () => setShowDockingOptions((prev) => !prev),
+            }}
+          />
+          {showDockingOptions && (
+            <div className="fixed left-4 bottom-16 w-56 z-50 overflow-hidden rounded-2xl border border-white/[0.1] bg-card/90 backdrop-blur-2xl shadow-2xl flex flex-col p-1.5 animate-fade-in-up apple-specular-edge">
+              <Link
+                to="/dock"
+                onClick={() => setShowDockingOptions(false)}
+                className="px-4 py-2.5 text-xs font-bold text-foreground hover:bg-primary/10 hover:text-primary transition-colors border-b border-border/50 rounded-xl flex items-center justify-between"
+              >
+                <span>Single Docking</span>
+                <ChevronRight size={13} />
+              </Link>
+              <Link
+                to="/batch-dock"
+                onClick={() => setShowDockingOptions(false)}
+                className="px-4 py-2.5 text-xs font-bold text-foreground hover:bg-primary/10 hover:text-primary transition-colors rounded-xl flex items-center justify-between"
+              >
+                <span>Batch Screening</span>
+                <ChevronRight size={13} />
+              </Link>
+            </div>
+          )}
+        </div>
 
-      <div className="xl:pl-64">
+        <div className="xl:pl-64 flex-1">
+          {/* ══════════════════════════════════════════════
+              HERO & SPOTLIGHT SEARCH BAR
+          ══════════════════════════════════════════════ */}
+          <section id="docs-hero" className="relative pt-32 pb-14 overflow-hidden">
+            <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 relative z-10 w-full">
+              <AnimatedSection>
+                <div className="flex items-center gap-2 text-xs font-bold tracking-widest text-primary uppercase mb-4">
+                  <BookOpen size={15} /> PLATFORM DEVELOPER REFERENCE
+                </div>
+                <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-foreground mb-4">
+                  SaliDock Architecture & Documentation
+                </h1>
+                <p className="text-muted-foreground text-sm md:text-base leading-relaxed max-w-3xl mb-8">
+                  Comprehensive reference for SaliDock's end-to-end computational pipeline — from macromolecular structure input, automated protonation, and wRRF consensus pocket detection, to 3D convolutional neural network (GNINA CNN) scoring and interactive vector exports.
+                </p>
 
-        {/* ══════════════════════════════════════════════
-            HERO
-        ══════════════════════════════════════════════ */}
-        <section id="docs-hero" className="relative pt-32 pb-20 overflow-hidden">
-          <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 relative z-10 w-full">
-            <AnimatedSection>
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-8 h-[2px] bg-primary" />
-                <span className="text-[11px] font-bold tracking-widest text-primary uppercase">
-                  Platform Reference
-                </span>
-              </div>
-              <h1 className="text-4xl md:text-[46px] leading-[1.1] font-medium text-foreground mb-6 uppercase tracking-tight">
-                Official Documentation
-              </h1>
-              <p className="text-muted-foreground font-medium leading-[1.9] text-[15px] max-w-3xl mb-12">
-                Salidock provides a complete, end-to-end computational docking pipeline —
-                from raw structure input through automated preparation, binding-site prediction,
-                and docking execution, to interactive result analysis. This reference covers each
-                stage of the workflow in the order you will encounter it.
-              </p>
-
-              {/* Workflow Overview Cards */}
-              <div className="grid sm:grid-cols-3 gap-4">
-                {[
-                  { n: "01", icon: FlaskConical, label: "Input & Preparation", desc: "Upload protein and ligand, select chains, strip heteroatoms." },
-                  { n: "02", icon: Compass,      label: "Docking Execution",    desc: "Choose Auto-Blind or Active-Site mode, run the simulation." },
-                  { n: "03", icon: LayoutDashboard, label: "Analysis & Export", desc: "Visualise poses in 3D, inspect 2D interaction maps, download complexes." },
-                ].map(({ n, icon: Icon, label, desc }) => (
-                  <AccentCard key={n} className="p-6">
-                    <div className="flex items-center gap-3 mb-3">
-                      <span className="text-[10px] font-bold tracking-widest text-muted-foreground">{n}</span>
-                      <Icon className="w-4 h-4 text-primary" strokeWidth={2.5} />
-                      <h3 className="text-[13px] font-bold text-foreground uppercase tracking-wide">{label}</h3>
+                {/* Apple Spotlight Search Command Bar */}
+                <div className="relative max-w-2xl mb-12">
+                  <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl bg-card/80 backdrop-blur-2xl border transition-all duration-200 shadow-elevated ${
+                    searchFocused ? 'border-primary ring-2 ring-primary/20 apple-specular-edge' : 'border-border/80 hover:border-primary/40'
+                  }`}>
+                    <Search size={18} className="text-primary shrink-0" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onFocus={() => setSearchFocused(true)}
+                      onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
+                      placeholder="Spotlight search protocols, algorithms, parameters, APIs..."
+                      className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground/70 outline-none"
+                    />
+                    <div className="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-lg bg-muted/60 border border-border/60 text-[10px] font-mono-code text-muted-foreground shrink-0">
+                      <Command size={10} /> K
                     </div>
-                    <p className="text-[13px] text-muted-foreground font-medium leading-[1.7]">{desc}</p>
-                  </AccentCard>
-                ))}
-              </div>
-            </AnimatedSection>
-          </div>
-        </section>
-
-        <div className="border-t border-border" />
-
-        {/* ══════════════════════════════════════════════
-            STICKY SCROLL WORKFLOW PIPELINE
-        ══════════════════════════════════════════════ */}
-        <section className="py-20 relative">
-          <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
-            <StickyScroll content={stickyDocsContent} />
-          </div>
-        </section>
-
-        <div className="border-t border-border" />
-
-        {/* ══════════════════════════════════════════════
-            EXPORTS & TIPS
-        ══════════════════════════════════════════════ */}
-        <section id="exports" className="py-20 relative">
-          <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
-
-            {/* Export Details */}
-            <AnimatedSection delay={300}>
-              <div className="relative p-8 md:p-10 border border-border rounded-sm bg-muted/20 overflow-hidden">
-                <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-[2.5px] border-l-[2.5px] border-primary" />
-                <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b-[2.5px] border-r-[2.5px] border-primary" />
-                <div className="absolute -right-10 -top-10 opacity-[0.03]">
-                  <FileText size={150} />
-                </div>
-
-                <div className="flex items-center gap-3 mb-6">
-                  <FileText className="w-5 h-5 text-primary" strokeWidth={2.5} />
-                  <h4 className="text-[15px] font-bold text-primary uppercase tracking-wide">
-                    Exporting Results
-                  </h4>
-                </div>
-
-                <div className="grid sm:grid-cols-2 gap-8">
-                  <div>
-                    <h4 className="text-[12px] font-bold text-foreground uppercase tracking-widest mb-3">
-                      3D Structure Export
-                    </h4>
-                    <ul className="text-[13px] text-muted-foreground font-medium space-y-3">
-                      <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />Select any pose from the <em>Viewing Pose</em> dropdown.</li>
-                      <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />Adjust camera angle, zoom, and representation in the toolbar.</li>
-                      <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />Click the download icon in the table row to save the complex as a PDB file.</li>
-                    </ul>
                   </div>
 
-                  <div>
-                    <h4 className="text-[12px] font-bold text-foreground uppercase tracking-widest mb-3">
-                      2D Interaction Map Export
-                    </h4>
-                    <ul className="text-[13px] text-muted-foreground font-medium space-y-3 mb-4">
-                      <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />Switch to the <em>2D Interactions</em> tab.</li>
-                      <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />Toggle contact distance annotations and bond type color matches.</li>
-                      <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />Click the download icon to save a publication-ready SVG.</li>
-                    </ul>
-                  </div>
+                  {/* Spotlight Search Results Dropdown */}
+                  {searchFocused && filteredSearch.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-2 p-2 rounded-2xl bg-card/95 backdrop-blur-2xl border border-white/[0.1] shadow-2xl z-50 animate-fade-in-up divide-y divide-border/40">
+                      {filteredSearch.map((item) => (
+                        <div
+                          key={item.id}
+                          onMouseDown={() => { scrollToSection(item.id); setSearchQuery(""); }}
+                          className="p-3 rounded-xl hover:bg-primary/10 transition-colors cursor-pointer flex items-center justify-between group"
+                        >
+                          <div>
+                            <div className="font-semibold text-xs text-foreground group-hover:text-primary transition-colors">
+                              {item.title}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground">
+                              {item.section} • <span className="font-semibold">{item.category}</span>
+                            </div>
+                          </div>
+                          <ChevronRight size={14} className="text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                {/* Mol* Tips */}
-                <div className="mt-8 pt-8 border-t border-border">
-                  <h4 className="text-[12px] font-bold text-foreground uppercase tracking-widest mb-6">
-                    Mol* Visualisation Tips
-                  </h4>
-                  <div className="grid sm:grid-cols-2 gap-6">
+                {/* 3-Stage Pipeline Physical Scrubber Card */}
+                <div id="scrubber" className="mb-8">
+                  <div className="flex items-center justify-between mb-3.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      3-Stage Execution Scrubber
+                    </span>
+                    <span className="text-xs text-primary font-semibold">Click stage to navigate</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     {[
                       {
-                        title: "1. Add Residue Labels",
-                        body: "Select binding-site residues → right panel → Labels → toggle Residue Name + Number. Or use Components → Around Ligand → add a Label representation.",
+                        step: "01",
+                        title: "Ingestion & Sanitization",
+                        desc: "PDB / AlphaFold DB, MMFF94 force field & Gasteiger charges",
+                        id: "input",
+                        icon: FlaskConical
                       },
                       {
-                        title: "2. Show Non-Covalent Interactions",
-                        body: "Go to Structure → Structure Tools → Structure Measurements. The Interactions tab provides colour-coded contact detection built into Mol*.",
+                        step: "02",
+                        title: "wRRF Cavity Consensus",
+                        desc: "fpocket, P2Rank & PUResNet with 4.5 Å DBSCAN clustering",
+                        id: "auto-blind",
+                        icon: Compass
                       },
                       {
-                        title: "3. Isolate the Binding Pocket",
-                        body: "Use the 'Around Ligand' selection to display only residues within 4–5 Å. Switch surrounding residues to Ball & Stick and set the protein to Cartoon coloured by secondary structure.",
+                        step: "03",
+                        title: "Sampling & CNN Rescoring",
+                        desc: "AutoDock Vina, GNINA 3D CNN rescoring & ProLIF 2D maps",
+                        id: "results-3d",
+                        icon: Sparkles
                       },
-                      {
-                        title: "4. Ligand Colouring",
-                        body: "CPK or element-symbol colouring is preferred for publication figures. Avoid default single-colour schemes when submitting to journals.",
-                      },
-                    ].map(({ title, body }) => (
-                      <div key={title} className="relative pl-4 border-l-2 border-primary/20">
-                        <h5 className="text-[12px] font-bold text-primary uppercase tracking-wide mb-2">{title}</h5>
-                        <p className="text-[13px] text-muted-foreground font-medium leading-[1.6]">{body}</p>
-                      </div>
-                    ))}
+                    ].map((st, idx) => {
+                      const Icon = st.icon;
+                      const active = activePipelineStage === idx + 1;
+                      return (
+                        <button
+                          key={st.step}
+                          type="button"
+                          onClick={() => {
+                            setActivePipelineStage(idx + 1);
+                            scrollToSection(st.id);
+                          }}
+                          className={`p-4 rounded-2xl border text-left transition-all duration-150 ease-out active:scale-[0.98] flex gap-3.5 ${
+                            active
+                              ? 'border-primary/60 bg-card/90 shadow-md ring-1 ring-primary/25 apple-specular-edge'
+                              : 'border-border/70 bg-card/40 hover:bg-card/70 hover:border-primary/30'
+                          }`}
+                        >
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${active ? 'bg-primary text-primary-foreground shadow-xs' : 'bg-muted/70 text-muted-foreground'}`}>
+                            <Icon size={16} />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-[10px] font-mono-code font-bold text-primary">Stage {st.step}</span>
+                              <h3 className="font-bold text-xs text-foreground tracking-tight">{st.title}</h3>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground leading-relaxed">{st.desc}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-              </div>
-            </AnimatedSection>
+              </AnimatedSection>
+            </div>
+          </section>
 
-          </div>
-        </section>
+          <div className="border-t border-border/60" />
 
-        <Footer lightTheme />
+
+
+          {/* ══════════════════════════════════════════════
+              STICKY SCROLL WORKFLOW PIPELINE
+          ══════════════════════════════════════════════ */}
+          <section className="py-20 relative">
+            <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
+              <StickyScroll content={stickyDocsContent} />
+            </div>
+          </section>
+
+          <div className="border-t border-border/60" />
+
+          {/* ══════════════════════════════════════════════
+              EXPORTS & PRO TIPS SECTION
+          ══════════════════════════════════════════════ */}
+          <section id="exports" className="py-20 relative">
+            <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
+              <AnimatedSection delay={200}>
+                <AppleCard className="p-8 md:p-10">
+                  <div className="flex items-center gap-3 mb-6 pb-6 border-b border-border/60">
+                    <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+                      <Download size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-foreground tracking-tight">Export Protocols & Journal Publishing Guidelines</h3>
+                      <p className="text-xs text-muted-foreground">Standards for publication-ready coordinates, complex PDBs, and 2D vector figures.</p>
+                    </div>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-8 mb-8">
+                    <div>
+                      <h4 className="text-xs font-bold text-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                        <LayoutDashboard size={14} className="text-primary" /> 3D Complex PDB Structure Export
+                      </h4>
+                      <ul className="text-xs text-muted-foreground font-medium space-y-2.5">
+                        <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span>Select target pose from the <em>Viewing Pose</em> dropdown in the viewer toolbar.</span></li>
+                        <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span>Adjust camera angle, zoom, surface mesh transparency, and atom labeling.</span></li>
+                        <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span>Click the download icon in the table row to save the receptor-ligand complex as a unified PDB file.</span></li>
+                      </ul>
+                    </div>
+
+                    <div>
+                      <h4 className="text-xs font-bold text-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                        <Activity size={14} className="text-primary" /> 2D Interaction Diagram (Vector SVG)
+                      </h4>
+                      <ul className="text-xs text-muted-foreground font-medium space-y-2.5">
+                        <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span>Switch to the <em>2D Interactions</em> tab on the Results page.</span></li>
+                        <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span>Toggle bond distance annotations and bond type color matches.</span></li>
+                        <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" /><span>Click download to save a publication-ready SVG with infinite vector resolution.</span></li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Mol* Professional Tips Callouts */}
+                  <div className="pt-6 border-t border-border/60">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">
+                      Mol* Visualization Pro-Tips
+                    </h4>
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                      {[
+                        { title: "Residue Labels", body: "Select active residues → Components → Around Ligand → add Label representation to clearly show pocket numbers." },
+                        { title: "Non-Covalent Bonds", body: "Go to Structure Tools → Structure Measurements to activate native Mol* contact detection lines." },
+                        { title: "Pocket Isolation", body: "Isolate residues within 4.5 Å and switch to Ball & Stick while leaving receptor cartoon translucent." },
+                        { title: "Element Coloring", body: "CPK element-symbol coloring is preferred for journal peer-review submission figures." },
+                      ].map((tip, i) => (
+                        <div key={i} className="p-3.5 rounded-2xl bg-card/40 border border-border/60 text-xs">
+                          <h5 className="font-bold text-primary mb-1">{tip.title}</h5>
+                          <p className="text-muted-foreground text-[11px] leading-relaxed">{tip.body}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </AppleCard>
+              </AnimatedSection>
+            </div>
+          </section>
+        </div>
       </div>
+
+      <Footer />
     </div>
   );
 };
 
 export default Documentation;
+

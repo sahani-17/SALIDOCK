@@ -16,8 +16,9 @@ export default {
         },
         extend: {
             fontFamily: {
-                sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-                display: ['"Instrument Serif"', '"Iowan Old Style"', 'Georgia', 'serif'],
+                sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', '"SF Pro Display"', '"SF Pro"', 'system-ui', 'sans-serif'],
+                display: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Display"', '"SF Pro"', 'system-ui', 'sans-serif'],
+                mono: ['"SF Mono"', '"JetBrains Mono"', 'ui-monospace', 'Menlo', 'monospace'],
             },
             colors: {
                 border: "hsl(var(--border))",

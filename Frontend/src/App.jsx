@@ -34,6 +34,13 @@ function CanonicalManager() {
 }
 
 function App() {
+  useEffect(() => {
+    document.documentElement.classList.add("dark");
+    try {
+      localStorage.setItem("theme", "dark");
+    } catch (e) {}
+  }, []);
+
   return (
     <AuthProvider>
       <BrowserRouter>

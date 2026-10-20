@@ -17,6 +17,7 @@ const Hero3D = ({
     ligandRepr = "ball-and-stick",
     spin = true,
     focusOnLigand = false,
+    transparent = true,
 }) => {
     const viewerRef = useRef(null);
     const [pdbData, setPdbData] = useState(null);
@@ -66,10 +67,24 @@ const Hero3D = ({
         };
     }, [pdbId]);
 
+    // Smoothly fly camera to cavity or reset when focus mode changes
+    useEffect(() => {
+        if (!viewerRef.current || !pdbData) return;
+        const targetFocus = focusOnLigand || showInteractions;
+        const timer = setTimeout(() => {
+            if (targetFocus) {
+                viewerRef.current?.zoomToCavity?.();
+            } else {
+                viewerRef.current?.resetCamera?.();
+            }
+        }, 80);
+        return () => clearTimeout(timer);
+    }, [focusOnLigand, showInteractions, pdbData]);
+
     return (
-        <div className="relative w-full h-full bg-card rounded-xl overflow-hidden">
+        <div className={`relative w-full h-full overflow-hidden ${transparent ? 'bg-transparent' : 'bg-card rounded-xl'}`}>
             {!pdbData && !error && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-card z-10 gap-2">
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-card/40 backdrop-blur-md z-10 gap-2">
                     <AnimatedCircularProgressBar label="RCSB" size={56} strokeWidth={4} />
                     <span className="text-xs font-semibold text-foreground">Loading {pdbId.toUpperCase()}…</span>
                 </div>
@@ -94,6 +109,7 @@ const Hero3D = ({
                     spin={spin}
                     showProtein
                     minimal
+                    transparent={transparent}
                     focusOnLigand={focusOnLigand || showInteractions}
                 />
             )}

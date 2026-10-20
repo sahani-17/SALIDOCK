@@ -16,28 +16,28 @@ export default function PosesTable({
   const isManualOnly = allPoses.length > 0 && allPoses.every((p) => p.cavity_id === undefined || p.cavity_id === null);
 
   return (
-    <section className="bg-card rounded-2xl border border-border p-6 mb-6 shadow-elevated">
+    <section className="bg-card/75 backdrop-blur-xl rounded-3xl border border-border/80 p-6 mb-6 shadow-elevated apple-specular-edge">
       <div className="mb-6 flex items-center justify-between">
-        <h2 className="font-display text-2xl text-foreground">
+        <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
           {isManualOnly ? 'Active Site Docking Results' : 'Binding Cavities & Docking Poses'}
         </h2>
         {isManualOnly && (
-          <span className="text-xs px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 font-semibold">
+          <span className="text-xs px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 font-semibold apple-specular-edge">
             User-Defined Coordinates
           </span>
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-border">
+      <div className="overflow-x-auto rounded-2xl border border-border/70 bg-card/40 backdrop-blur-md">
 
         <table className="w-full text-center border-collapse">
           <thead>
-            <tr className="bg-muted/50">
-              <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Cavity ID</th>
-              <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Mode</th>
-              <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Affinity (kcal/mol)</th>
-              <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Center (x, y, z)</th>
-              <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Actions</th>
+            <tr className="bg-muted/40">
+              <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Cavity ID</th>
+              <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Mode</th>
+              <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Affinity (kcal/mol)</th>
+              <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Center (x, y, z)</th>
+              <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -49,26 +49,26 @@ export default function PosesTable({
               return (
                 <tr
                   key={globalIndex}
-                  className={`border-t border-border transition-colors ${
-                    isSelected ? 'bg-primary/10' : 'hover:bg-muted/30'
+                  className={`border-t border-border/50 transition-colors duration-150 ${
+                    isSelected ? 'bg-primary/10' : 'hover:bg-muted/20'
                   }`}
                 >
                   <td className="px-4 py-3 text-sm">
                     {pose.cavity_id !== undefined && pose.cavity_id !== null ? (
                       <button
                         onClick={() => onCavityClick(pose.cavity_id.toString())}
-                        className="text-primary font-semibold hover:underline"
+                        className="text-primary font-semibold hover:underline active:scale-95 transition-transform"
                       >
                         C{pose.cavity_id}
                       </button>
                     ) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20">
                         Active Site
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm text-foreground">{pose.mode || '-'}</td>
-                  <td className="px-4 py-3 text-sm font-medium text-foreground">
+                  <td className="px-4 py-3 text-sm text-foreground font-medium">{pose.mode || '-'}</td>
+                  <td className="px-4 py-3 text-sm font-semibold text-foreground font-mono-code">
                     {pose.affinity?.toFixed(2) ?? '-'}
                   </td>
                   <td className="px-4 py-3 text-sm font-mono-code text-muted-foreground">
@@ -79,10 +79,10 @@ export default function PosesTable({
                       <button
                         onClick={() => onViewPose(globalIndex)}
                         disabled={loadingViewer && isSelected}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                        className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all duration-150 ease-out active:scale-[0.97] ${
                           isSelected
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-card text-foreground hover:bg-muted border border-border hover:border-primary/40'
+                            ? 'bg-primary text-primary-foreground shadow-xs shadow-primary/20 apple-specular-edge'
+                            : 'bg-card/80 text-foreground hover:bg-card border border-border/80 hover:border-primary/40'
                         } disabled:opacity-50`}
                       >
                         {loadingViewer && isSelected
@@ -93,7 +93,7 @@ export default function PosesTable({
                       <button
                         onClick={() => onDownloadPose(globalIndex)}
                         disabled={downloadingPose === globalIndex}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-card text-muted-foreground hover:text-foreground border border-border hover:border-primary/40 rounded-md disabled:opacity-50 transition-all hover:bg-muted"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-card/80 text-muted-foreground hover:text-foreground border border-border/80 hover:border-primary/40 rounded-full disabled:opacity-50 transition-all duration-150 ease-out active:scale-[0.97] hover:bg-card"
                         title="Download PDB"
                       >
                         {downloadingPose === globalIndex
