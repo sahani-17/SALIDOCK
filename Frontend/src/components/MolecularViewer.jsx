@@ -205,10 +205,11 @@ const MolecularViewer = forwardRef(function MolecularViewer({
       };
 
       if (
-        ref === tag ||
+        (ref === tag ||
         hasTag(tags) ||
         hasTag(paramsTags) ||
-        (targetLabel && label === targetLabel)
+        (targetLabel && label === targetLabel)) &&
+        (!state.tree?.nodes || state.tree.nodes.has(ref))
       ) {
         update.delete(ref);
         deleted = true;
@@ -227,7 +228,9 @@ const MolecularViewer = forwardRef(function MolecularViewer({
     if (children && children.size > 0) {
       const update = plugin.build();
       children.forEach(childRef => {
-        update.delete(childRef);
+        if (!plugin.state.data.tree.nodes || plugin.state.data.tree.nodes.has(childRef)) {
+          update.delete(childRef);
+        }
       });
       await update.commit();
     }
@@ -236,9 +239,9 @@ const MolecularViewer = forwardRef(function MolecularViewer({
   // Apply visual representation settings dynamically to Mol*
   const applySettings = useCallback(async () => {
     const plugin = pluginRef.current;
-    if (!plugin) return;
+    if (!plugin || !plugin.state?.data) return;
     const structureRef = plugin.managers.structure.hierarchy.current.structures[0];
-    if (!structureRef || !structureRef.cell) return;
+    if (!structureRef || !structureRef.cell || !structureRef.cell.obj?.data) return;
 
     try {
       const ligandExpression = getLigandExpression();
