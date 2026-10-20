@@ -3,11 +3,9 @@
     admin off
 }
 
-# ── Localhost & Production Caddy Configuration ───────────────────────────────
-# When DOMAIN_NAME is not set, Caddy defaults to http://localhost (no SSL attempts).
-# When DOMAIN_NAME is set (e.g. on Azure VM: DOMAIN_NAME=salidock-v2.salixirax.com),
-# Caddy automatically provisions HTTPS for that domain.
-{$DOMAIN_NAME:http://localhost}, http://127.0.0.1, :80 {
+# ── salidock-v2.salixirax.com (Production — Azure VM) ────────────────────
+# Caddy automatically provisions a free HTTPS certificate via Let's Encrypt.
+http://localhost, salidock-v2.salixirax.com {
 
     # Reverse proxy backend API calls
     handle /api/* {
