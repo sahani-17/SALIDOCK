@@ -10,7 +10,8 @@ import {
     Activity,
     CheckCircle2,
     ChevronRight,
-    RefreshCw
+    RefreshCw,
+    Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../services/api';
